@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.verify/
+*.tsbuildinfo
+.DS_Store
+
+# Client source data — transcripts, workbooks, scans. Never tracked, in any mock.
+# The catalog is shown to OTHER clients, so real data here is a commercial defect,
+# not merely a legal one.
+mocks/*/private/
+
+# Copied from yagoda-crm/docs and logistic/docs, both of which gitignore these in
+# their own repos because they quote real client surnames. They are here as
+# STRUCTURE reference for the generated demo/script.md template — never tracked.
+reference/demo-scripts/

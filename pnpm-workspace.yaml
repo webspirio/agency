@@ -1,0 +1,5 @@
+packages:
+  - "packages/*"
+  - "mocks/*"
+allowBuilds:
+  esbuild: set this to true or false
