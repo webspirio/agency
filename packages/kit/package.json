@@ -1,0 +1,25 @@
+{
+  "name": "@agency/kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./lib/*": "./src/lib/*/index.ts",
+    "./lib/cn": "./src/lib/cn.ts",
+    "./lib/motion": "./src/lib/motion.ts",
+    "./lib/language-preference": "./src/lib/language-preference.ts",
+    "./templates/*": "./src/templates/*.tsx",
+    "./chart-colors": "./src/chart-colors.ts",
+    "./toast": "./src/toast.ts",
+    "./*": "./src/*.tsx"
+  },
+  "peerDependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "radix-ui": "^1.6.7",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0",
+    "lucide-react": "^1.31.0"
+  }
+}
