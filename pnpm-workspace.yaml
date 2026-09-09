@@ -1,5 +1,9 @@
 packages:
   - "packages/*"
   - "mocks/*"
+
+# esbuild ships prebuilt platform binaries; its postinstall only relinks them,
+# and it has never run in this tree while `vite build` works. Left unapproved so
+# no dependency of a scaffolded mock can run arbitrary install-time code.
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: false

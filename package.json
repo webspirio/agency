@@ -3,11 +3,13 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.5.2",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -b --pretty false || tsc --noEmit -p tsconfig.base.json",
-    "lint": "oxlint --max-warnings=0",
+    "typecheck": "tsc -b",
+    "lint": "oxlint --max-warnings=0 packages templates mocks",
     "agency": "node packages/cli/bin/agency.mjs"
   },
   "devDependencies": {

@@ -13,6 +13,10 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "types": ["node"],
+
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true
   }
 }

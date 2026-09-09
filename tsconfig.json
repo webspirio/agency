@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/cli" },
+    { "path": "packages/dec" },
+    { "path": "packages/kit" },
+    { "path": "packages/mock" },
+    { "path": "packages/synth" }
+  ]
+}

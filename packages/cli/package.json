@@ -1,0 +1,8 @@
+{
+  "name": "@agency/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "agency": "./bin/agency.mjs" },
+  "exports": { ".": "./src/index.ts" }
+}
