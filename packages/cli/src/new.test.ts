@@ -237,6 +237,19 @@ describe('agency new — the silent ones', () => {
     );
   });
 
+  it('leaves an existing mock untouched when it refuses to overwrite it', async () => {
+    // Refusing is the easy half. The expensive half is the unwind: the `rm`
+    // that removes a half-written mock must never reach a directory that
+    // existed BEFORE the call. A mock carries hand-written screens by day two,
+    // and `agency new` re-run against the wrong slug would take them with it.
+    const { dir, files } = await newMock({ slug: 'overwrite-guard', root });
+    writeFileSync(join(dir, 'HAND-WRITTEN.txt'), 'a screen nobody has committed yet\n');
+
+    await expect(newMock({ slug: 'overwrite-guard', root })).rejects.toThrow(/exists/);
+
+    expect(walk(dir).sort(byPath)).toEqual([...files, 'HAND-WRITTEN.txt'].sort(byPath));
+  });
+
   it('throws on an unknown placeholder instead of writing an empty string', async () => {
     // The plan's renderer substitutes `String(data[k] ?? '')`, so a typo in a
     // template — `{{name}}` for `{{title}}` — yields `headline: ''` and a mock
