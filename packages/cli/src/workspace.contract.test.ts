@@ -128,6 +128,24 @@ describe('every test file on disk is collected by exactly one vitest project', (
   });
 });
 
+describe('no build output is committed into a source tree', () => {
+  it('has no generated .d.ts sitting beside the .ts it was generated from', () => {
+    // `packages/synth/src/corpus.d.ts` was committed this way: a stray `tsc`
+    // emitted it next to `corpus.ts`, and from then on every consumer resolved
+    // the STALE declaration instead of the source. A blanket ignore of
+    // `**/*.d.ts` is the wrong fix — `packages/kit/src/testing.d.ts` and
+    // `vite-env.d.ts` are hand-written and load-bearing. The property that
+    // separates them is the sibling: a generated declaration has a `.ts` of the
+    // same basename next to it, a hand-written one does not.
+    const skip = /^(node_modules|reference|dist)/;
+    const declarations = filesMatching(join(REPO, 'packages'), /\.d\.ts$/, skip);
+    const generated = declarations.filter((d) =>
+      existsSync(join(REPO, d.replace(/\.d\.ts$/, '.ts'))),
+    );
+    expect(generated).toEqual([]);
+  });
+});
+
 describe('the workspace manifest carries no unresolved placeholder', () => {
   it('resolves allowBuilds to a boolean', () => {
     const yaml = readFileSync(join(REPO, 'pnpm-workspace.yaml'), 'utf8');
