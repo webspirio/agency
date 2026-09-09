@@ -1,0 +1,255 @@
+import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+/**
+ * The lint surface is the ONLY enforcement surface Plan A ships, so it gets the
+ * same treatment as any other load-bearing module: fixtures that prove each
+ * rule fires, fixtures that prove it does NOT fire on code it has no business
+ * touching, and a ratchet so the exemption list can only shrink.
+ *
+ * Everything here runs against the SHIPPED `oxlint.base.json` +
+ * `oxlint-rules.js`, copied as a pair into a temp dir — not against a config
+ * the test writes for itself, which would let the two drift apart in silence.
+ */
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const OXLINT = join(ROOT, 'node_modules', '.bin', 'oxlint');
+
+type Result = { code: number; out: string };
+
+/**
+ * Lint `source` at `path` inside a scratch tree whose config extends the real
+ * base. The path matters: the whole scoping design turns on `overrides.files`
+ * globs, and a rule that fires everywhere is a different rule from one that
+ * fires under `src/domain/`.
+ */
+function lintAt(path: string, source: string, extraConfig: object = {}): Result {
+  const dir = mkdtempSync(join(tmpdir(), 'agency-lint-'));
+  cpSync(join(ROOT, 'oxlint.base.json'), join(dir, 'oxlint.base.json'));
+  cpSync(join(ROOT, 'oxlint-rules.js'), join(dir, 'oxlint-rules.js'));
+  writeFileSync(
+    join(dir, '.oxlintrc.json'),
+    JSON.stringify({ extends: ['./oxlint.base.json'], ...extraConfig }),
+  );
+  const file = join(dir, path);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, source);
+  try {
+    return { code: 0, out: execFileSync(OXLINT, ['--max-warnings=0', '.'], { cwd: dir, encoding: 'utf8' }) };
+  } catch (e: unknown) {
+    const err = e as { status?: number; stdout?: string; stderr?: string };
+    return { code: err.status ?? 1, out: `${err.stdout ?? ''}${err.stderr ?? ''}` };
+  }
+}
+
+/** Domain code — where money lives, and where every rule is on. */
+const lint = (source: string) => lintAt('src/domain/calc.ts', source);
+
+describe('the rules fire on what they were written for', () => {
+  it('rejects multiplication and division', () => {
+    expect(lint('export const x = (a: number, b: number) => a * b;').code).not.toBe(0);
+    expect(lint('export const x = (a: number, b: number) => a / b;').code).not.toBe(0);
+  });
+
+  it('rejects relational comparison — the measured hole that exited 0', () => {
+    const r = lint('export const x = (a: {amount: string}, b: {amount: string}) => a.amount > b.amount;');
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/lexicographic|dec\.cmp/);
+  });
+
+  it('rejects Math.random for ids', () => {
+    expect(lint('export const id = () => Math.random().toString(36);').code).not.toBe(0);
+  });
+
+  it('rejects Number(), parseFloat, parseInt and toFixed', () => {
+    expect(lint('export const x = (s: string) => Number(s);').code).not.toBe(0);
+    expect(lint('export const x = (s: string) => parseFloat(s);').code).not.toBe(0);
+    expect(lint('export const x = (s: string) => parseInt(s, 10);').code).not.toBe(0);
+    expect(lint('export const x = (n: number) => n.toFixed(2);').code).not.toBe(0);
+  });
+
+  it('rejects a bare .sort()', () => {
+    expect(lint('export const x = (xs: string[]) => xs.sort();').code).not.toBe(0);
+  });
+});
+
+describe('the escapes each rule used to permit', () => {
+  // Every case below exited 0 against the first version of these rules. They
+  // are the same hazard reached by a different token, which is the only kind of
+  // hole a syntactic rule can have.
+  it.each([
+    ['Number.parseFloat', 'export const x = (s: string) => Number.parseFloat(s);'],
+    ['Number.parseInt', 'export const x = (s: string) => Number.parseInt(s, 10);'],
+    ['globalThis.Number', 'export const x = (s: string) => globalThis.Number(s);'],
+    ['new Number', 'export const x = (s: string) => new Number(s);'],
+    ['unary plus', 'export const x = (s: string) => +s;'],
+    ['toPrecision', 'export const x = (n: number) => n.toPrecision(4);'],
+    ['toSorted', 'export const x = (xs: string[]) => xs.toSorted();'],
+    ['sort(undefined)', 'export const x = (xs: string[]) => xs.sort(undefined);'],
+    ['computed sort', "export const x = (xs: string[]) => xs['sort']();"],
+    ['crypto.randomUUID', 'export const id = () => crypto.randomUUID();'],
+    ['crypto.getRandomValues', 'export const id = () => crypto.getRandomValues(new Uint8Array(8));'],
+  ])('rejects %s', (_name, source) => {
+    expect(lint(source).code).not.toBe(0);
+  });
+});
+
+describe('the rules stay quiet on code they have no business touching', () => {
+  it.each([
+    ['an index bump', 'export const next = (i: number) => i + 1;'],
+    ['a sort with a real comparator', 'export const x = (xs: number[]) => xs.sort((a, b) => a - b);'],
+    ['string concatenation', "export const label = (a: string) => 'x' + a;"],
+    ['a seq id', 'export const id = (n: number) => `x-${String(n).padStart(6, "0")}`;'],
+  ])('allows %s', (_name, source) => {
+    const r = lint(source);
+    expect({ code: r.code, out: r.out }).toEqual({ code: 0, out: '' });
+  });
+});
+
+describe('presentation code is scoped, not exempted', () => {
+  // The base config ships to EVERY mock. Rules that fire on a sparkline's
+  // `(v - lo) / span` make the operator's first experience of the framework a
+  // red build on their own chart code — and SPEC 17 names "the operator
+  // disables a check row rather than fixing what it caught" as the abandon
+  // signal. So pixel maths is allowed where pixels live.
+  it('allows pixel arithmetic under src/pages and src/components', () => {
+    const svg = 'export const x = (v: number, lo: number, span: number) => (v - lo) / span * 100;';
+    expect(lintAt('src/pages/Chart.tsx', svg).code).toBe(0);
+    expect(lintAt('src/components/Chart.tsx', svg).code).toBe(0);
+  });
+
+  it('allows an integer count comparison under src/pages', () => {
+    expect(lintAt('src/pages/List.tsx', 'export const x = (n: number) => n > 0;').code).toBe(0);
+  });
+
+  // The exemption is paid for: a page that cannot be caught doing money
+  // arithmetic is instead forbidden from importing the money module at all, so
+  // the invariant "money is computed in the domain, pages render strings" is
+  // enforced from the other side rather than dropped.
+  it('forbids importing the money module from presentation code', () => {
+    const r = lintAt('src/pages/Total.tsx', "import { mul } from '@agency/dec';\nexport const x = () => mul('1', '2');\n");
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/@agency\/dec/);
+  });
+
+  it('still catches money arithmetic in the domain and the api layer', () => {
+    const bad = 'export const x = (a: number, b: number) => a * b;';
+    expect(lintAt('src/domain/calc.ts', bad).code).not.toBe(0);
+    expect(lintAt('src/api/routes.ts', bad).code).not.toBe(0);
+  });
+
+  it('scopes by a position-independent glob, so a mock nested two levels down inherits it', () => {
+    // `overrides.files` resolves relative to the directory of the config that
+    // APPLIES to a file, not the one that declares it. A glob written
+    // `src/pages/**` silently changes meaning inside `mocks/<slug>/`, which
+    // carries its own `.oxlintrc.json`. Anchoring with `**/` is what makes the
+    // base config mean the same thing everywhere it is extended.
+    const raw = readFileSync(join(ROOT, 'oxlint.base.json'), 'utf8');
+    const base = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, '')) as {
+      overrides?: { files: string[] }[];
+    };
+    for (const o of base.overrides ?? []) {
+      for (const glob of o.files) expect(glob).toMatch(/^\*\*\//);
+    }
+  });
+});
+
+/**
+ * Ported from reference/verify/checks/lint-exempt-ratchet.mjs. An exemption
+ * list with no baseline can only grow: nothing notices when an entry stops
+ * being needed, and each new offender inherits the last one's excuse. The
+ * ratchet is BIDIRECTIONAL — a new exempted file is red, an exemption that no
+ * longer suppresses anything is red, and a change in how many findings a file
+ * suppresses is red.
+ */
+type BaselineEntry = { file: string; rules: string[]; findings: number; reason: string };
+
+/** `.oxlintrc.json` is JSONC: oxlint accepts `//`, JSON.parse does not. */
+function readConfig() {
+  const raw = readFileSync(join(ROOT, '.oxlintrc.json'), 'utf8');
+  return JSON.parse(raw.replace(/^\s*\/\/.*$/gm, '')) as {
+    ignorePatterns?: string[];
+    overrides?: { files: string[]; rules: Record<string, string> }[];
+  };
+}
+
+/** What the shipped config actually exempts, as `file -> sorted rule names`. */
+function exemptionsInConfig(): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const o of readConfig().overrides ?? []) {
+    const off = Object.entries(o.rules)
+      .filter(([name, level]) => name.startsWith('agency/') && level === 'off')
+      .map(([name]) => name);
+    if (off.length === 0) continue;
+    for (const file of o.files) out.set(file, new Set([...(out.get(file) ?? []), ...off]));
+  }
+  return out;
+}
+
+/** How many findings `rules` produce on `file` with the exemption lifted. */
+function findingsWithout(file: string, rules: Iterable<string>): number {
+  const dir = mkdtempSync(join(tmpdir(), 'agency-ratchet-'));
+  const cfg = join(dir, 'cfg.json');
+  writeFileSync(
+    cfg,
+    JSON.stringify({
+      jsPlugins: [join(ROOT, 'oxlint-rules.js')],
+      rules: Object.fromEntries([...rules].map((r) => [r, 'error'])),
+    }),
+  );
+  // oxlint exits 1 whenever it reports anything, which is the normal path here.
+  let raw: string;
+  try {
+    raw = execFileSync(OXLINT, ['--config', cfg, '--format=json', file], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+  } catch (e: unknown) {
+    raw = (e as { stdout?: string }).stdout ?? '';
+  }
+  const parsed = JSON.parse(raw) as { diagnostics?: unknown[] };
+  return (parsed.diagnostics ?? []).length;
+}
+
+describe('the workspace exemption list is a ratchet, not a drain', () => {
+  const BASELINE = join(ROOT, 'scripts', 'verify', 'baselines', 'lint-exempt.json');
+
+  it('exempts a file from named rules, never from all of them', () => {
+    // `ignorePatterns` switches off all ~100 oxlint rules for a file, so a file
+    // exempted for one inconvenient rule stops being linted entirely. Measured:
+    // `Number(v).toFixed(2)` inside packages/dec/src/dec.ts — the one module in
+    // the repo that must never contain a float — exited 0.
+    const paths = (readConfig().ignorePatterns ?? []).filter(
+      (p) => !/(^|\/)(dist|node_modules|reference)(\/|$|\*)/.test(p),
+    );
+    expect(paths).toEqual([]);
+  });
+
+  it('matches the committed baseline file for file, rule and reason', () => {
+    const baseline = JSON.parse(readFileSync(BASELINE, 'utf8')) as { entries: BaselineEntry[] };
+    const inConfig = exemptionsInConfig();
+
+    expect(new Set(inConfig.keys())).toEqual(new Set(baseline.entries.map((e) => e.file)));
+    for (const entry of baseline.entries) {
+      expect(inConfig.get(entry.file)).toEqual(new Set(entry.rules));
+      // A reason short enough to be a shrug is not a reason.
+      expect(entry.reason.length).toBeGreaterThan(40);
+    }
+  });
+
+  it('suppresses exactly as many findings as the baseline records', () => {
+    const baseline = JSON.parse(readFileSync(BASELINE, 'utf8')) as { entries: BaselineEntry[] };
+    const measured = baseline.entries.map((e) => ({
+      file: e.file,
+      // > 0 is the staleness half: an exemption that suppresses nothing is dead
+      // weight that will silently blind the next edit to that file.
+      findings: findingsWithout(e.file, e.rules),
+    }));
+    expect(measured).toEqual(baseline.entries.map((e) => ({ file: e.file, findings: e.findings })));
+    for (const m of measured) expect(m.findings).toBeGreaterThan(0);
+  });
+});

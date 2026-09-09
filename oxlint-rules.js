@@ -58,25 +58,59 @@ const noDecimalComparison = {
 };
 
 /**
- * `Number(s)`, `parseFloat(s)`, `parseInt(s)`, `n.toFixed(2)` — selectors:
- * CallExpression[callee.name='Number'],
- * CallExpression[callee.name=/^parse(Float|Int)$/],
- * CallExpression[callee.property.name='toFixed'].
+ * `Number(s)`, `parseFloat(s)`, `parseInt(s)`, `n.toFixed(2)` — plus the six
+ * spellings of the same hazard that the first version of this rule permitted,
+ * every one of which was measured exiting 0:
+ *
+ *   Number.parseFloat(s)   Number.parseInt(s)   globalThis.Number(s)
+ *   new Number(s)          +s                   n.toPrecision(4)
+ *
+ * `Number.parseFloat` matters most: it is the form oxlint's own
+ * `unicorn/prefer-number-properties` rewrites `parseFloat` INTO, so the two
+ * rules together turned a caught violation into an uncaught one.
+ *
+ * `Number.isInteger`/`Number.isFinite` are deliberately NOT flagged — they are
+ * predicates over a count, they return a boolean, and no value passes through
+ * them. `packages/dec/src/dec.ts` guards its divisor with one.
  */
+const COERCING_NUMBER_STATICS = new Set(['parseFloat', 'parseInt']);
+const COERCING_METHODS = new Set(['toFixed', 'toPrecision']);
+
 const noNumericCoercion = {
   meta: {
     docs: { description: 'Coercing a decimal string through a float loses precision silently.' },
   },
   create(context) {
+    const coercion = (node) =>
+      context.report({
+        node,
+        message: 'Number() on a decimal string loses precision silently. Use @agency/dec.',
+      });
+
     return {
+      UnaryExpression(node) {
+        // `+s` is numeric coercion with no name on it: +'0.1' + +'0.2' is
+        // 0.30000000000000004. Unary minus is left alone — it is how a negative
+        // literal is written.
+        if (node.operator === '+') {
+          context.report({
+            node,
+            message:
+              'Unary + coerces a decimal string through a float silently. Use @agency/dec.',
+          });
+        }
+      },
+
+      NewExpression(node) {
+        if (node.callee.type === 'Identifier' && node.callee.name === 'Number') coercion(node);
+      },
+
       CallExpression(node) {
         const callee = node.callee;
+
         if (callee.type === 'Identifier') {
           if (callee.name === 'Number') {
-            context.report({
-              node,
-              message: 'Number() on a decimal string loses precision silently. Use @agency/dec.',
-            });
+            coercion(node);
           } else if (callee.name === 'parseFloat' || callee.name === 'parseInt') {
             context.report({
               node,
@@ -86,23 +120,50 @@ const noNumericCoercion = {
           }
           return;
         }
-        if (
-          callee.type === 'MemberExpression' &&
-          !callee.computed &&
-          callee.property.type === 'Identifier' &&
-          callee.property.name === 'toFixed'
-        ) {
+
+        if (callee.type !== 'MemberExpression' || callee.computed) return;
+        if (callee.property.type !== 'Identifier') return;
+        const property = callee.property.name;
+
+        if (COERCING_METHODS.has(property)) {
           context.report({
             node,
-            message: 'toFixed rounds through a float. Use dec.round(value, scale).',
+            message: `${property} rounds through a float. Use dec.round(value, scale).`,
           });
+          return;
+        }
+
+        if (callee.object.type !== 'Identifier') return;
+        const object = callee.object.name;
+        if (object === 'Number' && COERCING_NUMBER_STATICS.has(property)) {
+          context.report({
+            node,
+            message:
+              'parseFloat/parseInt on a decimal string loses precision silently. Use @agency/dec.',
+          });
+        } else if (object === 'globalThis' && property === 'Number') {
+          coercion(node);
         }
       },
     };
   },
 };
 
-/** `Math.random()` — selector: CallExpression[callee.object.name='Math'][callee.property.name='random'] */
+/**
+ * `Math.random()` — and the two other unordered sources SPEC 11 means when it
+ * says "seq() or ULID, store-assigned", both of which the first version of this
+ * rule let through: `crypto.randomUUID()` and `crypto.getRandomValues()`.
+ *
+ * `Date.now()` is deliberately absent. It is a legitimate frame clock —
+ * `packages/kit/src/animated-number.tsx` measures easing with it — so banning
+ * it outright would need an exemption on day one, and an exemption is how a
+ * rule starts being negotiated with instead of obeyed.
+ */
+const UNORDERED = {
+  Math: new Set(['random']),
+  crypto: new Set(['randomUUID', 'getRandomValues']),
+};
+
 const noUnorderedId = {
   meta: {
     docs: { description: 'Ids must be store-assigned and ordered.' },
@@ -115,9 +176,8 @@ const noUnorderedId = {
           callee.type === 'MemberExpression' &&
           !callee.computed &&
           callee.object.type === 'Identifier' &&
-          callee.object.name === 'Math' &&
           callee.property.type === 'Identifier' &&
-          callee.property.name === 'random'
+          UNORDERED[callee.object.name]?.has(callee.property.name)
         ) {
           context.report({
             node,
@@ -130,7 +190,26 @@ const noUnorderedId = {
   },
 };
 
-/** `xs.sort()` — selector: CallExpression[callee.property.name='sort'][arguments.length=0] */
+/**
+ * `xs.sort()` — and the three ways to reach the same default comparator that
+ * the `arguments.length === 0` + non-computed test used to miss:
+ *
+ *   xs.toSorted()      the copying twin, same default comparator
+ *   xs.sort(undefined) one argument, and it is the default
+ *   xs['sort']()       computed access
+ *
+ * `toSorted` matters because it is what a reviewer asking for immutability
+ * suggests, and it silently reintroduces `['9.00','10.00'] -> ['10.00','9.00']`.
+ */
+const SORTS = new Set(['sort', 'toSorted']);
+
+/** True when the only argument is literally the default comparator. */
+const isDefaultComparator = (args) =>
+  args.length === 0 ||
+  (args.length === 1 &&
+    ((args[0].type === 'Identifier' && args[0].name === 'undefined') ||
+      (args[0].type === 'UnaryExpression' && args[0].operator === 'void')));
+
 const noImplicitSort = {
   meta: {
     docs: { description: 'A bare .sort() is lexicographic and locale-blind.' },
@@ -138,14 +217,19 @@ const noImplicitSort = {
   create(context) {
     return {
       CallExpression(node) {
-        if (node.arguments.length !== 0) return;
+        if (!isDefaultComparator(node.arguments)) return;
         const callee = node.callee;
-        if (
-          callee.type === 'MemberExpression' &&
-          !callee.computed &&
-          callee.property.type === 'Identifier' &&
-          callee.property.name === 'sort'
-        ) {
+        if (callee.type !== 'MemberExpression') return;
+
+        const name = callee.computed
+          ? callee.property.type === 'Literal'
+            ? callee.property.value
+            : undefined
+          : callee.property.type === 'Identifier'
+            ? callee.property.name
+            : undefined;
+
+        if (typeof name === 'string' && SORTS.has(name)) {
           context.report({
             node,
             message:

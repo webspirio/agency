@@ -10,7 +10,11 @@
     "test": "vitest run",
     "typecheck": "tsc -b",
     "lint": "oxlint --max-warnings=0 packages templates mocks",
-    "agency": "node packages/cli/bin/agency.mjs"
+    "agency": "node packages/cli/bin/agency.mjs",
+    "verify": "node scripts/verify/run.mjs --tier fast",
+    "verify:full": "node scripts/verify/run.mjs --tier full",
+    "verify:ci": "node scripts/verify/run.mjs --tier full --no-skip",
+    "lint:exempt": "node scripts/verify/checks/lint-exempt.mjs"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",

@@ -1,0 +1,54 @@
+{
+  "note": "Files exempted from named agency/* rules in .oxlintrc.json, with the number of findings each exemption suppresses. The ratchet is bidirectional: a new file is red, a stale exemption is red, a changed count is red. Regenerate with `node scripts/verify/checks/lint-exempt.mjs --write` and say why in the commit.",
+  "entries": [
+    {
+      "file": "packages/dec/src/dec.ts",
+      "rules": [
+        "agency/no-float-arithmetic",
+        "agency/no-decimal-comparison"
+      ],
+      "findings": 24,
+      "reason": "THE one module allowed to do the arithmetic: bigint `*` and `/`, and the `<`/`>` that implement cmp itself. Exempting it is the premise of the whole rule set, and mirrors the four-module scoping shipped at yagoda-starter/backend/eslint.config.mjs:38-65. It deliberately KEEPS agency/no-numeric-coercion — a Number() or toFixed here is the exact hazard the module exists to prevent."
+    },
+    {
+      "file": "packages/dec/src/dec.test.ts",
+      "rules": [
+        "agency/no-implicit-sort"
+      ],
+      "findings": 1,
+      "reason": "expect(['9.00','10.00'].sort()).toEqual(['10.00','9.00']) — the bare sort IS the assertion. This test pins the exact bug agency/no-implicit-sort prevents, so the rule must not be allowed to delete it."
+    },
+    {
+      "file": "packages/mock/src/errors.test.ts",
+      "rules": [
+        "agency/no-implicit-sort"
+      ],
+      "findings": 1,
+      "reason": "expect([...ids].sort()).toEqual(ids) — asserts that a DEFAULT lexicographic sort reproduces createSeq's creation order, the property that makes zero-padded ids reproducible by a SQL ORDER BY id. Passing a comparator here would test the comparator, not the ids."
+    },
+    {
+      "file": "packages/mock/src/adapter.ts",
+      "rules": [
+        "agency/no-decimal-comparison"
+      ],
+      "findings": 2,
+      "reason": "status >= 400 and status >= 500 — HTTP status integers chosen by the adapter itself and never read off a payload. This file JSON round-trips its response body and never inspects a domain value."
+    },
+    {
+      "file": "packages/kit/src/image-picker.test.tsx",
+      "rules": [
+        "agency/no-implicit-sort"
+      ],
+      "findings": 2,
+      "reason": "expect([...created].sort()).toEqual([...revoked].sort()) — set equality over opaque blob: URLs, where the sort IS the normalisation and no ordering claim is being made."
+    },
+    {
+      "file": "packages/kit/src/sparkline.tsx",
+      "rules": [
+        "agency/no-numeric-coercion"
+      ],
+      "findings": 2,
+      "reason": "`${x.toFixed(2)},${y.toFixed(2)}` — SVG path coordinates, in pixels. oxlint.base.json already scopes the float and comparison rules away from **/kit/src/** as presentation, but deliberately does NOT scope no-numeric-coercion: toFixed is the money hazard itself, so it stays on everywhere and is exempted one file at a time, counted."
+    }
+  ]
+}
