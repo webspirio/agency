@@ -2,36 +2,40 @@
 
 A workspace that turns "sales call → clickable CRM mock → sometimes a real NestJS product" into a
 repeatable standard. Five packages (`dec`, `synth`, `mock`, `kit`, `cli`), one template, one
-scaffolder. `docs/SPEC.md` is the design and the evidence for every decision in it; `docs/PLAN-A.md`
-is the implementation plan; `docs/BUILD-REPORT.md` records what was actually built and what was
-deferred.
-
-**Read this first, and then read `docs/SPEC.md` §1.2.** The governing rule of this repo is not a
-style guide:
+scaffolder. `docs/SPEC.md` is the design and its evidence, `docs/PLAN-A.md` the plan,
+`docs/BUILD-REPORT.md` what was built and what is still open.
 
 > A standard may propagate only as (a) something the deterministic scaffolder writes at t=0, or
 > (b) a check that goes red. Never as prose.
 
-This file is prose. It is therefore **documentation of the checks, not a substitute for them.** If
-you find yourself about to write a convention into a comment or into this file *as its enforcement*,
-stop: either the scaffolder emits it, or a check fails on it, or it does not exist. The evidence for
-that rule is in the spec — 0% inheritance between two mocks written 16 days apart by the same author,
-and 0% compliance with the one committed skill, whose author wrote 68 of the commits that ignore it.
+This file is prose, and therefore **documentation of the checks, not a substitute for them.** If you
+are about to write a convention here *as its enforcement*: either the scaffolder emits it, or a check
+fails on it, or it does not exist.
 
----
+## Verification is infrastructure. Run it — always.
 
-## Always run the verification layer
+**Not on request. Before a turn ends.** The owner amended `BUILD-PROMPT.md` mid-build to say so, and
+this paragraph is where that instruction lives.
 
 ```bash
-pnpm verify        # fast tier — the same thing the Stop hook runs (~12s)
-pnpm verify:full   # every tier
+pnpm verify        # fast tier — what the Stop hook runs, ~12s
+pnpm verify:full   # fast + full: renders the template, then installs, builds and tests a real mock
 pnpm verify:ci     # the CI form: a SKIPPED check counts as a failure
 ```
 
-`pnpm verify` is a wrapper over `scripts/verify/run.mjs`. The rows live in
-`scripts/verify/registry.mjs` **as data**, each carrying two sentences: what a PASS proves, and what
-it stays blind to. Read the blind-spot footer — it prints on green as well as red, because a table of
-passes without its blind spots is exactly the false confidence this layer exists to remove.
+`pnpm verify` wraps `scripts/verify/run.mjs`. The rows live in `scripts/verify/registry.mjs` **as
+data**, each carrying two sentences: what a PASS proves, and what it stays blind to. Read the
+blind-spot footer — it prints on green as well as red, because a table of passes without its blind
+spots is exactly the false confidence this layer exists to remove.
+
+`--only <id>` narrows a run (the report records that it was narrowed, so the green cannot be quoted
+as a verdict on the tree); `--no-skip` makes a skip blocking; `--reuse-if-fresh` serves the last
+green only when the content hash of every file that could change a verdict is unchanged.
+
+When a row goes red: **fix the code.** Do not edit a rule, do not add an ignore, do not `it.skip`.
+If a check is genuinely wrong, say so in your report and leave it failing. `docs/SPEC.md` §17 names
+"the operator disables a row rather than fixing what it caught" as the signal to abandon the whole
+enforcement strategy.
 
 **Five statuses, and they never collapse into each other:**
 
@@ -43,105 +47,108 @@ passes without its blind spots is exactly the false confidence this layer exists
 | `NOT_RUN` | a dependency did not pass, so this was never started | yes |
 | `UNRUNNABLE` | the command could not start at all | yes |
 
-`SKIPPED` and `UNRUNNABLE` are not `FAILED`. Reporting "lint FAILED" when the linter was merely
-absent from PATH asserts something about the code that was never tested — and reporting `SKIPPED` as
-part of "all green" is the same error in the other direction. When you report results, say which of
-the five you got.
+Reporting "lint FAILED" when the linter was merely absent from PATH asserts something about the code
+that was never tested; folding `SKIPPED` into "all green" is the same error in the other direction.
+When you report results, say which of the five you got.
 
-### What the fast tier does NOT cover
+### What the fast tier does NOT prove
 
-Deliberate, and worth knowing before you call anything done:
+Per-row blind spots are in the table below. These are the tier's gaps *as a whole*:
 
-- **It does not build.** No `vite build` runs, so everything that breaks only in a bundle — the
-  Tailwind `@source` line, asset paths, CSS variables absent from `dist` — is untouched. That is
-  precisely the silent failure the day-4 gate exists to catch, and it is the reason the gate is a
-  separate, timed measurement rather than a check row.
-- **It does not run a browser.** No Playwright, no viewport check, no deep-link check.
+- **It does not build.** No `tsc` over a mock, no `vite build`, no bundle. Everything that breaks
+  only in a bundle — the Tailwind `@source` line, asset paths, CSS variables absent from `dist` — is
+  untouched until `pnpm verify:full`.
+- **It does not run a browser.** No Playwright, no viewport, no deep link, no click. Nobody has
+  looked at a pixel.
 - **It does not measure coverage or mutation.** A test that cannot fail counts the same as one that
-  can. This repo has already been bitten by that: `packages/dec/golden.json` was generated by
-  importing the module it tests, so 675 cases asserted `dec === dec` and stayed green while `dec`
-  was mutated to round the wrong way.
-- **It says nothing about `mocks/<slug>` builds.** Those are separate TypeScript projects built by
-  their own `pnpm --filter <slug> build`.
+  can. `packages/dec/golden.json` was once generated by importing the module it tests: 675 cases
+  asserted `dec === dec` and stayed green while `dec` rounded the wrong way.
+- **It says nothing about a mock you have already scaffolded.** `mocks/<slug>` is its own TypeScript
+  project, compiled only by its own build.
+- **Prose is not gated.** `docs:truth` proves the paths in this file resolve. It cannot prove a
+  sentence around one of them is still true.
 
-### The individual commands
+<!-- BEGIN:verify-table -->
+<!-- Generated from scripts/verify/registry.mjs. Do not edit by hand: the `memo:drift`
+     row compares this block byte for byte and goes red on any difference.
+     To change the text, edit registry.mjs and then run
+     `node scripts/verify/checks/memo-drift.mjs --write`. -->
+
+| check | tier | what a PASS proves | what it still does NOT prove |
+| --- | --- | --- | --- |
+| `engines` | fast | The node interpreter that is running these checks satisfies the `engines.node` floor package.json declares, so every other row in this table is a verdict about a runtime this project says it supports. A running major below the floor is FAILED, not skipped; only an absent or unevaluatable `engines.node` is SKIPPED, and it says which. | The major only, and only against a single ">=N" floor — a disjunction or an upper bound is refused rather than approximated. A patch-level V8 difference, a different pnpm, a different libc or a different OS all change behaviour and are invisible here. It also says nothing about the node that will run in CI or on a client machine, only about this process; a .nvmrc that disagrees with the interpreter is printed as a WARNING and does not block. |
+| `lint` | fast | oxlint exits 0 over packages/, templates/ and mocks/ with --max-warnings=0, so no file in the workspace performs money arithmetic, relational comparison, numeric coercion, an unordered id or a default-comparator sort outside the exemptions recorded in the lint-exempt baseline. Deleting the JS plugin does not weaken this: oxlint then exits 1 with "Failed to load JS plugin" rather than silently dropping the five rules. | The rules are syntactic and oxlint has no type information, so they cannot tell a decimal string from a pixel count. Under **/src/pages/** and **/src/components/** the float and comparison rules are off by design and the invariant is carried instead by a ban on importing @agency/dec there — which a component can still evade by receiving an already-wrong number as a prop. Nothing here checks that the arithmetic dec DOES perform is right. |
+| `typecheck` | fast | `tsc -b --force` builds every referenced project in the root solution to completion under strict, noUncheckedIndexedAccess and verbatimModuleSyntax. FORCED, not incremental: the plain `tsc -b` this replaced returned exit 0 over a tree --force rejected with three errors, because a stale tsbuildinfo answered for it. The same invocation asserts that no file under reference/ is in the program, so read-only prior art cannot make this row permanently red. | Says nothing about mocks/<slug>, which are their own projects outside the solution and are compiled only by the `build` row, nor about anything a type cannot express — `as Locale` on an unvalidated string typechecks and throws at demo time. It cannot see runtime resolution either: an exports map that TypeScript follows and node cannot load is green here. |
+| `test` | fast | Every *.test.ts and *.test.tsx under packages/ and mocks/ that vitest collects runs to completion and passes, in the environment its package needs. | Passing tests are not evidence that the right things are tested. Coverage is not measured and no mutation testing runs, so a test that cannot fail counts the same as one that can — the golden fixture asserted dec against itself for 675 cases and was green throughout. That every file on disk is actually collected is a SEPARATE row (test:parity); this one would report the same green over a config that silently collected nothing. |
+| `test:parity` | fast | Every *.test.ts/.tsx file on disk under packages/ and mocks/ is collected by exactly one vitest project — not zero, which makes a red test report green, and not two, which runs a jsdom test under node and fails it for reasons unrelated to the code. | Only the partition. It reads what `vitest list` claims to collect and compares it to a directory walk; it does not run a single test, and a file collected into the WRONG one of the two projects is counted as collected exactly once. |
+| `lint:exempt` | fast (after: lint) | Every rule-level exemption in .oxlintrc.json still suppresses exactly the number of findings the committed baseline records: a newly exempted file, an exemption that has gone stale, and a change in how much an exemption hides are each red. The ratchet is bidirectional, so a fixed file must be removed from the list rather than left as a standing excuse. | It checks the shape of the exemption list, never whether an exemption was a good idea, and never their GRANULARITY — thirteen of them are whole-file where a line-level `// oxlint-disable-next-line` would do, so nine kit components and the adapter are permanently unchecked for real money bugs on account of one `status >= 500`. It also cannot see suppression that does not go through the config: an inline disable comment is invisible to it, and so is a rule nobody turned on in the first place. |
+| `emit:clean` | fast | No .tsbuildinfo, and no .d.ts / .js / .map sitting beside the .ts or .tsx it was emitted from, exists anywhere under a src/ directory in packages/, templates/ or mocks/. The day-4 gate ran with eleven emitted .d.ts files and a tsconfig.tsbuildinfo inside mocks/<slug>/src/ and nothing was red about it; a stale declaration there is resolved in preference to the source that would have replaced it. | Emit is identified by the SIBLING, so build output whose source has since been deleted is invisible, and so is anything emitted outside a src/ directory. It also passes happily on a declaration a human wrote badly: vite-env.d.ts and testing.d.ts are correct here only because no compiler would produce a file by those names, not because they were inspected. |
+| `docs:truth` | fast | Every backticked path and every `pnpm <script>` CLAUDE.md names resolves — at the repo root, or inside templates/mock/ (with or without a .hbs suffix) for the paths a scaffolded mock owns, or in package.json for the scripts. Nothing is exempted by a heuristic. | Existence, not truth. A file that exists but no longer does what the sentence around it claims is green here, and so is every statement the memo makes that does not happen to contain a path or a script name — which is most of them. Prose is not gated and cannot be. |
+| `memo:drift` | fast | The proves / does-not-prove table inside the generated-region markers in CLAUDE.md is byte-identical to the table rendered from this registry, and the SHA-256 printed beneath it matches a digest taken over the RAW proves and blindSpot strings — which the rendered cells cannot stand in for, because rendering collapses whitespace and two different registry strings can produce one identical cell. | It compares two artifacts to each other, never either against reality. A `proves` sentence that is a lie is copied into the memo faithfully and both go green. It also says nothing about the rest of CLAUDE.md — every line outside the markers is unchecked prose. |
+| `template:render` | full | `agency new` produces a mock in which no {{placeholder}} and no .hbs file survives, all five silently-failing files carry their @scaffold-owned marker, the `@source` glob in index.css resolves to a real directory from mocks/<slug>/src/, and the whole rendered tree passes `oxlint --max-warnings=0`. The title is deliberately hostile — an apostrophe, an ampersand and a double quote — so a missing escaper for any one file type is red. | It does not compile or run anything: the mock is never typechecked, never built and never opened, because all three need `pnpm install` and that is the `build` row. A rendered file that is syntactically fine and semantically wrong passes. It also renders exactly one combination — de, profiles solo,full — so a locale- or profile-specific path is untested. |
+| `build` | full (after: template:render) | `agency new` then `pnpm install` then `pnpm --filter <slug> build` then `pnpm --filter <slug> test` completes end to end on a mock that did not exist a minute ago, and the emitted dist CSS contains bg-card, text-primary and rounded-xl — which it can only do if Tailwind scanned the kit through the `@source` line. That is the one failure the day-4 gate was designed around and it is otherwise completely silent: the build succeeds and every kit surface renders unstyled in front of the client. | Nothing renders in a browser: no Playwright, no viewport, no deep link, no click. The three utilities checked in dist CSS are a spot check, not the whole kit, and a class present in the stylesheet can still be overridden to nothing. It runs `pnpm install`, which rewrites pnpm-lock.yaml and node_modules and then restores the lockfile byte for byte — if that restoration fails it says so, but a concurrent install in the same tree is not detected. |
+
+<!-- registry-checksum: f786f068b3f7e44f072a0644ca13a625 -->
+<!-- END:verify-table -->
+
+### The individual commands, and the hooks
 
 ```bash
-pnpm test        # vitest, both projects (node + dom)
-pnpm typecheck   # tsc -b over the root solution — no `||` fallback, it must be able to fail
-pnpm lint        # oxlint --max-warnings=0 over packages templates mocks
-pnpm lint:exempt # the exemption ratchet
+pnpm test         # vitest, both projects (node + dom)
+pnpm typecheck    # tsc -b --force — FORCED: a stale tsbuildinfo once returned 0 over a red tree
+pnpm lint         # oxlint --max-warnings=0 over packages templates mocks
+pnpm lint:exempt  # the exemption ratchet
+pnpm verify:write # regenerate the table above after editing the registry
 ```
 
-The Stop hook (`.claude/hooks/stop-gate.mjs`) runs the fast tier at the end of every turn and
-**blocks** on red, at most twice per prompt — after that it lets the turn end and tells you to state
-the red result out loud. It fails closed on check failures and open-but-loud on its own errors: a
-message saying the turn is UNVERIFIED is never a green tree.
-
-`.claude/hooks/node.sh` resolves the interpreter from `.nvmrc` rather than PATH. The shell default
-here is node 22 and this repo pins 24; without it every row would report `UNRUNNABLE` — a false red,
-which is worse than no gate.
-
----
+`.claude/hooks/stop-gate.mjs` runs the fast tier at the end of every turn and **blocks** on red —
+exit 2 plus a top-level `{"decision":"block","reason":…}`, which is the shape the Stop contract
+reads. At most twice per prompt; after that it lets the turn end and tells you to state the red
+result out loud. It fails closed on check failures and open-but-loud on its own errors: a message
+saying the turn is UNVERIFIED is never a green tree. `.claude/hooks/node.sh` resolves the interpreter
+from `.nvmrc`, not PATH — the shell default here is node 22 and this repo pins 24.
 
 ## Hard rules
 
-These are not preferences. Each one is downstream of a measured failure recorded in `docs/SPEC.md`.
+Each is downstream of a measured failure recorded in `docs/SPEC.md`.
 
-1. **TDD, always.** Write the failing test, run it, watch it fail *for the stated reason*, then
-   implement. A test that passes the first time you run it is a broken test — fix it before moving
-   on. If you cannot say what the red output said, you did not watch it.
-2. **Never weaken a check to go green.** Do not edit a rule, do not add an ignore, do not `it.skip`.
-   If a rule is genuinely wrong, say so and leave it failing. SPEC §17 names "the operator disables a
-   row rather than fixing what it caught" as the signal to abandon the whole enforcement strategy.
-3. **Money is decimal strings.** No `Number()`, `parseFloat`, `toFixed`, no float, no integer minor
-   units. `packages/dec/src/dec.ts` is the only module allowed to do the arithmetic; it is the one
-   file exempt from the float and comparison rules, and it deliberately keeps `no-numeric-coercion`.
-4. **Ids are `seq()` or a ULID, store-assigned.** Never `Math.random()`, never `crypto.randomUUID()`,
-   never implicit array order. Two FIFO allocators were measured diverging by 1 200,00 UAH in 493 of
-   1000 runs.
-5. **Branch on `code` only.** The error envelope is
-   `{ statusCode, error, message, path, timestamp, requestId?, code?, ...ctx }`. `error` is the
-   canonical HTTP phrase and is decorative; never branch on it, never let a JS class name reach it.
-6. **Pagination is `{ data, total, page, limit }`.** Declared seven times across the source repos.
-7. **No new runtime dependencies.** Specifically forbidden in any mock's `dependencies`: `msw`,
-   `@mswjs/data`, `@msw/data`, `@electric-sql/pglite`, `zod`, `i18next`, `react-i18next`. Each was
-   rejected with a recorded reason in `docs/SPEC.md` §14.
-8. **`reference/` is read-only.** Snapshots from other repos. Read it, cite it, never import from it,
-   never edit it. The sibling repos under `/Users/oleksandrsecond/Projects/` are live: read, never
-   write.
+1. **TDD, always.** Failing test, run it, watch it fail *for the stated reason*, then implement. If
+   you cannot quote the red output, you did not watch it.
+2. **Never weaken a check to go green.** See above; this is the one that ends the project.
+3. **Money is decimal strings.** `packages/dec/src/dec.ts` is the only module allowed to do the
+   arithmetic. No `Number()`, `parseFloat`, `toFixed`, no float, no integer minor units.
+4. **Ids are `seq()` or a ULID, store-assigned.** Never `Math.random()`, never implicit array order:
+   two FIFO allocators were measured diverging by 1 200,00 UAH in 493 of 1000 runs.
+5. **Branch on `code` only** — `error` is the canonical HTTP phrase and is decorative. Pagination is
+   `{ data, total, page, limit }`.
+6. **No new runtime dependencies.** Forbidden in a mock's `dependencies`: `msw`, `@mswjs/data`,
+   `@electric-sql/pglite`, `zod`, `i18next`, `react-i18next`. Reasons in `docs/SPEC.md` §14.
+7. **`reference/` is read-only**, and the sibling repos under `/Users/oleksandrsecond/Projects/` are
+   live. Read them, cite them, never write to either.
+8. Never `git reset --hard`, `git clean`, or `git checkout .`. Other agents share this tree: commit
+   with an explicit pathspec, `git add <paths> && git commit -F - -- <paths>`.
 
 ## Where money and pixels are allowed to meet
 
 `oxlint.base.json` ships to every mock. The money rules are on everywhere **except**
-`**/src/pages/**` and `**/src/components/**`, where `(v - lo) / span` is a chart coordinate and
-`index > 0` is an array position, not a balance. That exemption is paid for: those same paths are
-forbidden from importing `@agency/dec` at all. So the invariant survives as **money is computed in
-`src/domain/` and `src/api/`, and a component receives a finished decimal string** — enforced from
-the other side rather than dropped.
-
-Workspace-specific exemptions live in `.oxlintrc.json` as **per-rule** overrides, never
-`ignorePatterns` (which switches off all ~100 rules for a file). Each names one file, the exact rules,
-and why. The list is ratcheted in both directions against
-`scripts/verify/baselines/lint-exempt.json`: a new exempted file is red, an exemption that has gone
-stale is red, and a change in how many findings one hides is red. Widening it is a visible, counted
-decision — `node scripts/verify/checks/lint-exempt.mjs --write` and say why in the commit.
+`**/src/pages/**` and `**/src/components/**`, where `(v - lo) / span` is a chart coordinate. That
+exemption is paid for: those same paths may not import `@agency/dec` at all, so the invariant
+survives as **money is computed in the domain and api layers; a component receives a finished
+string.** Workspace exemptions are **per-rule** overrides in `.oxlintrc.json`, never `ignorePatterns`
+(which disables all ~100 rules for a file), and are ratcheted both ways against
+`scripts/verify/baselines/lint-exempt.json`.
 
 ## The seam
 
-One `axios.create`, one adapter, one line of difference between a mock and the product.
-
-**The trap, and why the adapter must throw:** verified in axios 1.20.0, `lib/core/dispatchRequest.js`
-calls `adapter(config).then(...)` and contains **zero** references to `settle`. `validateStatus` lives
-only in `lib/core/settle.js`, which each built-in adapter calls *itself*. A custom adapter therefore
-owns status handling — **an adapter that resolves a 409 delivers it to TanStack Query as a success.**
+One `axios.create`, one adapter, one line of difference between a mock and the product. Verified in
+axios 1.20.0: `node_modules/axios/lib/core/dispatchRequest.js` calls `adapter(config).then(...)` and contains **zero** references
+to `settle`, which is where `validateStatus` lives and which each built-in adapter calls *itself*. A
+custom adapter therefore owns status handling — **one that resolves a 409 delivers it to TanStack
+Query as a success.** If this stops holding, the throwing branch needs re-examining:
 
 ```bash
 grep -c settle node_modules/axios/lib/core/dispatchRequest.js   # must be 0
 ```
-
-If that ever returns non-zero, axios has changed and the throwing branch needs re-examining. Stop and
-say so.
 
 ## Scaffolding a mock
 
@@ -149,27 +156,17 @@ say so.
 
 ```bash
 node packages/cli/bin/agency.mjs new <slug> --title "Title" --locale de --profiles solo,full
-pnpm install
-pnpm --filter <slug> build
-pnpm --filter <slug> test
+pnpm install && pnpm --filter <slug> build && pnpm --filter <slug> test
 ```
 
 Five files carry `@scaffold-owned` because they fail *silently* when rewritten: `src/app/router.tsx`,
 `src/api/client.ts`, the persist config in `src/main.tsx`, `src/profiles.ts`, and the `@source` line
 in `src/index.css`. Without that last one `bg-card` and `text-primary` are simply absent from the
-built CSS, with no error anywhere.
+built CSS with no error anywhere, which is why `pnpm verify:full` greps the emitted stylesheet for
+them rather than trusting the config meant to produce them.
 
-## When you are blocked
+## Stop and say so, rather than working around it
 
-Stop and say so rather than working around it:
-
-- a test you did not write starts failing;
-- you need a dependency that is not installed (do not run `pnpm add`);
-- two pieces of work want the same root file — `package.json`, `pnpm-lock.yaml`, `vitest.config.ts`,
-  `vitest.setup.ts`, `tsconfig.base.json`, `tsconfig.json`, `pnpm-workspace.yaml`, `.oxlintrc.json`,
-  `oxlint.base.json` and `oxlint-rules.js` are owned by whoever is orchestrating, not by a task;
-- a lint rule fires on code you believe is correct;
-- `grep -c settle node_modules/axios/lib/core/dispatchRequest.js` returns anything but `0`.
-
-Never run `git reset --hard`, `git clean`, or `git checkout .`. To undo, revert the specific files you
-touched, by name.
+A test you did not write starts failing · you need a dependency that is not installed (do not run
+`pnpm add`) · two pieces of work want the same root file · a lint rule fires on code you believe is
+correct · the `grep -c settle` above returns anything but `0`.

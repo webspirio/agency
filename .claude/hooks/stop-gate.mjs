@@ -15,11 +15,15 @@
  *    forever gets disabled, and a disabled gate is the failure mode SPEC 17
  *    names as the abandon signal.
  *
- * The exit-2-with-stderr mechanism is load-bearing: the Stop hook documentation
- * puts the decision at `hookSpecificOutput.decision`, and the exit-code table
- * says exit 2 "blocks the action regardless of JSON" with stderr as the reason.
- * Emitting one shape and hoping is how a gate runs on every turn, writes its
- * counter files, and blocks nothing — invisible for hours.
+ * THE JSON SHAPE IS LOAD-BEARING, and the shape this was lifted from was wrong.
+ * A Stop hook blocks with exit code 2 AND a TOP-LEVEL `{"decision":"block",
+ * "reason":…}`. `reason` is what the model is shown, so a block without one
+ * blocks and explains nothing. `additionalContext` is the opposite case: it is
+ * read only when NESTED inside `hookSpecificOutput` alongside `hookEventName`,
+ * and the yagoda-crm originals emit it at top level, where it is a silent no-op.
+ * Both directions are fixed here. Emitting one shape and hoping is how a gate
+ * runs on every turn, writes its counter files, and blocks nothing — invisible
+ * for hours.
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -31,12 +35,24 @@ const MAX_BLOCKS = 2;
 
 let emitted = false;
 
-/** Exactly ONE object may reach stdout: a second corrupts the protocol. */
+/**
+ * Exactly ONE object may reach stdout: a second corrupts the protocol.
+ *
+ * `context` is hoisted into `hookSpecificOutput` here rather than at each call
+ * site, because putting it at the top level is the exact silent no-op this hook
+ * was rewritten to remove — and a mistake that produces no error is a mistake
+ * that gets made again.
+ *
+ * @param {{decision?: 'block', reason?: string, systemMessage?: string, context?: string}} obj
+ */
 function emit(obj) {
   if (emitted) return;
+  const { context, ...rest } = obj;
+  const out = { ...rest };
+  if (context) out.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: context };
   const warn = process.env.VERIFY_HOOK_WARN;
-  const withWarn = warn ? { ...obj, systemMessage: `${warn}\n${obj.systemMessage ?? ''}`.trim() } : obj;
-  const text = JSON.stringify(withWarn);
+  if (warn) out.systemMessage = `${warn}\n${out.systemMessage ?? ''}`.trim();
+  const text = JSON.stringify(out);
   JSON.parse(text); // refuse to emit anything that is not round-trippable
   emitted = true;
   process.stdout.write(`${text}\n`);
@@ -82,6 +98,31 @@ function bump(id) {
   }
 }
 
+/**
+ * Turn the runner's JSON into the few lines that say what went wrong. Falls back
+ * to raw output if the JSON is unparseable — which is itself worth seeing, and
+ * is never silently swallowed.
+ */
+function summarise(res) {
+  const raw = `${res.stdout ?? ''}${res.stderr ?? ''}`.trimEnd();
+  let report;
+  try {
+    report = JSON.parse(res.stdout ?? '');
+  } catch {
+    return raw.split('\n').slice(-40).join('\n');
+  }
+  const lines = [];
+  for (const c of report.checks ?? []) {
+    if (!c.blocking) continue;
+    lines.push(`${c.status}  ${c.id}${c.reason ? ` — ${c.reason}` : ''}`);
+  }
+  for (const f of report.failures ?? []) {
+    lines.push('', `── ${f.id} ─────────────`, ...String(f.text).split('\n').slice(-20));
+  }
+  for (const w of report.warnings ?? []) lines.push(`WARNING ${w.id}: ${w.text}`);
+  return lines.join('\n');
+}
+
 function main() {
   const input = readStdin();
   // A Stop hook that re-blocks its own continuation would loop forever.
@@ -90,20 +131,26 @@ function main() {
     return;
   }
 
-  const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'verify', 'run.mjs'), '--tier', 'fast'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1' },
-    timeout: 240_000,
-  });
+  // `--json` rather than the human table: the reason handed back to the model
+  // has to be the FAILURE, and scraping the table gave it the blind-spot footer
+  // — forty lines of "what this does not prove" presented as why the turn was
+  // blocked. Invoked as node + run.mjs rather than `pnpm verify` so the gate
+  // does not depend on pnpm being on a hook's PATH; it is the same fast tier.
+  const res = spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'scripts', 'verify', 'run.mjs'), '--tier', 'fast', '--json'],
+    { cwd: ROOT, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' }, timeout: 240_000 },
+  );
 
   if (res.error || typeof res.status !== 'number') {
     // The gate could not evaluate the turn. That is NOT a green tree, and must
     // never be presented as one.
     process.stderr.write(`verify-hook: the gate could not run: ${res.error?.message ?? 'no exit status'}\n`);
     emit({
-      systemMessage:
-        'verify-hook: the gate could not run, so this turn is UNVERIFIED. Run `pnpm verify` yourself and say what it printed.',
+      systemMessage: 'verify-hook: the gate could not run — this turn is UNVERIFIED.',
+      context:
+        'The Stop gate could not execute `scripts/verify/run.mjs`, so nothing about this turn was ' +
+        'checked. That is not a green tree. Run `pnpm verify` yourself and report what it printed.',
     });
     return;
   }
@@ -114,25 +161,29 @@ function main() {
   }
 
   const blocks = bump(safeId(input.prompt_id));
-  const tail = `${res.stdout ?? ''}${res.stderr ?? ''}`.trimEnd().split('\n').slice(-40).join('\n');
+  const tail = summarise(res);
 
   if (blocks > MAX_BLOCKS) {
     // Stop blocking, but do not pretend it passed.
     emit({
-      systemMessage:
-        `verify-hook: \`pnpm verify\` is still red after ${MAX_BLOCKS} blocks; letting the turn end. ` +
-        'Do not claim this work is complete — state the red result explicitly and what you tried.\n' +
-        tail,
+      systemMessage: `verify-hook: still red after ${MAX_BLOCKS} blocks; letting the turn end.`,
+      context:
+        `\`pnpm verify\` is still RED after ${MAX_BLOCKS} blocks, so the gate has stopped blocking — ` +
+        'a gate that can block forever gets switched off, and a switched-off gate is the abandon ' +
+        'signal SPEC 17 names. Do not claim this work is complete: state the red result explicitly ' +
+        `and say what you tried.\n\n${tail}`,
     });
     return;
   }
 
-  // Exit 2 with the reason on stderr is the mechanism that actually blocks.
-  process.stderr.write(
-    `\`pnpm verify\` is RED. Fix the code — do not weaken a check, do not add an ignore, ` +
-      `do not it.skip. If a check is genuinely wrong, say so and leave it failing.\n\n${tail}\n`,
-  );
-  emit({ decision: 'block', hookSpecificOutput: { hookEventName: 'Stop', decision: 'block' } });
+  const why =
+    '`pnpm verify` (fast tier) is RED, so this turn is not finished. Fix the code — do not weaken ' +
+    'a check, do not add an ignore, do not it.skip. If a check is genuinely wrong, say so and ' +
+    `leave it failing.\n\n${tail}`;
+  // Both halves. Exit 2 blocks; the top-level `reason` is what the model is
+  // shown, and stderr is what a human reading the hook log sees.
+  process.stderr.write(`${why}\n`);
+  emit({ decision: 'block', reason: why });
   process.exit(2);
 }
 
@@ -141,5 +192,10 @@ try {
 } catch (err) {
   // Fail open, loudly.
   process.stderr.write(`verify-hook: stop-gate crashed: ${err?.stack ?? err}\n`);
-  emit({ systemMessage: 'verify-hook: the gate crashed, so this turn is UNVERIFIED. Run `pnpm verify` yourself.' });
+  emit({
+    systemMessage: 'verify-hook: the gate crashed — this turn is UNVERIFIED.',
+    context:
+      'The Stop gate threw before it could evaluate this turn, so nothing was checked. Run ' +
+      '`pnpm verify` yourself and report what it printed.',
+  });
 }

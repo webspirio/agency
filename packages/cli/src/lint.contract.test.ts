@@ -158,98 +158,19 @@ describe('presentation code is scoped, not exempted', () => {
 });
 
 /**
- * Ported from reference/verify/checks/lint-exempt-ratchet.mjs. An exemption
- * list with no baseline can only grow: nothing notices when an entry stops
- * being needed, and each new offender inherits the last one's excuse. The
- * ratchet is BIDIRECTIONAL — a new exempted file is red, an exemption that no
- * longer suppresses anything is red, and a change in how many findings a file
- * suppresses is red.
+ * The exemption RATCHET used to live here. It has moved to the registry row
+ * `lint:exempt` (`scripts/verify/checks/lint-exempt.mjs`), which is the same
+ * algorithm run by a sequential runner instead of by vitest.
+ *
+ * It moved because it ran `oxlint` over the repo root once per baseline entry
+ * while `workspace.contract.test.ts` ran a twelve-thread oxlint over the whole
+ * tree in a neighbouring worker. Under that contention oxlint intermittently
+ * reported `no-unused-vars` on `packages/mock/src/router.ts:50` — a constant
+ * used twenty-six lines below — and each file passed alone. Duplicating a check
+ * in two runners does not double the assurance; it doubles the ways it can lie.
+ *
+ * What is left in this file is fixture-scoped: every `lintAt` call writes ONE
+ * file into its own temp directory and lints that directory. Those cannot race,
+ * and they are the mutation-tested proof that each rule fires on what it was
+ * written for and stays quiet on what it was not.
  */
-type BaselineEntry = { file: string; rules: string[]; findings: number; reason: string };
-
-/** `.oxlintrc.json` is JSONC: oxlint accepts `//`, JSON.parse does not. */
-function readConfig() {
-  const raw = readFileSync(join(ROOT, '.oxlintrc.json'), 'utf8');
-  return JSON.parse(raw.replace(/^\s*\/\/.*$/gm, '')) as {
-    ignorePatterns?: string[];
-    overrides?: { files: string[]; rules: Record<string, string> }[];
-  };
-}
-
-/** What the shipped config actually exempts, as `file -> sorted rule names`. */
-function exemptionsInConfig(): Map<string, Set<string>> {
-  const out = new Map<string, Set<string>>();
-  for (const o of readConfig().overrides ?? []) {
-    const off = Object.entries(o.rules)
-      .filter(([name, level]) => name.startsWith('agency/') && level === 'off')
-      .map(([name]) => name);
-    if (off.length === 0) continue;
-    for (const file of o.files) out.set(file, new Set([...(out.get(file) ?? []), ...off]));
-  }
-  return out;
-}
-
-/** How many findings `rules` produce on `file` with the exemption lifted. */
-function findingsWithout(file: string, rules: Iterable<string>): number {
-  const dir = mkdtempSync(join(tmpdir(), 'agency-ratchet-'));
-  const cfg = join(dir, 'cfg.json');
-  writeFileSync(
-    cfg,
-    JSON.stringify({
-      jsPlugins: [join(ROOT, 'oxlint-rules.js')],
-      rules: Object.fromEntries([...rules].map((r) => [r, 'error'])),
-    }),
-  );
-  // oxlint exits 1 whenever it reports anything, which is the normal path here.
-  let raw: string;
-  try {
-    raw = execFileSync(OXLINT, ['--config', cfg, '--format=json', file], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: 'pipe',
-    });
-  } catch (e: unknown) {
-    raw = (e as { stdout?: string }).stdout ?? '';
-  }
-  const parsed = JSON.parse(raw) as { diagnostics?: unknown[] };
-  return (parsed.diagnostics ?? []).length;
-}
-
-describe('the workspace exemption list is a ratchet, not a drain', () => {
-  const BASELINE = join(ROOT, 'scripts', 'verify', 'baselines', 'lint-exempt.json');
-
-  it('exempts a file from named rules, never from all of them', () => {
-    // `ignorePatterns` switches off all ~100 oxlint rules for a file, so a file
-    // exempted for one inconvenient rule stops being linted entirely. Measured:
-    // `Number(v).toFixed(2)` inside packages/dec/src/dec.ts — the one module in
-    // the repo that must never contain a float — exited 0.
-    const paths = (readConfig().ignorePatterns ?? []).filter(
-      (p) => !/(^|\/)(dist|node_modules|reference)(\/|$|\*)/.test(p),
-    );
-    expect(paths).toEqual([]);
-  });
-
-  it('matches the committed baseline file for file, rule and reason', () => {
-    const baseline = JSON.parse(readFileSync(BASELINE, 'utf8')) as { entries: BaselineEntry[] };
-    const inConfig = exemptionsInConfig();
-
-    expect(new Set(inConfig.keys())).toEqual(new Set(baseline.entries.map((e) => e.file)));
-    for (const entry of baseline.entries) {
-      expect(inConfig.get(entry.file)).toEqual(new Set(entry.rules));
-      // A reason short enough to be a shrug is not a reason.
-      expect(entry.reason.length).toBeGreaterThan(40);
-    }
-  });
-
-  it('suppresses exactly as many findings as the baseline records', () => {
-    const baseline = JSON.parse(readFileSync(BASELINE, 'utf8')) as { entries: BaselineEntry[] };
-    const measured = baseline.entries.map((e) => ({
-      file: e.file,
-      // > 0 is the staleness half: an exemption that suppresses nothing is dead
-      // weight that will silently blind the next edit to that file.
-      findings: findingsWithout(e.file, e.rules),
-    }));
-    expect(measured).toEqual(baseline.entries.map((e) => ({ file: e.file, findings: e.findings })));
-    for (const m of measured) expect(m.findings).toBeGreaterThan(0);
-  });
-});

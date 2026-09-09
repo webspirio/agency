@@ -7,7 +7,7 @@
  *
  * Usage:
  *   node scripts/verify/run.mjs [--tier fast|full] [--no-skip] [--only a,b]
- *                               [--json] [--timeout-ms N]
+ *                               [--reuse-if-fresh] [--json] [--timeout-ms N]
  *
  * Exit codes: 0 = nothing blocking, 1 = something blocking, or the runner itself
  * failed. The runner failing is NOT the same as the tree being green, and must
@@ -20,10 +20,11 @@
  * and refusing a boolean flag that was handed a value.
  */
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { CHECKS, PRECONDITIONS, checkById, inTier } from './registry.mjs';
+import { sourceHash, reportCovers, errMessage } from './hash.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const REPORT_DIR = path.join(ROOT, '.verify');
@@ -76,7 +77,7 @@ function isBlocking(status, noSkip) {
  * looked.
  */
 function parseArgs(argv) {
-  const o = { tier: 'fast', noSkip: false, only: null, json: false, timeoutMs: 300_000 };
+  const o = { tier: 'fast', noSkip: false, only: null, reuseIfFresh: false, json: false, timeoutMs: 300_000 };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const eq = arg.indexOf('=');
@@ -106,6 +107,10 @@ function parseArgs(argv) {
       case '--json':
         rejectValue();
         o.json = true;
+        break;
+      case '--reuse-if-fresh':
+        rejectValue();
+        o.reuseIfFresh = true;
         break;
       case '--only':
         o.only = value()
@@ -215,11 +220,19 @@ const SHELL_CANNOT_START = /(?:^|\n)(?:\/bin\/)?sh: (?:\d+: )?[^\n]*(?:command )
 const PNPM_MISSING_SCRIPT = /(?:Command|Script) "[^"]+" not found|ERR_PNPM_NO_SCRIPT/i;
 const NODE_CANNOT_LOAD = /\b(?:ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND|Cannot find module|Cannot find package)\b/;
 
-function classify(res) {
+/**
+ * @param {{outcome: string, code: number | null, out: string, err: string}} res
+ * @param {number | undefined} skipExit  the row's own "nothing to measure" code
+ */
+function classify(res, skipExit) {
   if (res.outcome === 'spawn-error') return UNRUNNABLE;
   // A timeout DID start, so it is not UNRUNNABLE. It ran and did not succeed.
   if (res.outcome === 'timeout') return FAILED;
   if (res.code === 0) return PASSED;
+  // A check that can tell "measured and wrong" from "nothing to measure against"
+  // is believed about which it is. Reading the second as FAILED asserts something
+  // that was never tested; reading it as PASSED is worse.
+  if (skipExit !== undefined && res.code === skipExit) return SKIPPED;
   if (res.code === 127 || res.code === 126) return UNRUNNABLE;
   const text = `${res.out}\n${res.err}`;
   if (SHELL_CANNOT_START.test(text) || PNPM_MISSING_SCRIPT.test(text)) return UNRUNNABLE;
@@ -242,6 +255,34 @@ const dur = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${globalThis.M
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+
+  let hash = 'unknown';
+  let hashedFileCount = 0;
+  try {
+    ({ hash, fileCount: hashedFileCount } = sourceHash(ROOT));
+  } catch (err) {
+    fatal(`could not compute sourceHash: ${errMessage(err)}`);
+  }
+
+  if (opts.reuseIfFresh && !opts.only) {
+    let stored = null;
+    try {
+      stored = JSON.parse(readFileSync(REPORT_PATH, 'utf8'));
+    } catch {
+      /* no usable report; run for real */
+    }
+    if (reportCovers(stored, { hash, tier: opts.tier, noSkip: opts.noSkip })) {
+      // Reuse is quiet, but never silent about what the reused verdict does NOT
+      // cover. In the harness this was ported from, the blind-spot footer was
+      // skipped on exactly the two paths production took, so the property held
+      // of the code and not of the layer.
+      if (!opts.json) printBlindSpots(stored, `reused the green report for ${hash.slice(0, 12)}`);
+      else process.stdout.write(`${JSON.stringify({ ...stored, reused: true }, null, 2)}\n`);
+      process.exitCode = 0;
+      return;
+    }
+  }
+
   const selected = selectChecks(opts);
   if (selected.length === 0) fatal('no checks selected — refusing to report a green');
 
@@ -251,6 +292,7 @@ async function main() {
   const selectedIds = new Set(selected.map((c) => c.id));
   let afterDepsFullyEvaluated = true;
   const failureDetail = [];
+  const warnings = [];
 
   for (const check of selected) {
     let status;
@@ -277,12 +319,16 @@ async function main() {
       reason = pre ? pre.describe : `unknown precondition ${check.needs}`;
     } else {
       const res = await runCommand(check.cmd, opts.timeoutMs);
-      status = classify(res);
+      status = classify(res, check.skipExit);
       ms = res.ms;
       exitCode = res.code;
       if (res.outcome === 'timeout') reason = `timed out after ${dur(opts.timeoutMs)}`;
       if (status === UNRUNNABLE) reason = 'the command could not be started (not on PATH / no such script)';
-      if (status !== PASSED) failureDetail.push({ id: check.id, text: tailOf(res) });
+      if (status === SKIPPED) {
+        reason = firstLine(res) || `the check exited ${check.skipExit} — its own "nothing to measure against" code`;
+      }
+      if (status !== PASSED && status !== SKIPPED) failureDetail.push({ id: check.id, text: tailOf(res) });
+      warnings.push(...warningLines(check.id, res));
     }
 
     statusById.set(check.id, status);
@@ -311,7 +357,15 @@ async function main() {
     noSkip: opts.noSkip,
     // Scope travels WITH the verdict so a narrow green cannot be quoted as a wide one.
     scope: { only: opts.only, checkIds: selected.map((c) => c.id), afterDepsFullyEvaluated },
+    sourceHash: hash,
+    hashedFileCount,
     ok: blocking.length === 0,
+    warnings,
+    // The tail of each failing command, carried IN the report. A consumer that
+    // only has the JSON — the Stop hook, a CI annotation — otherwise has to
+    // scrape the human table, and the hook was scraping the blind-spot footer
+    // and presenting it as the reason the turn was blocked.
+    failures: failureDetail,
     checks: rows,
   };
 
@@ -339,11 +393,32 @@ function tailOf(res) {
   return `${res.out}${res.err}`.trimEnd().split('\n').slice(-25).join('\n');
 }
 
+/** The check's own first line of explanation, used as a SKIPPED reason. */
+function firstLine(res) {
+  return `${res.out}${res.err}`.trim().split('\n')[0]?.trim() ?? '';
+}
+
+/**
+ * A check that PASSES can still have found something worth saying. Discarding a
+ * passing check's stdout throws that away — the same failure as a skip reading
+ * like a pass, one level down. `engines` uses this to report a .nvmrc that
+ * disagrees with the interpreter without blocking on it.
+ */
+function warningLines(id, res) {
+  return `${res.out}\n${res.err}`
+    .split('\n')
+    .filter((l) => /WARNING|\(!\)/.test(l))
+    // The checks prefix their own id; strip it rather than printing it twice.
+    .map((l) => ({ id, text: l.trim().replace(new RegExp(`^${id}:\\s*`), '').replace(/^WARNING\s*/, '') }))
+    .slice(0, 20);
+}
+
 function printTable(report, failureDetail) {
   const w = globalThis.Math.max(...report.checks.map((c) => c.id.length));
   const scopeNote = report.scope.only ? `--only ${report.scope.only.join(',')}` : `tier ${report.tier}`;
   process.stdout.write(
-    `\nverify · ${scopeNote}${report.noSkip ? ' · --no-skip' : ''} · HEAD ${report.head.slice(0, 8)} · node ${report.node}\n\n`,
+    `\nverify · ${scopeNote}${report.noSkip ? ' · --no-skip' : ''} · HEAD ${report.head.slice(0, 8)} · ` +
+      `node ${report.node} · sourceHash ${report.sourceHash.slice(0, 12)} (${report.hashedFileCount} files)\n\n`,
   );
 
   for (const c of report.checks) {
@@ -369,6 +444,13 @@ function printTable(report, failureDetail) {
     `\n  ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}` +
       `${blockingCount ? paint('31', ` · ⛔ ${blockingCount} blocking`) : ''}\n`,
   );
+
+  if (Array.isArray(report.warnings) && report.warnings.length) {
+    // Printed for checks that PASSED as well. A green with something to say is
+    // still a green, but it does not get to say it silently.
+    process.stdout.write(paint('33', `\n  Warnings, including from checks that PASSED\n`));
+    for (const w of report.warnings) process.stdout.write(`    ${paint('33', w.id)}: ${w.text}\n`);
+  }
 
   const skipped = report.checks.filter((c) => c.status === SKIPPED);
   if (skipped.length) {
@@ -415,10 +497,15 @@ function printTable(report, failureDetail) {
  * used both returned before reaching it, so the property held of the code and
  * not of the layer.
  */
-function printBlindSpots(report) {
+function printBlindSpots(report, note = null) {
+  if (note) process.stdout.write(paint('90', `\n  ${note}\n`));
   process.stdout.write(paint('1', '\n  What this does NOT prove\n'));
   for (const c of report.checks) {
     process.stdout.write(`\n  ${c.id}\n${wrap(c.blindSpot, 4, 92)}\n`);
+  }
+  if (note && Array.isArray(report.warnings) && report.warnings.length) {
+    process.stdout.write(paint('33', `\n  Warnings from that run\n`));
+    for (const w of report.warnings) process.stdout.write(`    ${w.id}: ${w.text}\n`);
   }
   process.stdout.write(paint('90', `\n  Report: .verify/last-run.json · ok=${report.ok}\n\n`));
 }

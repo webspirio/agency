@@ -5,51 +5,36 @@ import { join } from 'node:path';
 
 /**
  * CLAUDE.md is prose, and this repo's governing rule says prose is not a control
- * surface. So the prose gets a control surface of its own: every command it
- * tells an agent to run must exist, and every path it names must be on disk.
+ * surface. So the prose gets a control surface of its own.
  *
- * This is SPEC 10's `links:truth` row applied to the one document an agent reads
- * first. The failure it prevents is documented in the source repo it was learned
- * from: a README that instructed a step against a control deleted two phases
- * earlier, green the whole time because nothing checked it.
+ * The bulk of it — every path and every `pnpm <script>` the memo names — is now
+ * SPEC 10's `links:truth` idea as a registry row, `docs:truth`. This file keeps
+ * the assertions that row cannot make.
  */
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
 const CLAUDE_MD = read('CLAUDE.md');
 
-describe('CLAUDE.md tells the truth about the commands it names', () => {
-  it('names only package scripts that exist', () => {
-    const scripts = Object.keys(
-      (JSON.parse(read('package.json')) as { scripts: Record<string, string> }).scripts,
-    );
-    const named = [...CLAUDE_MD.matchAll(/`?pnpm (?:run )?([a-z][a-z:._-]*)/g)]
-      .map((m) => m[1])
-      .filter((s): s is string => s !== undefined)
-      // `pnpm install`, `pnpm add` and `pnpm --filter …` are pnpm's own verbs,
-      // not scripts of this workspace.
-      .filter((s) => !['install', 'add', 'filter', 'dlx', 'exec'].includes(s));
+/**
+ * "Every command CLAUDE.md names exists, and every path it names is on disk" has
+ * moved to the registry row `docs:truth`
+ * (`scripts/verify/checks/docs-truth.mjs`). It belongs there for two reasons:
+ * the memo is checked by the same runner that checks everything else, and its
+ * result now carries a `proves` and a `blindSpot` like every other row — which
+ * for a check ABOUT honesty is the part that matters. Its blind spot is written
+ * down: existence, not truth.
+ *
+ * What stays here is what `docs:truth` cannot see — the hooks being wired and
+ * executable, and the memo stating its own blind spots rather than only its
+ * passes.
+ */
 
-    expect([...new Set(named)].filter((s) => !scripts.includes(s))).toEqual([]);
-  });
-
-  it('names only files and directories that exist', () => {
-    const paths = [...CLAUDE_MD.matchAll(/`([a-zA-Z0-9_./-]+\.(?:ts|tsx|mjs|json|md|css|sh))`/g)]
-      .map((m) => m[1])
-      .filter((p): p is string => p !== undefined)
-      // Paths inside a scaffolded mock (`src/app/router.tsx`) exist in the
-      // template, not at the repo root; and node_modules paths are runtime.
-      .filter((p) => !p.startsWith('src/') && !p.includes('node_modules'));
-
-    const missing = [...new Set(paths)].filter(
-      (p) => !existsSync(join(ROOT, p)) && !existsSync(join(ROOT, 'templates', 'mock', p)),
-    );
-    expect(missing).toEqual([]);
-  });
-
-  it('names the five scaffold-owned files, and the template really carries the marker', () => {
+describe('the memo and the template agree about the scaffold-owned files', () => {
+  it('names them, and the template really carries the marker', () => {
     // The list in the prose and the markers in the template are two copies of
-    // one fact. This is the assertion that keeps them one fact.
+    // one fact. This is the assertion that keeps them one fact. `docs:truth`
+    // proves the paths RESOLVE; only this proves they are marked.
     const claimed = [...CLAUDE_MD.matchAll(/`(src\/[a-zA-Z0-9_./-]+\.(?:tsx?|css))`/g)]
       .map((m) => m[1])
       .filter((p): p is string => p !== undefined);
