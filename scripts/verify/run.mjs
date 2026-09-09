@@ -43,7 +43,7 @@ const NOT_RUN = 'NOT_RUN';
 const UNRUNNABLE = 'UNRUNNABLE';
 
 const useColor = process.stdout.isTTY === true && !process.env.NO_COLOR && process.env.TERM !== 'dumb';
-const paint = (code, s) => (useColor ? `[${code}m${s}[0m` : s);
+const paint = (code, s) => (useColor ? `\u001b[${code}m${s}\u001b[0m` : s);
 
 /**
  * Glyph AND word differ per status, so the table stays unambiguous with colour
