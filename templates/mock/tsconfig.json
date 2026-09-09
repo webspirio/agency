@@ -1,7 +1,23 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+
+    // The base turns on `composite` + `emitDeclarationOnly` so the WORKSPACE
+    // packages can be a real `tsc -b` project graph. A mock is not part of that
+    // graph — nothing references it, and vite compiles its sources itself — so
+    // inheriting those settings only made `pnpm build` scatter one `.d.ts` per
+    // module through `src/`, where the next build resolves the STALE
+    // declaration instead of the source. Measured on the day-4 gate: eleven
+    // emitted files, and nothing was red about it.
+    //
+    // `tsc -b` accepts `noEmit` on a root project (it refuses it only on a
+    // REFERENCED one, TS6310), and `noEmit` is also what licenses the base's
+    // `allowImportingTsExtensions`.
+    "composite": false,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true
   },
   "include": ["src"]
 }
