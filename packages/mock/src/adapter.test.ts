@@ -116,3 +116,34 @@ describe('unmatched routes', () => {
     await expect(c.post('/x')).rejects.toBeTruthy();
   });
 });
+
+describe('the request body is what a POST handler actually reads', () => {
+  it('hands the handler parsed JSON, not the string axios serialised', async () => {
+    let body: unknown;
+    const c = client([{ method: 'POST', path: '/intakes', handler: (ctx) => { body = ctx.body; return {}; } }]);
+    await c.post('/intakes', { supplier_id: 's-1', gross_kg: '12.50' });
+    expect(body).toEqual({ supplier_id: 's-1', gross_kg: '12.50' });
+  });
+
+  it('gives a bodyless GET null, so a handler can branch on it without an undefined check', async () => {
+    let body: unknown = 'unset';
+    const c = client([{ method: 'GET', path: '/x', handler: (ctx) => { body = ctx.body; return {}; } }]);
+    await c.get('/x');
+    expect(body).toBeNull();
+  });
+});
+
+describe('route matching is exact, not approximate', () => {
+  it('treats a dot in a route path as a literal, never a regex wildcard', async () => {
+    const c = client([{ method: 'GET', path: '/reports/q1.2026', handler: () => ({ ok: 1 }) }]);
+    expect((await c.get('/reports/q1.2026')).status).toBe(200);
+    await expect(c.get('/reports/q1X2026')).rejects.toBeTruthy();
+  });
+
+  it('percent-decodes a path param, as a real server would', async () => {
+    let params: unknown;
+    const c = client([{ method: 'GET', path: '/suppliers/:id', handler: (ctx) => { params = ctx.params; return {}; } }]);
+    await c.get(`/suppliers/${encodeURIComponent('ТОВ Ягода')}`);
+    expect(params).toEqual({ id: 'ТОВ Ягода' });
+  });
+});

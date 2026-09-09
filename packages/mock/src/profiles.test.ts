@@ -54,3 +54,9 @@ describe('href — rewriting the current URL for sharing', () => {
     expect(P.href('?point=p1&profile=custody', 'fleet')).toBe('?point=p1&profile=fleet');
   });
 });
+
+describe('all', () => {
+  it('exposes every profile in declared order, so the switcher can render them', () => {
+    expect(P.all.map((d) => d.id)).toEqual(['custody', 'fleet', 'solo']);
+  });
+});
