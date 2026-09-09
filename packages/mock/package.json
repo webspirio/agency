@@ -1,0 +1,9 @@
+{
+  "name": "@agency/mock",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@agency/dec": "workspace:*" },
+  "peerDependencies": { "axios": "^1.20.0" }
+}
