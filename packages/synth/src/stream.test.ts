@@ -7,6 +7,16 @@ const LISTS: (keyof LocaleCorpus)[] = ['given', 'family', 'company', 'street', '
 /** `draw(n, f)` rather than `for (let i = 0; i < n; i++)`: `<` is restricted syntax here. */
 const draw = <T>(n: number, f: () => T): T[] => Array.from({ length: n }, f);
 
+const ALPHABET: Record<Locale, ReadonlySet<string>> = {
+  de: new Set([...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß']),
+  uk: new Set([...'АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯабвгґдеєжзиіїйклмнопрстуфхцчшщьюя']),
+};
+/** Separators a proper name may legitimately contain. */
+const SEPARATORS = new Set([' ', '-', '&', 'ʼ']);
+
+const inAlphabet = (locale: Locale, text: string): boolean =>
+  [...text].every((ch) => ALPHABET[locale].has(ch) || SEPARATORS.has(ch));
+
 describe('createStream — deterministic given a seed', () => {
   it('produces an identical sequence for the same seed', () => {
     const a = createStream(20260909);
@@ -37,6 +47,50 @@ describe('createStream — deterministic given a seed', () => {
   it('is not degenerate — 200 draws over a 22-name list use most of the list', () => {
     const s = createStream(99);
     expect(new Set(draw(200, () => s.pick(CORPUS.de.given))).size).toBeGreaterThanOrEqual(20);
+  });
+});
+
+/**
+ * The stream takes a locale and every one of its lists is indexed by it, so a locale
+ * that is read once and then dropped — `CORPUS.de.given` hard-coded — still returns
+ * real corpus names, still satisfies ALL_NAMES, and still passes every test above.
+ * That mutant was run: 18/18 green while emitting 'Hans Müller' for `--locale uk`.
+ * It is SPEC §337's blind green on 'Hans Müller' with the scripts swapped, and it is
+ * the one defect in this package a demo audience would notice before a check did.
+ */
+describe('createStream — locale fidelity', () => {
+  it('emits every locale in its own script, never the other locale’s', () => {
+    const s = createStream(2026);
+    const foreign: string[] = [];
+    for (const locale of LOCALES) {
+      for (const value of draw(60, () => s.person(locale))) {
+        if (!inAlphabet(locale, value)) foreign.push(locale + ' person ' + value);
+      }
+      for (const value of draw(60, () => s.company(locale))) {
+        if (!inAlphabet(locale, value)) foreign.push(locale + ' company ' + value);
+      }
+      for (const addr of draw(60, () => s.address(locale))) {
+        const [line = '', city = ''] = addr.split(', ');
+        const street = line.replace(/ \d+$/, '');
+        if (!inAlphabet(locale, street)) foreign.push(locale + ' street ' + street);
+        if (!inAlphabet(locale, city)) foreign.push(locale + ' city ' + city);
+      }
+    }
+    expect(foreign).toEqual([]);
+  });
+
+  it('draws each locale from that locale’s own lists', () => {
+    const s = createStream(77);
+    for (const locale of LOCALES) {
+      const given = new Set(CORPUS[locale].given);
+      const family = new Set(CORPUS[locale].family);
+      for (const value of draw(60, () => s.person(locale))) {
+        const [g = '', f = ''] = value.split(' ');
+        expect(given.has(g)).toBe(true);
+        expect(family.has(f)).toBe(true);
+      }
+      expect(CORPUS[locale].company).toContain(s.company(locale));
+    }
   });
 });
 
@@ -76,13 +130,6 @@ describe('corpus', () => {
  * next one loud.
  */
 describe('corpus integrity', () => {
-  const ALPHABET: Record<Locale, ReadonlySet<string>> = {
-    de: new Set([...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß']),
-    uk: new Set([...'АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯабвгґдеєжзиіїйклмнопрстуфхцчшщьюя']),
-  };
-  /** Separators a proper name may legitimately contain. */
-  const SEPARATORS = new Set([' ', '-', '&', 'ʼ']);
-
   const entries = (): { locale: Locale; list: keyof LocaleCorpus; value: string }[] =>
     LOCALES.flatMap((locale) =>
       LISTS.flatMap((list) => CORPUS[locale][list].map((value) => ({ locale, list, value }))),
