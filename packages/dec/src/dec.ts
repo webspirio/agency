@@ -67,9 +67,20 @@ export function div(a: string, n: number, scale = 2): string {
     throw new Error('dec.div: n must be a non-zero integer');
   }
   const A = split(a);
-  // One guard digit, then round it away — the same half-up the rest of the module uses.
-  const numerator = rescale(A.units, A.scale, scale + 1);
-  return render(rescale(numerator / BigInt(n), scale + 1, scale), scale);
+  // ONE rounding, at the target scale. Scaling the dividend to a single guard
+  // digit first and rounding that away rounds twice, and two half-ups are not
+  // one half-up: 0.00450 / 1 becomes 0.005 and then 0.01, where half-up at
+  // scale 2 is 0.00. Dividing the fully-scaled numerator instead keeps the
+  // whole remainder in play, so the only rounding is the last one.
+  const numerator = A.units * 10n ** BigInt(scale);
+  const denominator = 10n ** BigInt(A.scale) * BigInt(n);
+  const quotient = numerator / denominator; // bigint division truncates toward zero
+  const remainder = numerator % denominator;
+  const magnitude = remainder < 0n ? -remainder : remainder;
+  const divisor = denominator < 0n ? -denominator : denominator;
+  const negative = (numerator < 0n) !== (denominator < 0n);
+  if (magnitude * 2n >= divisor) return render(quotient + (negative ? -1n : 1n), scale);
+  return render(quotient, scale);
 }
 
 export function sum(values: string[], scale = 2): string {

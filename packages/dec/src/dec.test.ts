@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { add, sub, mul, div, sum, cmp, gt, lt, isZero, isNegative, round } from './dec';
+import { add, sub, mul, div, sum, cmp, gt, gte, lt, lte, isZero, isNegative, round } from './dec';
 
 describe('parsing', () => {
   it('rejects anything that is not a plain decimal', () => {
@@ -42,6 +42,25 @@ describe('div — a decimal split over a whole count', () => {
     expect(() => div('1.00', 0)).toThrow(/non-zero integer/);
     expect(() => div('1.00', 2.5)).toThrow(/non-zero integer/);
   });
+  it('rounds ONCE, even when the dividend is finer than the target scale', () => {
+    // 0.0045 sits BELOW the 0.005 tie, so half-up at scale 2 is 0.00. Scaling the
+    // dividend to a single guard digit first rounds it to 0.005 and then rounds
+    // that up: two roundings, one wrong answer. This is the money bug the module
+    // exists to make impossible, so it is asserted rather than assumed.
+    expect(div('0.00450', 1)).toBe('0.00');
+    expect(div('0.00451', 1)).toBe('0.00');
+    expect(div('1.00450', 1)).toBe('1.00');
+    expect(div('-1.00450', 1)).toBe('-1.00');
+    // a real tie at the target scale still goes up, away from zero
+    expect(div('0.005', 1)).toBe('0.01');
+    expect(div('-0.005', 1)).toBe('-0.01');
+    // an FX rate split over a count, kept at the rate's own scale
+    expect(div('47.8032', 4, 4)).toBe('11.9508');
+  });
+  it('divides by a negative count, rounding away from zero', () => {
+    expect(div('1.00', -3)).toBe('-0.33');
+    expect(div('-1.00', -3)).toBe('0.33');
+  });
 });
 
 describe('sum — rounded per line then summed', () => {
@@ -58,6 +77,12 @@ describe('cmp — numeric, never lexicographic', () => {
     expect(cmp('10', '10.00')).toBe(0);
     expect(gt('0.01', '0')).toBe(true);
     expect(lt('-0.01', '0')).toBe(true);
+    // gte/lte were exported but unasserted: flipping either to a strict > / <
+    // left all 690 tests green, so the equality boundary is pinned here.
+    expect(gte('1.00', '1.000')).toBe(true);
+    expect(lte('1.00', '1.000')).toBe(true);
+    expect(gte('0.99', '1.00')).toBe(false);
+    expect(lte('1.01', '1.00')).toBe(false);
     expect(isZero('0.00')).toBe(true);
     expect(isNegative('-0.01')).toBe(true);
   });
