@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{locale}}">
+<html lang="{{locale}}" data-theme-key="{{slug}}:theme">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,9 +7,13 @@
     <title>{{title}}</title>
     <script>
       // Paint 0. Without this the first frame is light and then snaps to dark,
-      // in front of the client. Same key the kit's theme store writes.
+      // in front of the client. The key is read from <html data-theme-key>,
+      // which is the same attribute @agency/kit's themeStorageKey() reads: one
+      // definition, so the two halves cannot drift apart. It is per-slug so two
+      // mocks served from one origin do not share a theme.
       try {
-        var pref = localStorage.getItem('web-starter:theme');
+        var key = document.documentElement.dataset.themeKey;
+        var pref = key ? localStorage.getItem(key) : null;
         var dark =
           pref === 'dark' ||
           ((pref === null || pref === 'system') &&

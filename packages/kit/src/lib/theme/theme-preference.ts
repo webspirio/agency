@@ -2,7 +2,38 @@ import { useSyncExternalStore } from 'react';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 
-const KEY = 'web-starter:theme';
+/**
+ * The key when a host sets no `data-theme-key`. A LAST RESORT, not a default to
+ * rely on: every mock `agency new` writes carries the attribute, and
+ * `packages/cli/src/template.test.ts` asserts it does.
+ */
+const FALLBACK_KEY = 'agency-kit:theme';
+
+/**
+ * The localStorage key this store reads and writes, scoped to the app that is
+ * running — read from `<html data-theme-key="…">`, which `agency new` fills in
+ * with the mock's slug.
+ *
+ * It used to be a hardcoded `web-starter:theme`. One key, shared by every mock
+ * served from one origin: harmless in production, where each slug gets its own
+ * Worker, and wrong on `localhost:5173`, which is where every mock is reviewed
+ * before a client ever sees it — flip one mock to dark and the next one opens
+ * dark too.
+ *
+ * Read per call rather than captured at module load so a test (and a host that
+ * mounts two apps) can change it, and because the attribute is the ONE place
+ * the key is written: `index.html`'s paint-0 script reads the same attribute,
+ * and that agreement is the entire point of the inline script.
+ */
+export function themeStorageKey(): string {
+  try {
+    return document.documentElement.dataset.themeKey || FALLBACK_KEY;
+  } catch {
+    // No document at all (SSR, a node test) — nothing can be persisted anyway.
+    return FALLBACK_KEY;
+  }
+}
+
 const PREFERENCES: readonly ThemePreference[] = ['system', 'light', 'dark'];
 
 const isPreference = (v: string | null): v is ThemePreference =>
@@ -10,7 +41,7 @@ const isPreference = (v: string | null): v is ThemePreference =>
 
 function getStored(): ThemePreference {
   try {
-    const v = localStorage.getItem(KEY);
+    const v = localStorage.getItem(themeStorageKey());
     return isPreference(v) ? v : 'system';
   } catch {
     return 'system';
@@ -41,7 +72,7 @@ function createThemeStore(): Store {
     preference: getStored(),
     setPreference: (preference) => {
       try {
-        localStorage.setItem(KEY, preference);
+        localStorage.setItem(themeStorageKey(), preference);
       } catch {
         /* storage disabled — ignore */
       }

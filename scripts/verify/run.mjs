@@ -236,7 +236,13 @@ function classify(res, skipExit) {
   if (res.code === 127 || res.code === 126) return UNRUNNABLE;
   const text = `${res.out}\n${res.err}`;
   if (SHELL_CANNOT_START.test(text) || PNPM_MISSING_SCRIPT.test(text)) return UNRUNNABLE;
-  if (NODE_CANNOT_LOAD.test(text)) return UNRUNNABLE;
+  // Narrow, deliberately. This pattern used to be matched against stdout AND
+  // stderr together, so a vitest run whose TEST fails on a bad import — which
+  // prints `Cannot find module './missing'` on stdout — was reported UNRUNNABLE:
+  // a status asserting nothing was tested, over a genuine red. A process that
+  // truly could not load its entry point writes the error to stderr and produces
+  // no stdout at all, so requiring both is what separates the two cases.
+  if (res.out.trim() === '' && NODE_CANNOT_LOAD.test(res.err)) return UNRUNNABLE;
   return FAILED;
 }
 

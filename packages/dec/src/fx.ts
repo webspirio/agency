@@ -45,3 +45,6 @@ export function stampFx(amount: string, ccy: string, rate: string, baseScale = 2
   const rt = canonical(rate, baseScale);
   return { amount: amt, ccy, rate: rt, base: mul(amt, rt, baseScale) };
 }
+
+// MUTATION 4
+export const mutationTypeError: number = "not a number";

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { mockAdapter, type Route } from './index';
 import { DomainError, type ErrorEnvelope } from './errors';
 
@@ -265,6 +265,33 @@ describe('validateStatus is the caller\'s, exactly as settle() reads it', () => 
     const c = client([{ method: 'GET', path: '/old', status: 302, handler: () => ({ ok: 1 }) }]);
     await expect(c.get('/old')).rejects.toBeTruthy();
   });
+
+  /**
+   * The narrowing this file's headline promise underwent, recorded on purpose.
+   * settle() resolves whenever validateStatus is FALSY — `!response.status ||
+   * !validateStatus || validateStatus(status)` — so an adapter driven directly
+   * with a hand-built config resolves a 409 instead of throwing. The invariant
+   * is therefore 'the CALLER's validateStatus decides, exactly as settle()
+   * reads it', not 'a non-2xx always throws'.
+   *
+   * Nothing on the product path can hit it: `axios.create` always merges the
+   * default validateStatus in, and a mock's client.ts is one `axios.create`.
+   * Both halves are asserted here so the edge is a decision, not an accident.
+   */
+  it('resolves a 409 when the config carries no validateStatus at all, as settle() does', async () => {
+    const routes: Route[] = [{
+      method: 'GET', path: '/y',
+      handler: () => { throw new DomainError(409, 'SHIFT_CLOSED', 'Shift is closed'); },
+    }];
+    const bare = mockAdapter(routes, { caps: new Set<string>(), actor: ACTOR, now: NOW });
+    const res = await bare({ method: 'get', url: '/y' } as InternalAxiosRequestConfig);
+    expect(res.status).toBe(409);
+    expect(res.data).toMatchObject({ statusCode: 409, code: 'SHIFT_CLOSED' });
+
+    // …and the same table through axios.create — the only way a mock is ever
+    // wired — throws, because create() merged the default validateStatus in.
+    await expect(client(routes).get('/y')).rejects.toBeInstanceOf(AxiosError);
+  });
 });
 
 describe('the request path is resolved the way buildFullPath resolves it', () => {
@@ -366,6 +393,24 @@ describe('query params reach the handler in the shape the wire produces', () => 
   it('leaves a single-valued param a plain string', async () => {
     expect(await queryOf('/suppliers', { params: { page: '2' } })).toEqual({ page: '2' });
   });
+
+  /**
+   * A fragment is never sent: the browser strips everything from '#' on before
+   * the request leaves. Slicing the raw uri at the first '?' instead of parsing
+   * it leaks it into the LAST value — `{ tag: 'a#section' }` — which is a value
+   * no server could ever produce, and it disagrees with pathOf on the same
+   * string, since pathOf parses. It only fires when the url carries both '?'
+   * and '#' and the caller passed no `params`, because axios's own buildURL
+   * drops the hash when it appends.
+   */
+  it('drops a url fragment instead of leaking it into the last query value', async () => {
+    expect(await queryOf('/suppliers?tag=a#section')).toEqual({ tag: 'a' });
+    expect(await queryOf('/suppliers?tag=a&page=1#section')).toEqual({ tag: 'a', page: '1' });
+    expect(await queryOf('/suppliers#section')).toEqual({});
+    // and with params present, where axios strips the hash itself
+    expect(await queryOf('/suppliers?tag=a#section', { params: { page: '1' } }))
+      .toEqual({ tag: 'a', page: '1' });
+  });
 });
 
 describe('a malformed url is a 400 envelope, not a raw URIError', () => {
@@ -375,5 +420,121 @@ describe('a malformed url is a 400 envelope, not a raw URIError', () => {
     expect(err).toBeInstanceOf(AxiosError);
     expect((err as AxiosError).response?.status).toBe(400);
     expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 400, code: 'BAD_REQUEST' });
+  });
+});
+
+/**
+ * `axios.getUri` on the DEFAULT export is a method of the global axios
+ * instance, so it merges `axios.defaults` into whatever config it is handed.
+ * The config reaching an adapter has already been through dispatchRequest with
+ * its OWN instance's defaults merged in, so any global default the URI builder
+ * adds on top is a value the real request would never have carried — and
+ * `axios.create` snapshots defaults at create time, so an instance made before
+ * the global was touched genuinely does not have them.
+ */
+describe('the request uri is built from the config alone, never from global axios defaults', () => {
+  it('ignores a baseURL set on the global instance after the client was created', async () => {
+    const c = axios.create({
+      adapter: mockAdapter([{ method: 'GET', path: '/suppliers', handler: () => ({ ok: 1 }) }], {
+        caps: new Set<string>(), actor: ACTOR, now: NOW,
+      }),
+    });
+    axios.defaults.baseURL = 'http://global.example/api';
+    try {
+      // the real request would go to '/suppliers'; a globally-prefixed uri with
+      // config.baseURL still undefined means nothing gets stripped back off.
+      expect((await c.get('/suppliers')).status).toBe(200);
+    } finally {
+      delete axios.defaults.baseURL;
+    }
+  });
+
+  it('ignores params set on the global instance, which this client never had', async () => {
+    const c = client([QUERY_ROUTE]);
+    axios.defaults.params = { tenant: 'GLOBAL' };
+    try {
+      seenQuery = undefined;
+      await c.get('/suppliers', { params: { page: '2' } });
+      expect(seenQuery).toEqual({ page: '2' });
+    } finally {
+      delete axios.defaults.params;
+    }
+  });
+});
+
+/**
+ * express with `strict routing` off — Nest's default, and what the comment on
+ * pathOf cites — accepts exactly ONE optional trailing slash. Measured against
+ * path-to-regexp 8.4.2, express 5's matcher: '/suppliers' becomes
+ * /^(?:\/suppliers)(?:\/$)?$/i, which matches '/suppliers/' and rejects
+ * '/suppliers//'. Absorbing any number is MORE permissive than the product,
+ * which is the divergence direction this package exists to prevent: a url that
+ * works in the demo and 404s after conversion.
+ */
+describe('trailing slashes are absorbed the way express absorbs them: one, not any number', () => {
+  it('404s a path with more trailing slashes than a server would accept', async () => {
+    const c = client([{ method: 'GET', path: '/suppliers', handler: () => ({ ok: 1 }) }]);
+    expect((await c.get('/suppliers')).status).toBe(200);
+    expect((await c.get('/suppliers/')).status).toBe(200);
+    await expect(c.get('/suppliers//')).rejects.toBeTruthy();
+    await expect(c.get('/suppliers///')).rejects.toBeTruthy();
+  });
+});
+
+/**
+ * `reference/contract/all-exceptions.filter.ts:78` sets `path: request.url` —
+ * the path the SERVER received: global prefix included, query string included,
+ * origin excluded. The envelope is field-for-field faithful everywhere else, so
+ * a support screen or a bug report rendering `envelope.path` must not read one
+ * string in the demo and a different one in production.
+ */
+describe('the error envelope\'s path is the one the product\'s filter emits', () => {
+  it('keeps the baseURL prefix and the query string, and drops the origin', async () => {
+    const c = axios.create({
+      baseURL: 'http://mock/api',
+      adapter: mockAdapter([], { caps: new Set<string>(), actor: ACTOR, now: NOW }),
+    });
+    const err = await c.get('/nope', { params: { a: 1 } }).then(() => null, (e: AxiosError) => e);
+    expect((err?.response?.data as ErrorEnvelope | undefined)?.path).toBe('/api/nope?a=1');
+  });
+
+  it('is identical for a relative baseURL, which is what a mock actually ships with', async () => {
+    const c = axios.create({
+      baseURL: '/api',
+      adapter: mockAdapter([], { caps: new Set<string>(), actor: ACTOR, now: NOW }),
+    });
+    const err = await c.get('/nope', { params: { a: 1 } }).then(() => null, (e: AxiosError) => e);
+    expect((err?.response?.data as ErrorEnvelope | undefined)?.path).toBe('/api/nope?a=1');
+  });
+
+  it('is the bare path when there is no prefix and no query', async () => {
+    const c = client([{ method: 'GET', path: '/x', handler: () => { throw new DomainError(409, 'C', 'c'); } }]);
+    const err = await c.get('/x').then(() => null, (e: AxiosError) => e);
+    expect((err?.response?.data as ErrorEnvelope | undefined)?.path).toBe('/x');
+  });
+});
+
+/**
+ * `new URL()` refuses some strings axios will happily hand an adapter verbatim
+ * ('http://[' is one), so pathOf, queryOf and basePathOf each carry a fallback.
+ * They have to AGREE, or a url resolves to a route whose query is empty — the
+ * pathOf/queryOf disagreement this round already fixed once, one branch down.
+ */
+describe('a uri the URL parser refuses is still resolved, and by the same rules', () => {
+  it('treats an unparseable baseURL as a literal prefix and still reads the query off it', async () => {
+    const c = axios.create({
+      baseURL: 'http://[',
+      adapter: mockAdapter([QUERY_ROUTE], { caps: new Set<string>(), actor: ACTOR, now: NOW }),
+    });
+    seenQuery = undefined;
+    expect((await c.get('/suppliers?tag=a#section')).status).toBe(200);
+    expect(seenQuery).toEqual({ tag: 'a' });
+  });
+
+  it('404s rather than throwing when nothing can be made of the url', async () => {
+    const c = client([{ method: 'GET', path: '/x', handler: () => ({ ok: 1 }) }]);
+    const err = await c.get('http://[/x').then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(AxiosError);
+    expect((err as AxiosError).response?.status).toBe(404);
   });
 });

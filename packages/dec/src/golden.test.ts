@@ -107,6 +107,32 @@ const scaleOf = (v: string): number => {
   return dot === -1 ? 0 : v.length - dot - 1;
 };
 
+/**
+ * The package's runtime surface, read off the module itself. The previous form
+ * of the coverage assertion below compared the fixture against the hand-written
+ * EVERY_OP literal above, so both sides came from the same two hand-maintained
+ * sources and a new export could never make it red — which is exactly how
+ * `scaleOf` shipped with no test at all. Deriving one side from `dec` makes an
+ * uncovered export a startup failure instead of a silent hole.
+ */
+const EXPORTED_FUNCTIONS = (): string[] =>
+  Object.keys(dec).filter((k) => typeof (dec as Record<string, unknown>)[k] === 'function');
+
+/**
+ * Exports whose coverage lives outside this fixture. Each MUST name the file
+ * that covers it, so adding an entry is a visible decision rather than a way to
+ * make this test quiet.
+ */
+const COVERED_ELSEWHERE: string[] = [
+  // dec.test.ts — "scaleOf — the digit count, and a rejection for anything it
+  // cannot read". A reader, not an arithmetic op: it has no `expected` value a
+  // decimal oracle could produce, so it cannot be a fixture row.
+  'scaleOf',
+  // fx.test.ts — "stampFx". Composes mul/round rather than doing arithmetic,
+  // and returns an object, which this fixture's Case shape cannot express.
+  'stampFx',
+];
+
 describe('golden parity fixture', () => {
   it('has at least 200 cases so the backend money module can be asserted against it later', () => {
     expect(cases.length).toBeGreaterThanOrEqual(200);
@@ -114,6 +140,15 @@ describe('golden parity fixture', () => {
 
   it('covers every exported operation, not just add/sub/mul', () => {
     const ops = new Set(cases.map((c) => c.op));
+    const exported = EXPORTED_FUNCTIONS();
+    // (1) every runtime export is either a fixture op or explicitly accounted
+    //     for above. A new export with no coverage lands here, named.
+    expect(exported.filter((k) => !ops.has(k as Case['op']) && !COVERED_ELSEWHERE.includes(k)))
+      .toEqual([]);
+    // (2) and back the other way: every name in EVERY_OP and in the allowlist
+    //     is really exported, so a rename cannot leave a dead entry behind
+    //     quietly reducing the check above to a no-op.
+    expect([...EVERY_OP, ...COVERED_ELSEWHERE].filter((k) => !exported.includes(k))).toEqual([]);
     expect(EVERY_OP.filter((op) => !ops.has(op))).toEqual([]);
     expect(ops.size).toBe(EVERY_OP.length);
   });

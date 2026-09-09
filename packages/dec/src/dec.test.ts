@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { add, sub, mul, div, sum, cmp, gt, gte, lt, lte, isZero, isNegative, round } from './dec';
+import { add, sub, mul, div, sum, cmp, gt, gte, lt, lte, isZero, isNegative, round, scaleOf } from './dec';
 
 describe('parsing', () => {
   it('rejects anything that is not a plain decimal', () => {
@@ -203,5 +203,53 @@ describe('scale validation', () => {
     expect(round('-2.5', 0)).toBe('-3');
     expect(add('1', '2', 0)).toBe('3');
     expect(sum(['0.6', '0.6'], 0)).toBe('2');
+  });
+});
+
+/**
+ * `scaleOf` is the module's only READER — it answers a question about a string
+ * rather than computing with it — and that is exactly why it needs its own
+ * assertions. Its single caller today, `fx.canonical`, feeds the answer to
+ * `round()`, which re-validates, so a `scaleOf` that silently returns 0 for a
+ * value it cannot read is invisible from every other test in this package: the
+ * whole suite stayed green (2411/2411) with the body replaced by an unvalidated
+ * `v.indexOf('.')` scan. The next caller to use it as a validator would get the
+ * silent 0.
+ *
+ * So the contract is two-part and both parts are asserted here: the digit count
+ * is the count of digits AFTER the point (not a string offset — '000012.30' is
+ * scale 2, not 9), and a string this module cannot read is an ERROR, never 0.
+ */
+describe('scaleOf — the digit count, and a rejection for anything it cannot read', () => {
+  it('counts the fractional digits as written, padding included', () => {
+    expect(scaleOf('1.20')).toBe(2);
+    expect(scaleOf('7')).toBe(0);
+    expect(scaleOf('-0')).toBe(0);
+    expect(scaleOf('47.8032')).toBe(4);
+    expect(scaleOf('-1.005')).toBe(3);
+    // leading zeros belong to the WHOLE part and never inflate the scale.
+    expect(scaleOf('000012.30')).toBe(2);
+  });
+
+  it('throws dec\'s own /decimal/ error for a string it cannot read, never 0', () => {
+    for (const bad of ['abc', '', ' 1', '1.2.3', 'NaN', '0x10', '+1', '1.', '.5']) {
+      expect(() => scaleOf(bad), bad).toThrow(/decimal/);
+    }
+    // scientific notation is the dangerous one: '1e-3' LOOKS like a decimal and
+    // has no '.', so an unvalidated scan answers 0 for a value with three
+    // fractional digits.
+    expect(() => scaleOf('1e-3')).toThrow(/decimal/);
+    expect(() => scaleOf(1.2 as unknown as string)).toThrow(/decimal/);
+  });
+
+  /**
+   * The property fx.canonical actually depends on: scaleOf agrees with round()
+   * about how many digits a value is written with, so `round(v, scaleOf(v))`
+   * is the identity on every canonical decimal.
+   */
+  it('agrees with round(), so round(v, scaleOf(v)) returns v unchanged', () => {
+    for (const v of ['0.004', '1.005', '100.00', '47.8032', '-2.5', '9999999999.99', '0']) {
+      expect(round(v, scaleOf(v)), v).toBe(v);
+    }
   });
 });

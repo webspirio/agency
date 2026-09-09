@@ -11,6 +11,10 @@
       kit surface renders as unstyled boxes. No error, no warning, a green build.
       The path is relative to THIS file at `mocks/<slug>/src/index.css`.
 
+      `{ts,tsx}`, not `tsx`. The scanner is textual and knows nothing about
+      components: `focusRing` in `packages/kit/src/lib/cn.ts` names three
+      utilities from a plain `.ts` file, and a `*.tsx` glob does not see them.
+
    2. The @theme block. A utility only exists if a token backs it: `bg-card` is
       generated from `--color-card` and from nothing else. @source with no
       @theme finds the class name and emits nothing for it — the same silent
@@ -20,7 +24,7 @@
    below the @theme block, and no component anywhere, reads a literal colour. */
 @import "tailwindcss";
 @import "tw-animate-css";
-@source "../../../packages/kit/src/**/*.tsx";
+@source "../../../packages/kit/src/**/*.{ts,tsx}";
 
 /* The kit's theme store toggles `.dark` on <html> (see @agency/kit/lib/theme).
    Tailwind's stock `dark:` variant follows prefers-color-scheme instead, which

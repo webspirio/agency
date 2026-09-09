@@ -50,7 +50,7 @@ describe('stampFx', () => {
    * `base` field was canonical while the two fields it was derived from were
    * not.
    */
-  it('stores canonical amount and rate, so two stamps of the same money are byte-identical', () => {
+  it('stores canonical amount and rate, so two stamps of the same money are byte-identical at or above baseScale', () => {
     expect(stampFx('1.2', 'EUR', '1.0000')).toEqual(stampFx('1.20', 'EUR', '1.0000'));
     expect(JSON.stringify(stampFx('1.2', 'EUR', '1.0000'))).toBe(
       JSON.stringify(stampFx('1.20', 'EUR', '1.0000')),
@@ -77,5 +77,42 @@ describe('stampFx', () => {
     // and the finer-than-baseScale amount keeps its own scale on the row
     expect(stampFx('0.004', 'X', '1000.0000').amount).toBe('0.004');
     expect(stampFx('1.005', 'X', '2.0000').amount).toBe('1.005');
+  });
+
+  /**
+   * A DELIBERATE, recorded consequence of the max(): at a non-default baseScale
+   * the amount is stored at the BASE currency's scale even though it is not
+   * denominated in the base currency. stampFx('100.00','EUR','47.8032',6) says
+   * '100.000000' EUR, and a client that formats by `ccy`'s minor units has four
+   * digits of padding to strip.
+   *
+   * It is kept because the alternative is worse: rounding `amount` down to its
+   * own scale before the multiply reintroduces double rounding (the three cases
+   * in the test above), and collapsing BELOW baseScale needs a currency -> scale
+   * map this module has no way to know. The row is internally consistent — all
+   * three of amount, rate and base share one scale — which is the property
+   * `diffFields` actually needs. Only the default baseScale = 2 path ships.
+   */
+  it('widens amount and rate to baseScale, so one row carries one scale throughout', () => {
+    expect(stampFx('100.00', 'EUR', '47.8032', 6)).toEqual({
+      amount: '100.000000', ccy: 'EUR', rate: '47.803200', base: '4780.320000',
+    });
+    expect(stampFx('100.00', 'EUR', '47.8032', 4).rate).toBe('47.8032');
+    // the default path, which is the one every mock takes, is untouched
+    expect(stampFx('100.00', 'EUR', '47.8032')).toEqual({
+      amount: '100.00', ccy: 'EUR', rate: '47.8032', base: '4780.32',
+    });
+  });
+
+  /**
+   * The residual limit stated in fx.ts, asserted rather than left as prose: a
+   * scale FINER than baseScale is preserved, so '0.004' and '0.0040' are still
+   * two different rows. Closing it needs a currency -> scale map; when one
+   * arrives this test is the thing that goes red and asks for a decision.
+   */
+  it('does not collapse a scale finer than baseScale — the stated residual limit', () => {
+    expect(stampFx('0.004', 'X', '1.0000').amount).toBe('0.004');
+    expect(stampFx('0.0040', 'X', '1.0000').amount).toBe('0.0040');
+    expect(stampFx('0.004', 'X', '1.0000')).not.toEqual(stampFx('0.0040', 'X', '1.0000'));
   });
 });

@@ -101,6 +101,20 @@ describe('the five statuses never collapse', () => {
     expect(r.code).toBe(1);
   });
 
+  it('does not relabel a genuine FAILED as UNRUNNABLE because the output mentions a missing module', () => {
+    // The "could not load its entry point" pattern was matched against stdout AND
+    // stderr together. A vitest run whose test fails on a bad import prints
+    // `Cannot find module './missing'` on stdout — so a real red was reported as
+    // UNRUNNABLE, a status that asserts nothing was tested. UNRUNNABLE is the
+    // quieter direction to be wrong in, which is what makes it the worse one.
+    const r = verify(['--json', '--only', 'selftest:failedwithloadmessage'], {
+      AGENCY_VERIFY_SELFTEST: '1',
+    });
+    const row = asReport(r.out).checks[0];
+    expect(row?.status).toBe('FAILED');
+    expect(row?.blocking).toBe(true);
+  });
+
   it('reports NOT_RUN for a check whose dependency did not pass', () => {
     // NOT_RUN is not FAILED: nothing was learned about this check's subject.
     const r = verify(['--json', '--only', 'selftest:fail,selftest:after'], { AGENCY_VERIFY_SELFTEST: '1' });

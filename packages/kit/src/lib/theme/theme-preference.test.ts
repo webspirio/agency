@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { vi } from 'vitest';
+import { themeStorageKey } from './theme-preference';
 
-const KEY = 'web-starter:theme';
+/** Not a literal: the key is per-app now, so a test that spelled one out would
+ *  agree with itself and with nothing else. */
+const KEY = themeStorageKey();
 
 async function freshStore() {
   const mod = await import('./theme-preference');

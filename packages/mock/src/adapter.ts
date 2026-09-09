@@ -1,4 +1,4 @@
-import axios, { AxiosError, type AxiosAdapter } from 'axios';
+import { Axios, AxiosError, type AxiosAdapter } from 'axios';
 import { DomainError, envelopeOf, type ErrorEnvelope } from './errors';
 import { compile, type Actor, type Ctx, type Route } from './router';
 import { createSeq } from './types';
@@ -22,6 +22,44 @@ export type MockAdapterOptions = {
 /** Only ever used to parse a path; never fetched. */
 const PLACEHOLDER_ORIGIN = 'http://mock.invalid';
 
+/**
+ * A defaults-FREE axios, built once, used only to serialise a config into its
+ * uri. `axios.getUri` is a method of the GLOBAL instance, so it merges live
+ * `axios.defaults` into whatever it is handed: a client created before someone
+ * set `axios.defaults.baseURL` would have its mocked requests resolved against
+ * a prefix the real request never carries (a 404 here, a 200 in production),
+ * and `axios.defaults.params` would arrive in `ctx.query` as a param the caller
+ * never sent. The config reaching an adapter is already fully merged —
+ * dispatchRequest folded in its own instance's defaults before calling us — so
+ * config-only is exactly right.
+ */
+const URI_BUILDER = new Axios({});
+
+/**
+ * The uri parsed against a placeholder origin so a server-relative one parses
+ * at all. `null` for a uri the parser refuses, which every caller falls back
+ * from rather than throwing.
+ */
+function parseUri(uri: string): URL | null {
+  try {
+    return new URL(uri, PLACEHOLDER_ORIGIN);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the SERVER would see in `request.url`: path and query string, origin and
+ * fragment excluded. `reference/contract/all-exceptions.filter.ts:78` puts
+ * exactly this in the error envelope's `path`, so a support screen or a bug
+ * report that renders `envelope.path` reads the same string in the demo as in
+ * production — prefix and query included, not the stripped route path.
+ */
+function requestUrlOf(uri: string): string {
+  const parsed = parseUri(uri);
+  return parsed ? `${parsed.pathname}${parsed.search}` : uri;
+}
+
 /** The path part of a baseURL, without its trailing slash. '' when there is none. */
 function basePathOf(baseURL: string | undefined): string {
   if (!baseURL) return '';
@@ -35,21 +73,26 @@ function basePathOf(baseURL: string | undefined): string {
 /**
  * The path the server would route on, resolved the way `buildFullPath` resolves
  * it: an absolute url, a relative one with no leading slash and a baseURL-prefixed
- * one all reduce to the same route-table path, and one trailing slash is absorbed
+ * one all reduce to the same route-table path, and ONE trailing slash is absorbed
  * because express with `strict routing` off — Nest's default — treats
  * '/suppliers/' and '/suppliers' as the same route.
+ *
+ * Exactly one, not any number. MEASURED against path-to-regexp 8.4.2, express
+ * 5's own matcher: '/suppliers' compiles to /^(?:\/suppliers)(?:\/$)?$/i, so
+ * '/suppliers/' matches and '/suppliers//' and '/suppliers///' do not. Absorbing
+ * them all would make the mock MORE permissive than the product — a url that
+ * works in the demo and 404s after conversion, which is the divergence direction
+ * this package exists to prevent.
  */
 function pathOf(uri: string, baseURL: string | undefined): string {
-  let path: string;
-  try {
-    path = new URL(uri, PLACEHOLDER_ORIGIN).pathname;
-  } catch {
-    path = (uri.split('?')[0] ?? '/').split('#')[0] ?? '/';
-  }
+  const parsed = parseUri(uri);
+  let path = parsed
+    ? parsed.pathname
+    : ((uri.split('#')[0] ?? '/').split('?')[0] ?? '/');
   const base = basePathOf(baseURL);
   if (base && (path === base || path.startsWith(`${base}/`))) path = path.slice(base.length);
   if (!path.startsWith('/')) path = `/${path}`;
-  return path === '/' ? path : path.replace(/\/+$/, '') || '/';
+  return path === '/' ? path : path.replace(/\/$/, '') || '/';
 }
 
 /**
@@ -61,9 +104,14 @@ function pathOf(uri: string, baseURL: string | undefined): string {
  * product, or a handler that works in the mock breaks on conversion.
  */
 function queryOf(uri: string): Record<string, string | string[]> {
-  const mark = uri.indexOf('?');
-  if (mark === -1) return {};
-  const search = new URLSearchParams(uri.slice(mark + 1));
+  // PARSED, not sliced at the first '?': a fragment is stripped by the browser
+  // before the request is ever sent, so slicing leaks '#section' into the last
+  // value — `{ tag: 'a#section' }`, which no server could produce — and makes
+  // this function disagree with pathOf about the same string.
+  const parsed = parseUri(uri);
+  const sent = parsed ? parsed.search : `?${(uri.split('#')[0] ?? '').split('?')[1] ?? ''}`;
+  if (sent === '?' || sent === '') return {};
+  const search = new URLSearchParams(sent);
   const entries = new Map<string, string | string[]>();
   for (const key of search.keys()) {
     if (entries.has(key)) continue;
@@ -119,15 +167,19 @@ export function mockAdapter(routes: Route[], opts: MockAdapterOptions): AxiosAda
     // Everything that can throw — url resolution, matching, param decoding, the
     // handler, and the serialisation of what it returned — is inside the guard,
     // so nothing but an AxiosError can ever leave this adapter.
-    let path = pathOf(config.url ?? '/', config.baseURL);
+    // `path` is the ENVELOPE's field — request.url, as the product's filter
+    // emits it. The ROUTE path is a separate, stripped derivation below. The
+    // seed is a bare read, never a call: it is the one expression outside the
+    // guard, so it must not be able to throw. It only survives if getUri does.
+    let path = config.url ?? '/';
     let status: number;
     let data: unknown;
     let cause: unknown;
 
     try {
-      const uri = axios.getUri(config);
-      path = pathOf(uri, config.baseURL);
-      const hit = table.match(config.method ?? 'get', path);
+      const uri = URI_BUILDER.getUri(config);
+      path = requestUrlOf(uri);
+      const hit = table.match(config.method ?? 'get', pathOf(uri, config.baseURL));
 
       // Capabilities gate the ROUTE. An off-profile screen is not merely hidden
       // from the menu — its data is unreachable, so a typed URL cannot surface

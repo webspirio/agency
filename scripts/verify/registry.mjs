@@ -327,6 +327,17 @@ const SELFTEST = [
       "passing check's stdout — which is a skip reading like a pass, one level down.",
     blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
   },
+  {
+    id: 'selftest:failedwithloadmessage',
+    tier: 'fast',
+    cmd: 'sh -c "echo \\"FAIL src/a.test.ts > Error: Cannot find module \'./missing\'\\"; exit 1"',
+    proves:
+      'A check that RAN and reported a failure mentioning a missing module on stdout is classified ' +
+      'FAILED, not UNRUNNABLE. A test suite whose test fails on a bad import prints exactly that ' +
+      'text, and relabelling it as "could not start" hides a genuine red behind a status that ' +
+      'claims nothing was tested.',
+    blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
+  },
 ];
 
 if (process.env.AGENCY_VERIFY_SELFTEST) {

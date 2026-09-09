@@ -3,6 +3,14 @@ export type ErrorEnvelope = {
   /** Canonical HTTP phrase. DECORATIVE — never branch on it. */
   error: string;
   message: string | string[];
+  /**
+   * `request.url` as the SERVER received it: global prefix and query string
+   * included, origin and fragment excluded — what
+   * `reference/contract/all-exceptions.filter.ts:78` puts here. The adapter
+   * derives it from the resolved request uri, never from the stripped route
+   * path, so a screen rendering this field reads one string in the demo and in
+   * production.
+   */
   path: string;
   timestamp: string;
   requestId?: string;

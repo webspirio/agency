@@ -76,7 +76,25 @@ function patternOf(route: Route): { re: RegExp; keys: string[]; sample: string }
           `compile: '${segment}' is not a valid param name in ${route.path} — a param segment must be a bare identifier like ':id'`,
         );
       }
-      keys.push(segment.slice(1));
+      const name = segment.slice(1);
+      // A duplicate name cannot mean what it looks like: match()'s
+      // Object.fromEntries keeps only the LAST capture, so '/a/:id/b/:id'
+      // hands the handler one `id` and the first segment is unrecoverable.
+      //
+      // MEASURED, against path-to-regexp 8.4.2 — express 5's own matcher:
+      // it ACCEPTS the duplicate and loses the same segment,
+      // `match('/a/:id/b/:id')('/a/7/b/9')` -> `{ id: '9' }`, and its reverse
+      // `compile()` fills both segments from one value, '/a/7/b/7'. So this is
+      // not a mock-vs-product divergence — it is a pattern that means nothing
+      // coherent in EITHER, which is exactly what this function refuses. A
+      // startup throw costs the author one message; the alternative costs a
+      // handler a param that silently is not the one it was written against.
+      if (keys.includes(name)) {
+        throw new Error(
+          `compile: duplicate param name '${segment}' in ${route.path} — each param segment must be uniquely named`,
+        );
+      }
+      keys.push(name);
       sample.push(PARAM_SAMPLE);
       return '([^/]+)';
     })
