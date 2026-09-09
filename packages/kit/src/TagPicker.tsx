@@ -161,6 +161,7 @@ export function TagPicker({
           </Chip>
         )}
       </div>
+      {/* oxlint-disable-next-line agency/no-decimal-comparison -- a count of hidden tags, an integer, not a decimal string. */}
       {!searching && (hiddenUnselected > 0 || expanded) && (
         <button
           type="button"

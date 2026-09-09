@@ -177,6 +177,7 @@ export function mockAdapter(routes: Route[], opts: MockAdapterOptions): AxiosAda
         : (envelope?.message ?? `Request failed with status code ${status}`);
       const error = new AxiosError(
         String(message),
+        // oxlint-disable-next-line agency/no-decimal-comparison -- an HTTP status integer this file chose itself, never a value read off a payload: 5xx is ERR_BAD_RESPONSE, everything else ERR_BAD_REQUEST.
         status >= 500 ? AxiosError.ERR_BAD_RESPONSE : AxiosError.ERR_BAD_REQUEST,
         config,
         null,

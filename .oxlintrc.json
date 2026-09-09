@@ -1,6 +1,26 @@
 {
   "extends": ["./oxlint.base.json"],
 
+  // What makes a LINE-LEVEL exemption a ratchet rather than a one-way
+  // suppression. A file-level entry in `overrides` is pinned by
+  // `scripts/verify/baselines/lint-exempt.json`, so it goes red the day it
+  // stops suppressing anything. An inline `// oxlint-disable-next-line` has no
+  // such baseline — the ratchet reads this file's `overrides` and nothing else,
+  // and cannot see a comment. Without this option a directive left behind by a
+  // rewrite sits there forever, excusing a line that no longer offends and
+  // silently pre-authorising whatever gets written there next. With it set to
+  // `error`, a stale directive is a lint failure, which is the same guarantee
+  // the baseline gives the two remaining file-level entries — measured: a
+  // directive above a line with nothing to suppress exits 0 without it and 1
+  // with it.
+  //
+  // Root-config only, by oxlint's own schema, so it cannot live in
+  // `oxlint.base.json` and reach a mock by inheritance; a mock's own
+  // `.oxlintrc.json` is its root and needs its own copy.
+  "options": {
+    "reportUnusedDisableDirectives": "error"
+  },
+
   // Path exclusions only. A file is NEVER excluded here to silence a rule:
   // `ignorePatterns` switches off all ~100 oxlint rules for that file, so a file
   // excluded for one inconvenient rule stops being linted entirely. Measured
@@ -24,6 +44,18 @@
   // the ratchet is bidirectional: a new exempted file is red, an exemption that
   // no longer suppresses anything is red, and a change in how many findings a
   // file suppresses is red.
+  //
+  // A FILE-LEVEL entry is the last resort, not the default. It buys silence for
+  // every line of the file, including the lines nobody has written yet: the
+  // exemption stops describing the offence and starts describing the filename.
+  // An exemption belongs on the line it excuses — `// oxlint-disable-next-line
+  // agency/<rule>` (`{/* ... */}` inside JSX), carrying the same sentence a
+  // baseline entry would have carried. That form is verified to work on these
+  // JS-plugin rules, it leaves the other 200 lines of the file checked, and a
+  // second offence next to it goes red in `pnpm lint` instead of quietly
+  // changing a number in a baseline. Eleven of the thirteen exemptions this
+  // block used to hold are now such comments. Only two files are left, and each
+  // is here because the count itself is the argument.
   "overrides": [
     {
       // THE one module allowed to do the arithmetic: `*` and `/` over bigint,
@@ -39,41 +71,23 @@
       }
     },
     {
-      // `expect(['9.00','10.00'].sort()).toEqual(['10.00','9.00'])` — the bare
-      // sort IS the assertion. This test pins the exact bug the rule prevents,
-      // so the rule must not delete it.
-      "files": ["packages/dec/src/dec.test.ts"],
-      "rules": { "agency/no-implicit-sort": "off" }
-    },
-    {
-      // `expect([...ids].sort()).toEqual(ids)` — asserts that a DEFAULT
-      // lexicographic sort reproduces `createSeq` creation order, the property
-      // that makes zero-padded ids reproducible by a SQL `ORDER BY id`. A
-      // comparator here would test the comparator, not the ids.
-      "files": ["packages/mock/src/errors.test.ts"],
-      "rules": { "agency/no-implicit-sort": "off" }
-    },
-    {
-      // `status >= 400` / `status >= 500` — HTTP status integers chosen by the
-      // adapter itself and never read off a payload. This file JSON
-      // round-trips its body and never inspects a domain value.
-      "files": ["packages/mock/src/adapter.ts"],
-      "rules": { "agency/no-decimal-comparison": "off" }
-    },
-    {
-      // `expect([...created].sort()).toEqual([...revoked].sort())` — set
-      // equality over opaque `blob:` URLs, where the sort IS the normalisation.
-      "files": ["packages/kit/src/image-picker.test.tsx"],
-      "rules": { "agency/no-implicit-sort": "off" }
-    },
-    {
-      // `${x.toFixed(2)},${y.toFixed(2)}` — SVG path coordinates in pixels.
-      // The base config already scopes the float and comparison rules away from
-      // `**/kit/src/**` as presentation, but deliberately does NOT scope
-      // `no-numeric-coercion`: `toFixed` is the money hazard itself, so it stays
-      // on everywhere and is exempted one file at a time, counted.
+      // The one file in the workspace that is nothing but geometry:
+      // `w / (values.length - 1)`, `((v - lo) / span) * (height - 5)` and
+      // `${x.toFixed(2)},${y.toFixed(2)}` are an SVG viewBox measured in pixels.
+      // Seven findings sit on three of its twenty-six statement lines, so
+      // per-line comments would outnumber the arithmetic they excuse — this is
+      // the second and last file where the count is the argument.
+      //
+      // It used to be exempted TWICE and inconsistently: two `no-numeric-coercion`
+      // findings named and counted here, the other five hidden by an unnamed,
+      // uncounted `**/kit/src/**` glob in `oxlint.base.json`. All three rules are
+      // now named in one place and the whole seven are pinned.
       "files": ["packages/kit/src/sparkline.tsx"],
-      "rules": { "agency/no-numeric-coercion": "off" }
+      "rules": {
+        "agency/no-float-arithmetic": "off",
+        "agency/no-decimal-comparison": "off",
+        "agency/no-numeric-coercion": "off"
+      }
     }
   ]
 }

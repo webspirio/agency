@@ -135,6 +135,7 @@ describe('sum — rounded per line then summed', () => {
 describe('cmp — numeric, never lexicographic', () => {
   it('orders 9 before 10, which a string sort does not', () => {
     expect(cmp('9.00', '10.00')).toBe(-1);
+    // oxlint-disable-next-line agency/no-implicit-sort -- the bare sort IS the assertion: this line pins the exact bug agency/no-implicit-sort prevents, so the rule must not be allowed to delete it.
     expect(['9.00', '10.00'].sort()).toEqual(['10.00', '9.00']); // the bug this exists to prevent
     expect(cmp('10', '10.00')).toBe(0);
     expect(gt('0.01', '0')).toBe(true);

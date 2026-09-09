@@ -8,47 +8,17 @@
         "agency/no-decimal-comparison"
       ],
       "findings": 24,
-      "reason": "THE one module allowed to do the arithmetic: bigint `*` and `/`, and the `<`/`>` that implement cmp itself. Exempting it is the premise of the whole rule set, and mirrors the four-module scoping shipped at yagoda-starter/backend/eslint.config.mjs:38-65. It deliberately KEEPS agency/no-numeric-coercion — a Number() or toFixed here is the exact hazard the module exists to prevent."
-    },
-    {
-      "file": "packages/dec/src/dec.test.ts",
-      "rules": [
-        "agency/no-implicit-sort"
-      ],
-      "findings": 1,
-      "reason": "expect(['9.00','10.00'].sort()).toEqual(['10.00','9.00']) — the bare sort IS the assertion. This test pins the exact bug agency/no-implicit-sort prevents, so the rule must not be allowed to delete it."
-    },
-    {
-      "file": "packages/mock/src/errors.test.ts",
-      "rules": [
-        "agency/no-implicit-sort"
-      ],
-      "findings": 1,
-      "reason": "expect([...ids].sort()).toEqual(ids) — asserts that a DEFAULT lexicographic sort reproduces createSeq's creation order, the property that makes zero-padded ids reproducible by a SQL ORDER BY id. Passing a comparator here would test the comparator, not the ids."
-    },
-    {
-      "file": "packages/mock/src/adapter.ts",
-      "rules": [
-        "agency/no-decimal-comparison"
-      ],
-      "findings": 1,
-      "reason": "status >= 500 — one HTTP status integer, chosen by the adapter itself and never read off a payload, selecting between AxiosError.ERR_BAD_RESPONSE and ERR_BAD_REQUEST. Was 2 until the throw branch stopped hardcoding `status >= 400` and started honouring config.validateStatus, which is settle()'s own test — so `validateStatus: () => true` now behaves in the mock exactly as against the product. The ratchet caught the improvement; this is the count shrinking, which is the direction it is allowed to move."
-    },
-    {
-      "file": "packages/kit/src/image-picker.test.tsx",
-      "rules": [
-        "agency/no-implicit-sort"
-      ],
-      "findings": 2,
-      "reason": "expect([...created].sort()).toEqual([...revoked].sort()) — set equality over opaque blob: URLs, where the sort IS the normalisation and no ordering claim is being made."
+      "reason": "THE one module allowed to do the arithmetic: bigint `*` and `/`, and the `<`/`>` that implement cmp itself. Exempting it is the premise of the whole rule set, and mirrors the four-module scoping shipped at yagoda-starter/backend/eslint.config.mjs:38-65. It deliberately KEEPS agency/no-numeric-coercion — a Number() or toFixed here is the exact hazard the module exists to prevent. Stays whole-file rather than line-level because 24 findings across 8 of the file's ~200 lines would be 24 comments repeating one sentence; the file-level entry says it once and the count pins it."
     },
     {
       "file": "packages/kit/src/sparkline.tsx",
       "rules": [
+        "agency/no-float-arithmetic",
+        "agency/no-decimal-comparison",
         "agency/no-numeric-coercion"
       ],
-      "findings": 2,
-      "reason": "`${x.toFixed(2)},${y.toFixed(2)}` — SVG path coordinates, in pixels. oxlint.base.json already scopes the float and comparison rules away from **/kit/src/** as presentation, but deliberately does NOT scope no-numeric-coercion: toFixed is the money hazard itself, so it stays on everywhere and is exempted one file at a time, counted."
+      "findings": 7,
+      "reason": "The one file in the workspace that is nothing but geometry: `w / (values.length - 1)`, `((v - lo) / span) * (height - 5)` and `${x.toFixed(2)},${y.toFixed(2)}` are an SVG viewBox in pixels, and the 7 findings sit on 3 of its 26 statement lines. Per-line comments here would outnumber the arithmetic they excuse, so this one stays whole-file and counted. It was previously exempted TWICE and inconsistently — 2 coercion findings named here, the other 5 hidden by an unnamed, uncounted `**/kit/src/**` glob in oxlint.base.json — so all three rules are now named in one place with the full count."
     }
   ]
 }

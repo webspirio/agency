@@ -42,8 +42,11 @@ export function AnimatedNumber({ value, format, className }: AnimatedNumberProps
     let frame = 0;
     const started = performance.now();
     const step = (now: number) => {
+      // oxlint-disable-next-line agency/no-float-arithmetic -- elapsed ms over duration ms: the rAF easing parameter, in the range 0..1.
       const t = Math.min(1, (now - started) / duration);
+      // oxlint-disable-next-line agency/no-float-arithmetic -- interpolating the displayed number along the eased curve. The tween is presentation; `value` arrives already computed.
       setCurrent(t === 1 ? value : from + (value - from) * easeOut(t));
+      // oxlint-disable-next-line agency/no-decimal-comparison -- the 0..1 easing parameter against its end stop, not a decimal string.
       if (t < 1) frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);

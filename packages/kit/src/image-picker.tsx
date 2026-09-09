@@ -47,11 +47,18 @@ export function ImagePicker({
   // stale/missing preview, and RTL flags the update as happening outside
   // `act()`. This is the one place in this file the rule's heuristic (any
   // sync setState-in-effect is "derivable state") doesn't fit: the value
-  // isn't derivable without the side effect.
+  // isn't derivable without the side effect. It is verified safe under
+  // StrictMode by the tests in image-picker.test.tsx.
+  //
+  // There is deliberately no disable directive on the setState below. The one
+  // that used to sit there named `react-hooks/set-state-in-effect`, a rule
+  // oxlint does not implement — it has `react/set-state-in-effect`, which does
+  // not fire on this line even when explicitly denied. The directive suppressed
+  // nothing and read as if a check had been overruled. Reinstating it under any
+  // name now fails `options.reportUnusedDisableDirectives` in .oxlintrc.json.
   useEffect(() => {
     if (!value) return;
     const url = URL.createObjectURL(value);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above the effect; verified safe under StrictMode by the tests in image-picker.test.tsx.
     setObjectUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [value]);

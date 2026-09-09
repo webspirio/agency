@@ -57,6 +57,7 @@ export function LanguageSwitcher({ className, value, onChange, labels }: Languag
     () => getStoredLanguage() ?? SUPPORTED_LANGUAGES[0],
   );
 
+  // oxlint-disable-next-line agency/no-decimal-comparison -- an array length, not a decimal string: one language means nothing to switch between.
   if (SUPPORTED_LANGUAGES.length <= 1) return null;
 
   const active = value ?? stored;

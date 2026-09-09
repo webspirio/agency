@@ -164,12 +164,16 @@ const REAL = [
       'a change in how much an exemption hides are each red. The ratchet is bidirectional, so a ' +
       'fixed file must be removed from the list rather than left as a standing excuse.',
     blindSpot:
-      'It checks the shape of the exemption list, never whether an exemption was a good idea, and ' +
-      'never their GRANULARITY — thirteen of them are whole-file where a line-level ' +
-      '`// oxlint-disable-next-line` would do, so nine kit components and the adapter are ' +
-      'permanently unchecked for real money bugs on account of one `status >= 500`. It also cannot ' +
-      'see suppression that does not go through the config: an inline disable comment is invisible ' +
-      'to it, and so is a rule nobody turned on in the first place.',
+      'It reads the `overrides` block of .oxlintrc.json and nothing else — never whether an ' +
+      'exemption was a good idea, and never a suppression written anywhere but that one file. Two ' +
+      'whole-file entries are left, dec.ts (24 findings) and sparkline.tsx (7); the other eleven ' +
+      'became inline `// oxlint-disable-next-line agency/<rule>` comments, which this row cannot ' +
+      'see at all. Those are held instead by `lint` plus `options.reportUnusedDisableDirectives: ' +
+      '"error"`, which turns a STALE directive red but pins no count: a directive covers its ' +
+      'whole line and every rule it names, so a second offence added to an already-excused line ' +
+      'stays silent. The float and comparison rules are also off wholesale under **/src/pages/** ' +
+      'and **/src/components/** by way of oxlint.base.json, which this row never opens, and a ' +
+      'rule nobody turned on in the first place is invisible to it either way.',
   },
   {
     id: 'emit:clean',

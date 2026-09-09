@@ -67,6 +67,7 @@ describe('ImagePicker', () => {
       </StrictMode>,
     );
     unmount();
+    // oxlint-disable-next-line agency/no-implicit-sort -- set equality over opaque blob: URLs. The sort IS the normalisation; no ordering claim is being made. Covers both sorts on this line.
     expect([...created].sort()).toEqual([...revoked].sort());
   });
 

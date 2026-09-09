@@ -47,6 +47,7 @@ describe('createSeq', () => {
   it('sorts lexicographically in creation order, which a SQL ORDER BY can reproduce', () => {
     const next = createSeq('x');
     const ids = Array.from({ length: 1200 }, next);
+    // oxlint-disable-next-line agency/no-implicit-sort -- the DEFAULT lexicographic sort is the subject: this asserts it reproduces createSeq order, which is what makes a zero-padded id reproducible by a SQL ORDER BY. A comparator here would test the comparator.
     expect([...ids].sort()).toEqual(ids);
   });
 });

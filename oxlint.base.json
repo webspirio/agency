@@ -17,20 +17,11 @@
 
   "overrides": [
     {
-      // Presentation code, scoped rather than exempted.
-      //
-      // These rules are syntactic proxies: they cannot see that `(v - lo) / span`
-      // is an SVG coordinate and `index > 0` is an array position. Left firing
-      // repo-wide they make an operator's first experience of the framework a red
-      // build on their own chart — and SPEC 17 names "the operator disables a
-      // check row rather than fixing what it caught" as the abandon signal.
-      //
-      // The exemption is PAID FOR by the `no-restricted-imports` line below: a
-      // page that cannot be caught doing money arithmetic is instead forbidden
-      // from importing the money module at all. The invariant "money is computed
-      // in the domain, pages render finished strings" is enforced from the other
-      // side, not dropped. Anything under `src/domain/` or `src/api/` — where a
-      // mock's money actually lives — keeps every rule.
+      // The half of the presentation scoping that is a real invariant, and the
+      // half that applies to the kit as much as to a mock's own screens: money
+      // is computed in `src/domain` and `src/api` and reaches a component as a
+      // finished decimal string. A component that needs `@agency/dec` is doing
+      // arithmetic the Nest controller will have to do again at conversion.
       //
       // Anchored with `**/` deliberately: `overrides.files` resolves relative to
       // the directory of the config that APPLIES to a file, not the one that
@@ -38,8 +29,6 @@
       // meaning inside `mocks/<slug>/`, which carries its own `.oxlintrc.json`.
       "files": ["**/src/pages/**", "**/src/components/**", "**/kit/src/**"],
       "rules": {
-        "agency/no-float-arithmetic": "off",
-        "agency/no-decimal-comparison": "off",
         "no-restricted-imports": [
           "error",
           {
@@ -51,6 +40,33 @@
             ]
           }
         ]
+      }
+    },
+    {
+      // A MOCK'S OWN screens, and only those. These two rules are syntactic
+      // proxies: they cannot see that `(v - lo) / span` is an SVG coordinate and
+      // `index > 0` is an array position. Left firing on generated client code
+      // they make an operator's first experience of the framework a red build on
+      // their own chart — and SPEC 17 names "the operator disables a check row
+      // rather than fixing what it caught" as the abandon signal. The `off` is
+      // paid for by the `no-restricted-imports` block above, so the invariant is
+      // enforced from the other side rather than dropped, and anything under
+      // `src/domain/` or `src/api/` — where a mock's money actually lives —
+      // keeps every rule.
+      //
+      // `**/kit/src/**` is deliberately NOT in this list. The kit is agency code,
+      // written once and read by every mock, so it is held to the rule rather
+      // than scoped out of it: its nine pixel-maths sites carry a
+      // `// oxlint-disable-next-line agency/<rule>` on the offending line, and
+      // `sparkline.tsx` — seven findings, all geometry — is exempted by name and
+      // by count in the workspace's own `.oxlintrc.json`. A blanket glob here
+      // would have gone on silently covering kit code nobody has written yet,
+      // uncounted by the `lint:exempt` ratchet, which reads `.oxlintrc.json`
+      // only.
+      "files": ["**/src/pages/**", "**/src/components/**"],
+      "rules": {
+        "agency/no-float-arithmetic": "off",
+        "agency/no-decimal-comparison": "off"
       }
     }
   ]

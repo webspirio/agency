@@ -77,6 +77,7 @@ export function DashboardPage({
   let statBand: React.ReactNode = null;
   if (statsSlot != null) {
     statBand = <div className="mb-5">{statsSlot}</div>;
+  // oxlint-disable-next-line agency/no-decimal-comparison -- an array length, not a decimal string.
   } else if (stats && stats.length > 0) {
     statBand = (
       <div className="mb-5">
@@ -113,6 +114,7 @@ export function DashboardPage({
   let body: React.ReactNode = null;
   if (children != null) {
     body = children;
+  // oxlint-disable-next-line agency/no-decimal-comparison -- an array length, not a decimal string.
   } else if (sections && sections.length > 0) {
     body = (
       <div className={LAYOUTS[layout]}>

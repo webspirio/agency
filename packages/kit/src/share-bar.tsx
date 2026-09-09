@@ -16,6 +16,7 @@ export function ShareBar({
           key={i}
           title={p.label}
           className="h-full rounded-[2px] first:rounded-l-full last:rounded-r-full"
+          // oxlint-disable-next-line agency/no-float-arithmetic -- a CSS width percentage. Covers both operations on this line; the share bar renders proportions, it does not compute money.
           style={{ width: `${(p.value / total) * 100}%`, background: p.color }}
         />
       ))}

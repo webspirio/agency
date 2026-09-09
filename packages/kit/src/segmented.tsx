@@ -140,6 +140,7 @@ export function Segmented<T extends string>({
                   : 'text-muted-foreground hover:text-foreground',
             )}
           >
+            {/* oxlint-disable-next-line agency/no-decimal-comparison -- an array position: every segment but the first gets a divider. */}
             {index > 0 && (
               <span
                 data-slot="segmented-divider"

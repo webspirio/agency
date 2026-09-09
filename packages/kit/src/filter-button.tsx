@@ -36,6 +36,7 @@ export function FilterButton({
       )}
     >
       <SlidersHorizontal className="size-[18px]" aria-hidden />
+      {/* oxlint-disable-next-line agency/no-decimal-comparison -- a count of active filters, an integer, not a decimal string. */}
       {activeCount > 0 && (
         <span
           aria-hidden
