@@ -35,7 +35,7 @@ const PHRASES: Record<number, string> = {
 export function envelopeOf(e: DomainError, path: string, now: string): ErrorEnvelope {
   // Context first, envelope second: envelope keys always win.
   return {
-    ...(e.ctx ?? {}),
+    ...e.ctx,
     statusCode: e.status,
     error: PHRASES[e.status] ?? 'Error',
     message: e.messages,
