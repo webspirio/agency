@@ -68,9 +68,9 @@ describe('template invariants', () => {
 });
 
 /**
- * The seven above are Plan A's. The seven below close holes the plan's own gate
- * depends on but its test file does not cover — each one is a failure that
- * produces a green build and a wrong screen.
+ * The seven above are Plan A's, verbatim. The ten below close holes the plan's
+ * own gate depends on but its test file does not cover — each one is a failure
+ * that produces a green build and a wrong screen, or a red gate.
  */
 describe('template invariants — the silent ones', () => {
   it('resolves its @source glob to the kit FROM THE INSTANTIATED MOCK, not from the template', () => {
@@ -153,6 +153,36 @@ describe('template invariants — the silent ones', () => {
     expect(pkg.scripts.build).toMatch(/tsc/);
     const tsconfig = JSON.parse(read('tsconfig.json')) as { extends: string };
     expect(existsSync(asInstantiated(tsconfig.extends))).toBe(true);
+  });
+
+  it('ships a test and the runner that runs it — `pnpm --filter <slug> test` is a gate step', () => {
+    // `vitest run` over a package with no test files prints "No test files
+    // found, exiting with code 1". Measured 2026-09-10 against the workspace's
+    // own vitest 4.1.11. So a scaffold that ships no test does not merely skip
+    // a check, it fails the gate's fourth command — and `--passWithNoTests`
+    // would trade that for a `test` row (SPEC 10) that proves nothing forever.
+    const pkg = JSON.parse(read('package.json.hbs')) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.scripts.test).toMatch(/vitest/);
+    expect(pkg.scripts.test).not.toMatch(/passWithNoTests/);
+    expect(pkg.devDependencies.vitest).toBeTruthy();
+    const tests = templateFiles().filter((f) => /\.test\.tsx?$/.test(f));
+    expect(tests.length).toBeGreaterThan(0);
+  });
+
+  it('holds nothing but template — `agency new` copies the directory blind', () => {
+    // Task 10's newMock() is a `cpSync(TEMPLATE, dir, { recursive: true })`:
+    // every file sitting here, tracked or not, lands in every generated mock.
+    // A stray `tsconfig.tsbuildinfo` left by a `tsc -b` run in this directory
+    // is the dangerous one — it is gitignored, so review never sees it, and a
+    // stale buildinfo makes the generated mock's `tsc -b` decide the project
+    // is already up to date and emit nothing, silently.
+    const strays = templateFiles()
+      .map((f) => f.slice(T.length))
+      .filter((f) => /(^|\/)(node_modules|dist)\/|\.tsbuildinfo$|(^|\/)\.DS_Store$/.test(f));
+    expect(strays).toEqual([]);
   });
 
   it('path-links the four workspace packages instead of pinning a published version', () => {
