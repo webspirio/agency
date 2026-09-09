@@ -1,0 +1,199 @@
+/* @scaffold-owned — the theme contract, and the single most expensive line in
+   the scaffold to get wrong.
+
+   TWO things have to be true before `bg-card` exists in the built stylesheet,
+   and NEITHER of them fails loudly:
+
+   1. @source below. Tailwind 4 scans the project for class names, and it does
+      NOT scan a dependency. `@agency/kit` is path-linked, so without this line
+      Tailwind never sees `bg-card`, `text-primary` or `rounded-xl` written in a
+      kit component — the utilities are simply absent from dist/*.css and every
+      kit surface renders as unstyled boxes. No error, no warning, a green build.
+      The path is relative to THIS file at `mocks/<slug>/src/index.css`.
+
+   2. The @theme block. A utility only exists if a token backs it: `bg-card` is
+      generated from `--color-card` and from nothing else. @source with no
+      @theme finds the class name and emits nothing for it — the same silent
+      blank screen from the other direction.
+
+   Re-theming a mock is: change the hex values in `:root` and `.dark`. Nothing
+   below the @theme block, and no component anywhere, reads a literal colour. */
+@import "tailwindcss";
+@import "tw-animate-css";
+@source "../../../packages/kit/src/**/*.tsx";
+
+/* The kit's theme store toggles `.dark` on <html> (see @agency/kit/lib/theme).
+   Tailwind's stock `dark:` variant follows prefers-color-scheme instead, which
+   would ignore an explicit choice. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --radius: 0.5rem;
+  /* Scroll cap for Dialog/AlertDialog content. Both reference it; if it is
+     undefined a tall form silently cannot scroll. */
+  --app-content-max-h: calc(100dvh - 2rem);
+
+  /* Palette — light. Warm neutral paper, one accent. */
+  --background: #fafaf9;
+  --foreground: #1c1917;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #f0efed;
+  --secondary-foreground: #292524;
+  --muted: #f0efed;
+  --muted-foreground: #6b6560;
+  --muted2: #857f79;
+  --accent: #eceae7;
+  --accent-foreground: #1c1917;
+  --brand: #4f46e5;
+  --brand-foreground: #ffffff;
+  --destructive: #b91c1c;
+  --success: #15803d;
+  --border: #e4e2df;
+  --line2: #d4d1cd;
+  --input: #d4d1cd;
+  --ring: #4f46e5;
+
+  /* Instrument colours — status and charts read these, never a literal hex. */
+  --leaf: #15803d;
+  --amber: #b45309;
+  --sky: #0369a1;
+  --chart-1: #4f46e5;
+  --chart-2: #0369a1;
+  --chart-3: #b45309;
+  --chart-4: #15803d;
+  --chart-5: #9333ea;
+}
+
+.dark {
+  --background: #18181b;
+  --foreground: #f4f4f5;
+  --surface: #242427;
+  --card: #242427;
+  --card-foreground: #f4f4f5;
+  --popover: #242427;
+  --popover-foreground: #f4f4f5;
+  --primary: #a5b4fc;
+  --primary-foreground: #1e1b4b;
+  /* Secondary surfaces (table header band, hover fills) must read AGAINST the
+     card, not blend into it — keep the same step the light palette has. */
+  --secondary: #35353a;
+  --secondary-foreground: #f4f4f5;
+  --muted: #35353a;
+  --muted-foreground: #b4b0aa;
+  --muted2: #8d8a84;
+  --accent: #3b3b41;
+  --accent-foreground: #f4f4f5;
+  --brand: #a5b4fc;
+  --brand-foreground: #1e1b4b;
+  --destructive: #fb7185;
+  --success: #6ee7b7;
+  /* Dividers sit on both the card and the paper; one step off either and the
+     hairline vanishes. */
+  --border: #4d4d55;
+  --line2: #5b5b64;
+  --input: #5b5b64;
+  --ring: #a5b4fc;
+
+  --leaf: #4ade80;
+  --amber: #fbbf24;
+  --sky: #7dd3fc;
+  --chart-1: #a5b4fc;
+  --chart-2: #7dd3fc;
+  --chart-3: #fbbf24;
+  --chart-4: #4ade80;
+  --chart-5: #d8b4fe;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted2: var(--muted2);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-line2: var(--line2);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-leaf: var(--leaf);
+  --color-amber: var(--amber);
+  --color-sky: var(--sky);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Radius ladder — one multiplier drives every corner in the kit. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+
+  /* Typefaces. System stacks by default: a webfont is a network request in the
+     first 200 ms of a demo, so it is an opt-in per mock, not a default. */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Every figure on these screens is money or mass — always tabular, so
+     columns of numerals line up. */
+  .tnum,
+  table,
+  input {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* PageHeader's title uses this; without it the heading silently falls back to
+   the body face. */
+@utility font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

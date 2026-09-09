@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="{{locale}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{{title}}</title>
+    <script>
+      // Paint 0. Without this the first frame is light and then snaps to dark,
+      // in front of the client. Same key the kit's theme store writes.
+      try {
+        var pref = localStorage.getItem('web-starter:theme');
+        var dark =
+          pref === 'dark' ||
+          ((pref === null || pref === 'system') &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {
+        /* storage disabled — start light */
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

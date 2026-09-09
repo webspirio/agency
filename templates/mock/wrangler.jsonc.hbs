@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/wrangler.json",
+  "name": "{{slug}}",
+  "compatibility_date": "2026-09-09",
+  // One Worker per slug, served at root, so "single-page-application" — which
+  // serves the ROOT index.html for anything it cannot find — is correct here.
+  // Hash routing means it is barely exercised: every in-app link is a fragment.
+  "assets": { "directory": "./dist", "not_found_handling": "single-page-application" }
+}
