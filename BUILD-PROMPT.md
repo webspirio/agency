@@ -2,14 +2,14 @@
 
 Repo: `/Users/oleksandrsecond/Projects/agency` — a fresh pnpm 11.5.2 workspace, Node 24.
 Root config, `node_modules` and `reference/` are already in place. **Nothing in `packages/` exists yet.**
+Push the the webspirio gh org.
 
 Read first, in this order: `docs/SPEC.md` (the design and why every part of it is the way it is),
 then `docs/PLAN-A.md` (ten tasks, 62 TDD steps, real code in every one). This file is the operating
 manual that sits above both.
 
-**Your job:** execute Plan A — the workspace up to `agency new` — and stop at the gate in Task 10
-Step 6.
-
+**Your job:** execute everithing but well planned and very well verified like in the /Users/oleksandrsecond/Projects/yagoda-crm project with good verification layer an i want you to always run verification and put these instuction into the claude.md file.
+Build a good stable infrastructure first then build the actuall project on it.
 ---
 
 # HARD RULES
@@ -38,18 +38,6 @@ Step 6.
 10. **Never run `git reset --hard`, `git clean`, or `git checkout .`.** To undo, revert only the
     specific files you touched, by name.
 11. **Commit per task**, with the message given in the plan.
-
----
-
-# OUT OF SCOPE — do not build these
-
-`agency check` and its registry rows · `agency freeze` / `revive` / `thaw` · `catalog.json` · the
-portfolio Worker · freezing the three existing mocks · the `tools/mockkit` Claude plugin skills ·
-Cloudflare deployment · anything in `yagoda-starter`.
-
-All of that is **Plan B**, and Plan B is deliberately unwritten because the gate below can send this
-whole design to its fallback. If something seems to need a Plan B artifact, stub it and note it under
-"deferred" in your report.
 
 ---
 
