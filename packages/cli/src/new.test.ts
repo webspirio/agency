@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { LOCALES, newMock } from './new';
+import { LOCALES, newMock, render } from './new';
 
 const BIN = fileURLToPath(new URL('../bin/agency.mjs', import.meta.url));
 
@@ -269,20 +269,211 @@ describe('agency new — the silent ones', () => {
     expect(existsSync(join(root, 'mocks', 'half-written'))).toBe(false);
   });
 
+  it('renders a NESTED {{#each}} instead of corrupting it', async () => {
+    // Defect #2. The template only has one array to iterate, so the nesting a
+    // fixture can express is `profiles` inside `profiles` — which is exactly
+    // the shape that broke: the outer block terminated at the INNER
+    // `{{/each}}`, the inner marker survived into the emitted file, and
+    // `{{this.id}}` — still bound to the OUTER item — rendered the object.
+    const templateDir = fixtureTemplate({
+      'matrix.ts':
+        "export const m = [{{#each profiles}}[{{#each profiles}}'{{this.id}}',{{/each}}],{{/each}}];\n",
+    });
+    const { dir } = await newMock({
+      slug: 'nested-each',
+      profiles: ['solo', 'full'],
+      root,
+      templateDir,
+    });
+    const emitted = readFileSync(join(dir, 'matrix.ts'), 'utf8');
+    expect(emitted).toBe("export const m = [['solo','full',],['solo','full',],];\n");
+    expect(emitted).not.toContain('[object Object]');
+  });
+
+  it('refuses an unclosed {{#each}} and a stray {{/each}}', async () => {
+    const unclosed = fixtureTemplate({ 'a.ts': "export const a = '{{#each profiles}}{{this.id}}';\n" });
+    await expect(newMock({ slug: 'unclosed-each', root, templateDir: unclosed })).rejects.toThrow(
+      /unclosed \{\{#each\}\}/,
+    );
+    const stray = fixtureTemplate({ 'b.ts': "export const b = 1;{{/each}}\n" });
+    await expect(newMock({ slug: 'stray-each', root, templateDir: stray })).rejects.toThrow(
+      /\{\{\/each\}\} with no \{\{#each\}\}/,
+    );
+    // The dangerous one: a stray close AFTER a well-formed block. The depth
+    // scan has returned to zero by then, so a parser that only counted while
+    // inside a block would copy this marker into the mock.
+    const trailing = fixtureTemplate({
+      'c.ts': "export const c = [{{#each profiles}}'{{this.id}}',{{/each}}];{{/each}}\n",
+    });
+    await expect(newMock({ slug: 'trailing-each', root, templateDir: trailing })).rejects.toThrow(
+      /\{\{\/each\}\} with no \{\{#each\}\}/,
+    );
+  });
+
+  it('refuses an {{#each}} over something that is not an array, by name', async () => {
+    // `{{#each title}}` is a typo for `{{title}}`. Iterating a string one
+    // character at a time is what a permissive renderer would do with it.
+    const templateDir = fixtureTemplate({ 'd.ts': 'export const d = {{#each title}}x{{/each}};\n' });
+    await expect(newMock({ slug: 'not-array', root, templateDir })).rejects.toThrow(
+      /\{\{#each title\}\}.*no array to iterate/,
+    );
+  });
+
+  it('refuses an {{#each}} with no key rather than leaving the marker in the file', async () => {
+    const templateDir = fixtureTemplate({ 'e.ts': 'export const e = {{#each}}x{{/each}};\n' });
+    await expect(newMock({ slug: 'keyless-each', root, templateDir })).rejects.toThrow(
+      /\{\{#each\}\}.*names nothing to iterate/,
+    );
+  });
+
+  it('emits a real capability ARRAY per profile, not merely the id somewhere in the file', async () => {
+    // The previous assertion was `toContain("id: 'custody'")`, which is
+    // satisfied by `{ id: 'custody', label: 'custody', caps: [{{#each ...` —
+    // the exact corrupt output the non-greedy nested-each regex produced.
+    // Read the emitted entries back as structure so the caps array itself is
+    // what the test is about.
+    const { dir } = await newMock({ slug: 'caps-array', profiles: ['custody', 'fleet'], root });
+    const source = readFileSync(join(dir, 'src/profiles.ts'), 'utf8');
+    const emitted = [
+      ...source.matchAll(/\{ id: '([^']*)', label: '([^']*)', caps: \[([^\]]*)\] \}/g),
+    ].map((m) => ({
+      id: m[1],
+      label: m[2],
+      caps: (m[3] ?? '')
+        .split(',')
+        .map((c) => c.trim().replace(/^'|'$/g, ''))
+        .filter(Boolean),
+    }));
+    expect(emitted).toEqual([
+      { id: 'custody', label: 'custody', caps: ['custody'] },
+      { id: 'fleet', label: 'fleet', caps: ['fleet'] },
+    ]);
+  });
+
   it('never copies build droppings into a mock', async () => {
     // `.DS_Store` and `tsconfig.tsbuildinfo` are gitignored, so review never
     // sees them — and a stale buildinfo makes the generated mock's `tsc -b`
     // decide it is already up to date and emit nothing, silently.
+    //
+    // `keep.d.ts` is the discriminator, and it is why this filter cannot be
+    // `/\.d\.ts$/`: `keep.d.ts` sits beside `keep.ts` and can only have come
+    // out of `tsc`, while `vite-env.d.ts` has no sibling implementation and is
+    // a declaration somebody wrote on purpose. Same rule as
+    // `scripts/verify/checks/emit-clean.mjs`, which is what makes the two
+    // agree about what "emit" means.
     const templateDir = fixtureTemplate({
       'keep.ts': 'export const keep = 1;\n',
+      'keep.d.ts': 'export declare const keep: number;\n',
+      'vite-env.d.ts': '/// <reference types="vite/client" />\n',
       '.DS_Store': 'junk',
       'tsconfig.tsbuildinfo': '{}',
       'node_modules/left/index.js': 'module.exports = 1;\n',
       'dist/assets/app.js': 'console.log(1);\n',
+      'src/nested/deep.tsx': 'export const deep = 1;\n',
+      'src/nested/deep.d.ts': 'export declare const deep: number;\n',
+      'src/node_modules/sneaky/index.js': 'module.exports = 1;\n',
     });
     const { dir, files } = await newMock({ slug: 'no-droppings', root, templateDir });
-    expect(files).toEqual(['keep.ts']);
-    expect(walk(dir)).toEqual(['keep.ts']);
+    const expected = ['keep.ts', 'vite-env.d.ts', join('src', 'nested', 'deep.tsx')];
+    expect([...files].sort(byPath)).toEqual([...expected].sort(byPath));
+    expect(walk(dir).sort(byPath)).toEqual([...expected].sort(byPath));
+  });
+
+  it('keeps the template\'s own vite-env.d.ts, which the mock will not typecheck without', async () => {
+    // The blunt fix for the line above — drop every `.d.ts` — deletes this
+    // file, and the mock then fails `tsc -b` on `import.meta.env`. A test
+    // against a fixture cannot see that; this one is against the real template.
+    const { dir, files } = await newMock({ slug: 'vite-env-kept', root });
+    expect(files).toContain(join('src', 'vite-env.d.ts'));
+    expect(readFileSync(join(dir, 'src', 'vite-env.d.ts'), 'utf8')).toContain('vite/client');
+  });
+});
+
+/**
+ * `render` is exported for this block alone, and the export earns its place:
+ * the scaffolder's own data is one flat array of `{ id, label }`, so the
+ * scope-popping and the per-level escaping below are unreachable through
+ * `newMock`. Leaving the deepest branch of the parser tested only indirectly
+ * is how `[object Object]` shipped in the first place.
+ */
+describe('render — nested iteration, one scope per level', () => {
+  const plain = (v: string): string => v;
+
+  it('binds {{this}} to the INNERMOST item and restores the outer scope after the block', () => {
+    // Measured 2026-09-10 against the non-greedy
+    // `/\{\{#each (\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g`, this exact input produced
+    //   [{ id: 'solo', caps: [{{#each this.caps}}'[object Object]',] },{{/each}}]
+    // — the outer body truncated at the inner `{{/each}}`, the inner marker
+    // copied out verbatim, and `{{this}}` still bound to the OUTER item.
+    const source =
+      "[{{#each profiles}}{ id: '{{this.id}}'," +
+      " caps: [{{#each this.caps}}'{{this}}',{{/each}}]," +
+      " label: '{{this.label}}' },{{/each}}]";
+    const out = render(
+      source,
+      {
+        profiles: [
+          { id: 'solo', label: 'Solo', caps: ['read'] },
+          { id: 'full', label: 'Full', caps: ['read', 'write'] },
+        ],
+      },
+      plain,
+      'nested.ts',
+    );
+    expect(out).toBe(
+      "[{ id: 'solo', caps: ['read',], label: 'Solo' }," +
+        "{ id: 'full', caps: ['read','write',], label: 'Full' },]",
+    );
+  });
+
+  it('iterates three levels deep and still reaches the root scope from the bottom', () => {
+    const out = render(
+      '{{#each a}}{{#each this.b}}{{#each this.c}}[{{root}}:{{this}}]{{/each}}{{/each}}{{/each}}',
+      { root: 'R', a: [{ b: [{ c: ['x', 'y'] }, { c: ['z'] }] }] },
+      plain,
+      'deep.ts',
+    );
+    expect(out).toBe('[R:x][R:y][R:z]');
+  });
+
+  it('escapes a value produced at every level, not merely at the top', () => {
+    // The nested path is where an unescaped `L'Atelier` would land in
+    // `caps: ['…']`, and the emitted mock would not parse.
+    const out = render(
+      "{{#each rows}}'{{#each this.names}}{{this}}{{/each}}'{{/each}}",
+      { rows: [{ names: ["L'Atelier"] }] },
+      (v: string) => v.replace(/'/g, "\\'"),
+      'escaped.ts',
+    );
+    expect(out).toBe("'L\\'Atelier'");
+  });
+
+  it('renders two sibling blocks, so the scan resumes after a close rather than stopping', () => {
+    const out = render(
+      '{{#each a}}<{{this}}>{{/each}}|{{#each b}}[{{this}}]{{/each}}',
+      { a: ['1', '2'], b: ['3'] },
+      plain,
+      'siblings.ts',
+    );
+    expect(out).toBe('<1><2>|[3]');
+  });
+
+  it('renders an empty array as nothing, and leaves no marker behind', () => {
+    expect(render('x{{#each a}}{{#each this.b}}{{this}}{{/each}}{{/each}}y', { a: [] }, plain, 'e.ts')).toBe(
+      'xy',
+    );
+  });
+
+  it('names the field, not the file, when an inner item lacks it', () => {
+    expect(() =>
+      render('{{#each a}}{{this.missing}}{{/each}}', { a: [{ id: 'x' }] }, plain, 'f.ts'),
+    ).toThrow(/unknown placeholder \{\{this\.missing\}\}/);
+  });
+
+  it('refuses an inner {{#each}} over a field that is not an array', () => {
+    expect(() =>
+      render('{{#each a}}{{#each this.caps}}x{{/each}}{{/each}}', { a: [{ id: 'x' }] }, plain, 'g.ts'),
+    ).toThrow(/\{\{#each this\.caps\}\}.*no array to iterate/);
   });
 });
 
@@ -304,8 +495,10 @@ describe('the agency bin', () => {
     expect(r.out).toContain(join(root, 'mocks', 'bin-smoke'));
 
     const profiles = readFileSync(join(root, 'mocks', 'bin-smoke', 'src/profiles.ts'), 'utf8');
-    expect(profiles).toContain("id: 'solo'");
-    expect(profiles).toContain("id: 'full'");
+    // The whole entry, caps array included — `toContain("id: 'solo'")` alone is
+    // satisfied by the corrupt output the nested-each regex used to produce.
+    expect(profiles).toContain("{ id: 'solo', label: 'solo', caps: ['solo'] },");
+    expect(profiles).toContain("{ id: 'full', label: 'full', caps: ['full'] },");
     expect(profiles).toContain("'solo',\n);"); // the fallback is the first --profiles entry
     expect(readFileSync(join(root, 'mocks', 'bin-smoke', 'index.html'), 'utf8')).toContain(
       'lang="uk"',
