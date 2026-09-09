@@ -1,0 +1,82 @@
+{
+  "extends": ["./oxlint.base.json"],
+
+  // Exemptions live HERE, never in `oxlint.base.json`: every mock extends the
+  // base, and an exemption written there would ship to every mock in the
+  // agency. This file is the workspace's own, and nothing extends it.
+  //
+  // Each entry below names one file and says why. Widening any of them to a
+  // directory glob would blind files that do not exist yet — the point of a
+  // narrow list is that a tenth offender turns the check red and forces a
+  // decision instead of inheriting someone else's.
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+
+    // Read-only third-party snapshots (HARD RULE 7). Not agency code, never
+    // built, never shipped: linting it produced 236 of the first run's 285
+    // findings and none of them are actionable.
+    "reference/**",
+
+    // THE one module allowed to do the arithmetic — bigint `*`, `/` and the
+    // `<`/`>` that implement `cmp` itself. Exempting it is the premise of the
+    // whole rule set, and mirrors the four-module scoping already shipped at
+    // yagoda-starter/backend/eslint.config.mjs:38-65.
+    "packages/dec/src/dec.ts",
+
+    // `expect(['9.00','10.00'].sort()).toEqual(['10.00','9.00'])` — the bare
+    // sort IS the assertion. This test exists to pin the exact bug
+    // `agency/no-implicit-sort` prevents, so the rule must not delete it.
+    "packages/dec/src/dec.test.ts",
+
+    // `expect([...ids].sort()).toEqual(ids)` — asserts that a DEFAULT
+    // lexicographic sort reproduces `createSeq` creation order, which is the
+    // property that makes zero-padded ids reproducible by a SQL `ORDER BY`.
+    // A comparator here would test the comparator, not the ids.
+    "packages/mock/src/errors.test.ts",
+
+    // `status >= 400` / `status >= 500` — HTTP status integers on the axios
+    // seam, chosen by the adapter and never read from a payload. The file
+    // JSON round-trips its body and never inspects a domain value.
+    "packages/mock/src/adapter.ts",
+
+    // packages/kit — 84 files lifted verbatim from
+    // yagoda-starter/frontend/src/shared/ui (see packages/kit/PROVENANCE.md).
+    // Nine of them trip the rules on presentation arithmetic over JS numbers.
+    // Listed one by one rather than as `packages/kit/**` so that the 75 files
+    // that are clean today stay checked, and so a new kit component that does
+    // touch a decimal still goes red.
+
+    // SVG path geometry: `w / (values.length - 1)`, `i * step`,
+    // `(v - lo) / span`, and `.toFixed(2)` on path coordinates. Pixels.
+    "packages/kit/src/sparkline.tsx",
+
+    // requestAnimationFrame easing: `(now - started) / duration` and
+    // `from + (value - from) * easeOut(t)`. Frame timing, not a balance —
+    // the displayed value is formatted by the caller, not by this maths.
+    "packages/kit/src/animated-number.tsx",
+
+    // `(p.value / total) * 100` — a CSS width percentage.
+    "packages/kit/src/share-bar.tsx",
+
+    // `activeCount > 0` — an integer badge count.
+    "packages/kit/src/filter-button.tsx",
+
+    // `SUPPORTED_LANGUAGES.length <= 1` — an array length.
+    "packages/kit/src/LanguageSwitcher.tsx",
+
+    // `index > 0` — an array index, deciding whether to draw a divider.
+    "packages/kit/src/segmented.tsx",
+
+    // `hiddenUnselected > 0` — a count of collapsed chips.
+    "packages/kit/src/TagPicker.tsx",
+
+    // `stats.length > 0` and `sections.length > 0` — array lengths choosing
+    // between a slot and a default band.
+    "packages/kit/src/templates/dashboard-page.tsx",
+
+    // `expect([...created].sort()).toEqual([...revoked].sort())` — set
+    // equality over opaque blob: URLs, where the sort is the normalisation.
+    "packages/kit/src/image-picker.test.tsx"
+  ]
+}

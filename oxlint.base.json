@@ -1,0 +1,10 @@
+{
+  "jsPlugins": ["./oxlint-rules.js"],
+  "rules": {
+    "agency/no-float-arithmetic": "error",
+    "agency/no-decimal-comparison": "error",
+    "agency/no-numeric-coercion": "error",
+    "agency/no-unordered-id": "error",
+    "agency/no-implicit-sort": "error"
+  }
+}
