@@ -31,8 +31,8 @@
       "rules": [
         "agency/no-decimal-comparison"
       ],
-      "findings": 2,
-      "reason": "status >= 400 and status >= 500 — HTTP status integers chosen by the adapter itself and never read off a payload. This file JSON round-trips its response body and never inspects a domain value."
+      "findings": 1,
+      "reason": "status >= 500 — one HTTP status integer, chosen by the adapter itself and never read off a payload, selecting between AxiosError.ERR_BAD_RESPONSE and ERR_BAD_REQUEST. Was 2 until the throw branch stopped hardcoding `status >= 400` and started honouring config.validateStatus, which is settle()'s own test — so `validateStatus: () => true` now behaves in the mock exactly as against the product. The ratchet caught the improvement; this is the count shrinking, which is the direction it is allowed to move."
     },
     {
       "file": "packages/kit/src/image-picker.test.tsx",
