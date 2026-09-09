@@ -10,11 +10,36 @@ describe('parsing', () => {
 });
 
 describe('add / sub — scale 2 by default', () => {
-  it('does not go through a float', () => {
-    expect(add('0.10', '0.2')).toBe('0.30'); // 0.1 + 0.2 === 0.30000000000000004 in floats
+  it('canonicalises and signs correctly at scale 2', () => {
+    // 0.1 + 0.2 === 0.30000000000000004 in floats — but note that this
+    // assertion does NOT detect a float implementation: rounding to scale 2
+    // hides the error. It is kept for parity with
+    // reference/money/backend-money.spec.ts:47-50, not as the float guard.
+    expect(add('0.10', '0.2')).toBe('0.30');
     expect(add('140.00', '-5')).toBe('135.00');
     expect(sub('1.05', '1.05')).toBe('0.00');
     expect(sub('1.00', '2.50')).toBe('-1.50');
+  });
+
+  /**
+   * THE ACTUAL FLOAT GUARD. A full Number()-based reimplementation of this
+   * module — same signatures, same PATTERN, Math.round/toFixed to render —
+   * passes every other authored test in this file. These three assertions are
+   * the ones it fails, so they are what stands between the module and a
+   * rewrite that reaches for `Number()`.
+   */
+  it('does not go through a float', () => {
+    // scale 20 puts the target BELOW the float error instead of above it:
+    // a double says 0.30000000000000009992 here.
+    expect(add('0.10', '0.2', 20)).toBe('0.30000000000000000000');
+    // 1.005 is not representable in binary; the nearest double is just under
+    // it, so a float build rounds this to 0.00.
+    expect(sub('1.005', '1')).toBe('0.01');
+    // numeric(12,2) tops out at 9999999999.99, well past Number.MAX_SAFE_INTEGER
+    // once scaled. The square is the proof the internals are bigint: a double
+    // says ...800016896.00.
+    expect(mul('9999999999.99', '1.00')).toBe('9999999999.99');
+    expect(mul('9999999999.99', '9999999999.99', 2)).toBe('99999999999800000000.00');
   });
 });
 
@@ -60,6 +85,16 @@ describe('div — a decimal split over a whole count', () => {
   it('divides by a negative count, rounding away from zero', () => {
     expect(div('1.00', -3)).toBe('-0.33');
     expect(div('-1.00', -3)).toBe('0.33');
+    // Both cases above have a remainder of 100/300 — nowhere near the tie — so
+    // neither can see the sign of the ROUNDING STEP. `negative` at dec.ts is
+    // the XOR of the two signs, and simplifying it to `numerator < 0n` (the
+    // dividend's sign alone, which looks redundant) leaves the whole suite
+    // green while div('1.00', -8) silently returns -0.11 instead of -0.13.
+    // 1/8 and 3/8 land exactly on the half, so these four pin the XOR.
+    expect(div('1.00', -8)).toBe('-0.13');
+    expect(div('-1.00', -8)).toBe('0.13');
+    expect(div('3.00', -8)).toBe('-0.38');
+    expect(div('0.25', -2)).toBe('-0.13');
   });
 });
 
@@ -67,6 +102,33 @@ describe('sum — rounded per line then summed', () => {
   it('totals the printed lines', () => {
     expect(sum(['10944.00', '1827.00', '0.50'])).toBe('12771.50');
     expect(sum([])).toBe('0.00');
+  });
+
+  /**
+   * THE LOAD-BEARING TEST OF THIS MODULE, mirroring the one
+   * `reference/money/backend-money.spec.ts:85-101` names as such: the receipt
+   * prints each line and a total that must equal the lines printed above it.
+   * `Σ round(each)` is NOT `round(Σ exact)`, and the paper shows the former.
+   *
+   * Reducing through `add(total, v, scale)` produces neither: it rounds the
+   * RUNNING TOTAL at every step, so the answer depends on the order of the
+   * array. Both properties are pinned here, values first, because an
+   * add-exactly-then-round-once implementation is order-independent too.
+   */
+  it('rounds each line, not the running total, and does not depend on order', () => {
+    // round-once would say 1.00 (1.00 - 0.005 = 0.995 -> 1.00). Per line:
+    // round(-0.005) = -0.01, so 1.00 - 0.01 = 0.99. This single assertion is
+    // what separates the two semantics.
+    expect(sum(['1.00', '-0.005'])).toBe('0.99');
+    // Σ round(each) = 0.01 + 0.01 - 0.01. A running-total reduce says 0.02.
+    expect(sum(['0.005', '0.005', '-0.005'])).toBe('0.01');
+    // the same multiset, reordered: a running-total reduce says -0.01.
+    expect(sum(['-0.005', '0.005', '0.005'])).toBe('0.01');
+    expect(sum(['0.005', '-0.005', '0.005'])).toBe('0.01');
+    // and the reference module's own case, where every line is already scale 2
+    expect(sum(['0.01', '0.01', '0.01'])).toBe('0.03');
+    // a scale other than 2 rounds each line at THAT scale
+    expect(sum(['0.00005', '0.00005'], 4)).toBe('0.0002');
   });
 });
 
@@ -94,5 +156,51 @@ describe('round', () => {
     expect(round('-2.345', 2)).toBe('-2.35');
     expect(round('2.344', 2)).toBe('2.34');
     expect(round('2', 4)).toBe('2.0000');
+  });
+
+  it('defaults to scale 2 like every other export', () => {
+    expect(round('2.345')).toBe('2.35');
+    expect(round('-2.345')).toBe('-2.35');
+    expect(round('2')).toBe('2.00');
+  });
+});
+
+/**
+ * `scale` reaches `render`, which builds the body with `digits.slice(0, -scale)`
+ * and `digits.slice(-scale)`. A negative scale makes that produce a string
+ * ending in a bare '.' — round('1234.00', -2) returned '12.', a value this
+ * module's own PATTERN rejects, so it emitted something it could not read back.
+ * A fractional or NaN scale reached `10n ** BigInt(scale)` and surfaced a raw
+ * `RangeError: The number 2.5 cannot be converted to a BigInt`, which matches
+ * neither the /decimal/ nor the /non-zero integer/ contract the other guards
+ * establish. Every entry point validates its scale up front instead.
+ */
+describe('scale validation', () => {
+  it('refuses a negative scale rather than rendering an invalid decimal', () => {
+    expect(() => round('1234.00', -2)).toThrow(/scale/);
+    expect(() => round('1.00', -1)).toThrow(/scale/);
+    expect(() => add('1', '2', -1)).toThrow(/scale/);
+    expect(() => sub('1', '2', -1)).toThrow(/scale/);
+    expect(() => mul('1', '2', -1)).toThrow(/scale/);
+    expect(() => div('1.00', 2, -1)).toThrow(/scale/);
+    expect(() => sum([], -1)).toThrow(/scale/);
+    expect(() => sum(['1.00'], -1)).toThrow(/scale/);
+  });
+
+  it('refuses a non-integer or NaN scale with dec\'s own error, not a RangeError', () => {
+    expect(() => round('2.345', 2.5)).toThrow(/scale/);
+    expect(() => round('2.345', Number.NaN)).toThrow(/scale/);
+    expect(() => add('1', '2', 2.5)).toThrow(/scale/);
+    expect(() => sub('1', '2', Number.NaN)).toThrow(/scale/);
+    expect(() => mul('1', '2', 2.5)).toThrow(/scale/);
+    expect(() => div('1.00', 2, 2.5)).toThrow(/scale/);
+    expect(() => sum(['1.00'], 2.5)).toThrow(/scale/);
+  });
+
+  it('still allows scale 0', () => {
+    expect(round('2.5', 0)).toBe('3');
+    expect(round('-2.5', 0)).toBe('-3');
+    expect(add('1', '2', 0)).toBe('3');
+    expect(sum(['0.6', '0.6'], 0)).toBe('2');
   });
 });

@@ -1,10 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import axios, { AxiosError } from 'axios';
 import { mockAdapter, type Route } from './index';
-import { DomainError } from './errors';
+import { DomainError, type ErrorEnvelope } from './errors';
 
 const ACTOR = { id: 'u1', role: 'owner' };
 const NOW = () => '2026-09-09T10:00:00.000Z';
+
+let seenQuery: unknown;
+const QUERY_ROUTE: Route = {
+  method: 'GET', path: '/suppliers',
+  handler: (ctx) => { seenQuery = ctx.query; return {}; },
+};
 
 function client(routes: Route[], caps: string[] = []) {
   return axios.create({
@@ -145,5 +151,229 @@ describe('route matching is exact, not approximate', () => {
     const c = client([{ method: 'GET', path: '/suppliers/:id', handler: (ctx) => { params = ctx.params; return {}; } }]);
     await c.get(`/suppliers/${encodeURIComponent('ТОВ Ягода')}`);
     expect(params).toEqual({ id: 'ТОВ Ягода' });
+  });
+});
+
+describe('async handlers — the adapter must await, or a rejected mutation arrives as a success', () => {
+  it('awaits an async handler and returns its resolved body, not {}', async () => {
+    const c = client([{
+      method: 'GET', path: '/intakes',
+      handler: async () => ({ data: [{ id: 'i1' }], total: 1, page: 1, limit: 20 }),
+    }]);
+    const res = await c.get('/intakes');
+    expect(res.status).toBe(200);
+    expect(res.data).toEqual({ data: [{ id: 'i1' }], total: 1, page: 1, limit: 20 });
+  });
+
+  it('rejects when an async handler throws, instead of resolving 200 with an unhandled rejection', async () => {
+    const c = client([{
+      method: 'POST', path: '/shifts/:id/close',
+      handler: async () => { throw new DomainError(409, 'SHIFT_CLOSED', 'Shift is closed'); },
+    }]);
+    const err = await c.post('/shifts/s1/close').then(() => null, (e: AxiosError) => e);
+    expect(err?.response?.status).toBe(409);
+    expect(err?.response?.data).toMatchObject({ statusCode: 409, code: 'SHIFT_CLOSED' });
+  });
+});
+
+describe('serialisation happens inside the guard, so it can never escape as a raw throw', () => {
+  it('gives a void handler an empty body — what a Nest void handler puts on the wire', async () => {
+    const c = client([{ method: 'DELETE', path: '/intakes/:id', handler: () => { /* store.delete */ } }]);
+    const res = await c.delete('/intakes/i1');
+    expect(res.status).toBe(200);
+    expect(res.data).toBe('');
+  });
+
+  it('turns an unserialisable payload (BigInt) into a 500 envelope, not a TypeError', async () => {
+    const c = client([{ method: 'GET', path: '/x', handler: () => ({ units: 10n }) }]);
+    const err = await c.get('/x').then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(AxiosError);
+    expect((err as AxiosError).response?.status).toBe(500);
+    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 500, code: 'INTERNAL' });
+  });
+
+  it('turns a circular payload into a 500 envelope', async () => {
+    const c = client([{ method: 'GET', path: '/x', handler: () => { const o: Record<string, unknown> = {}; o.self = o; return o; } }]);
+    const err = await c.get('/x').then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(AxiosError);
+    expect((err as AxiosError).response?.status).toBe(500);
+  });
+
+  it('re-serialises the envelope separately when a DomainError ctx is circular', async () => {
+    const ctx: Record<string, unknown> = { field: 'login' };
+    ctx.self = ctx;
+    const c = client([{ method: 'GET', path: '/x', handler: () => { throw new DomainError(409, 'LOGIN_TAKEN', 'taken', ctx); } }]);
+    const err = await c.get('/x').then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(AxiosError);
+    expect((err as AxiosError).response?.status).toBe(500);
+    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 500, code: 'INTERNAL' });
+  });
+});
+
+describe('the clock is a seam, not a global', () => {
+  it('hands the handler the pinned instant, so a demo is not clock-dependent', async () => {
+    let seen: unknown;
+    const c = client([{ method: 'GET', path: '/x', handler: (ctx) => { seen = ctx.now; return {}; } }]);
+    await c.get('/x');
+    expect(seen).toBe('2026-09-09T10:00:00.000Z');
+  });
+
+  it('gives every handler in ONE request the same instant even when the clock moves', async () => {
+    let n = 0;
+    const seen: string[] = [];
+    const moving = axios.create({
+      baseURL: 'http://mock',
+      adapter: mockAdapter(
+        [{ method: 'GET', path: '/x', handler: (ctx) => { seen.push(ctx.now, ctx.now); return {}; } }],
+        { caps: new Set<string>(), actor: ACTOR, now: () => `2026-09-09T10:00:0${n++}.000Z` },
+      ),
+    });
+    await moving.get('/x');
+    await moving.get('/x');
+    expect(seen).toEqual([
+      '2026-09-09T10:00:00.000Z', '2026-09-09T10:00:00.000Z',
+      '2026-09-09T10:00:01.000Z', '2026-09-09T10:00:01.000Z',
+    ]);
+  });
+});
+
+describe('requestId — the envelope field the real filter always sets', () => {
+  it('stamps a store-assigned, monotonic id per request — never Math.random', async () => {
+    const c = client([{ method: 'GET', path: '/x', handler: () => { throw new DomainError(409, 'X', 'x'); } }]);
+    const a = await c.get('/x').then(() => null, (e: AxiosError) => e);
+    const b = await c.get('/x').then(() => null, (e: AxiosError) => e);
+    expect((a?.response?.data as ErrorEnvelope | undefined)?.requestId).toBe('req-000001');
+    expect((b?.response?.data as ErrorEnvelope | undefined)?.requestId).toBe('req-000002');
+  });
+
+  it('stamps the 404 envelope too', async () => {
+    const c = client([]);
+    const err = await c.get('/nope').then(() => null, (e: AxiosError) => e);
+    expect((err?.response?.data as ErrorEnvelope | undefined)?.requestId).toBe('req-000001');
+  });
+});
+
+describe('validateStatus is the caller\'s, exactly as settle() reads it', () => {
+  it('resolves a 404 when the caller passed validateStatus: () => true', async () => {
+    const c = client([]);
+    const res = await c.get('/nope', { validateStatus: () => true });
+    expect(res.status).toBe(404);
+    expect(res.data).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('rejects a 3xx under the default validateStatus, as every built-in adapter does', async () => {
+    const c = client([{ method: 'GET', path: '/old', status: 302, handler: () => ({ ok: 1 }) }]);
+    await expect(c.get('/old')).rejects.toBeTruthy();
+  });
+});
+
+describe('the request path is resolved the way buildFullPath resolves it', () => {
+  it('matches a trailing slash to the same route, as express with strict routing off', async () => {
+    const c = client([{ method: 'GET', path: '/suppliers', handler: () => ({ ok: 1 }) }]);
+    expect((await c.get('/suppliers/')).status).toBe(200);
+  });
+
+  it('still 404s /suppliers/ against /suppliers/:id — an empty segment is not a param', async () => {
+    const c = client([{ method: 'GET', path: '/suppliers/:id', handler: () => ({ ok: 1 }) }]);
+    await expect(c.get('/suppliers/')).rejects.toBeTruthy();
+  });
+
+  it('resolves a url written without a leading slash', async () => {
+    const c = client([{ method: 'GET', path: '/suppliers', handler: () => ({ ok: 1 }) }]);
+    expect((await c.get('suppliers')).status).toBe(200);
+  });
+
+  it('resolves a fully-qualified url against the same route table', async () => {
+    const c = client([{ method: 'GET', path: '/suppliers', handler: () => ({ ok: 1 }) }]);
+    expect((await c.get('http://mock/suppliers')).status).toBe(200);
+  });
+
+  it('strips a path baseURL, so route paths stay server-relative', async () => {
+    const c = axios.create({
+      baseURL: '/api',
+      adapter: mockAdapter([{ method: 'GET', path: '/overview', handler: () => ({ ok: 1 }) }], {
+        caps: new Set<string>(), actor: ACTOR, now: NOW,
+      }),
+    });
+    expect((await c.get('overview')).status).toBe(200);
+    expect((await c.get('/overview')).status).toBe(200);
+    // buildFullPath COMBINES: a caller who repeats the prefix asks for
+    // /api/api/overview, which 404s against the product too.
+    await expect(c.get('/api/overview')).rejects.toBeTruthy();
+  });
+});
+
+describe('an unexpected throw is sanitised on the wire and preserved for the developer', () => {
+  it('logs it and keeps the original reachable as the AxiosError cause', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const boom = new TypeError("Cannot read properties of undefined (reading 'map')");
+    const c = client([{ method: 'GET', path: '/boom', handler: () => { throw boom; } }]);
+    const err = await c.get('/boom').then(() => null, (e: AxiosError) => e);
+    expect(err?.response?.status).toBe(500);
+    expect(JSON.stringify(err?.response?.data)).not.toContain('reading');
+    expect(err?.cause).toBe(boom);
+    expect(spy).toHaveBeenCalledWith('[mock] unhandled handler error', boom);
+    spy.mockRestore();
+  });
+});
+
+describe('query params reach the handler in the shape the wire produces', () => {
+  async function queryOf(url: string, config?: Record<string, unknown>, instance = client([QUERY_ROUTE])) {
+    seenQuery = undefined;
+    await instance.get(url, config);
+    return seenQuery;
+  }
+
+  it('keeps an array param an array — paramsSerializer { indexes: null } puts repeated keys on the wire', async () => {
+    expect(await queryOf('/suppliers', { params: { tagIds: ['a', 'b'] } })).toEqual({ tagIds: ['a', 'b'] });
+  });
+
+  it('follows the caller\'s serializer rather than inventing one: the default form brackets the key', async () => {
+    const bracketed = axios.create({
+      baseURL: 'http://mock',
+      adapter: mockAdapter([QUERY_ROUTE], { caps: new Set<string>(), actor: ACTOR, now: NOW }),
+    });
+    expect(await queryOf('/suppliers', { params: { tagIds: ['a', 'b'] } }, bracketed))
+      .toEqual({ 'tagIds[]': ['a', 'b'] });
+  });
+
+  it('serialises a Date to an ISO instant, as toFormData does on the wire', async () => {
+    expect(await queryOf('/suppliers', { params: { from: new Date('2026-01-02T00:00:00Z') } }))
+      .toEqual({ from: '2026-01-02T00:00:00.000Z' });
+  });
+
+  it('collects repeated keys already present in the url', async () => {
+    expect(await queryOf('/suppliers?tag=a&tag=b')).toEqual({ tag: ['a', 'b'] });
+  });
+
+  it('merges url query with params instead of letting one clobber the other', async () => {
+    expect(await queryOf('/suppliers?tag=a&page=1', { params: { tag: 'b' } }))
+      .toEqual({ tag: ['a', 'b'], page: '1' });
+  });
+
+  it('accepts a URLSearchParams instance as params', async () => {
+    expect(await queryOf('/suppliers', { params: new URLSearchParams([['a', '1'], ['a', '2']]) }))
+      .toEqual({ a: ['1', '2'] });
+  });
+
+  it('honours a custom paramsSerializer function', async () => {
+    expect(await queryOf('/suppliers', {
+      params: { a: 1, b: 2 },
+      paramsSerializer: (p: Record<string, unknown>) => Object.entries(p).map(([k, v]) => `${k}=X${String(v)}`).join('&'),
+    })).toEqual({ a: 'X1', b: 'X2' });
+  });
+
+  it('leaves a single-valued param a plain string', async () => {
+    expect(await queryOf('/suppliers', { params: { page: '2' } })).toEqual({ page: '2' });
+  });
+});
+
+describe('a malformed url is a 400 envelope, not a raw URIError', () => {
+  it('answers a bad percent escape in a path param with 400 BAD_REQUEST', async () => {
+    const c = client([{ method: 'GET', path: '/suppliers/:id', handler: () => ({ ok: 1 }) }]);
+    const err = await c.get('/suppliers/100%').then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(AxiosError);
+    expect((err as AxiosError).response?.status).toBe(400);
+    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 400, code: 'BAD_REQUEST' });
   });
 });

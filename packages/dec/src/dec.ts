@@ -20,6 +20,32 @@ function split(v: string): { units: bigint; scale: number } {
   return { units: negative ? -units : units, scale: fraction.length };
 }
 
+/** The number of fractional digits `v` is written with. `'1.20'` -> 2, `'7'` -> 0. */
+export function scaleOf(v: string): number {
+  return split(v).scale;
+}
+
+/**
+ * Every entry point validates its target scale here, before a single bigint is
+ * built. Two failures made this necessary and neither announced itself:
+ *
+ *  - a NEGATIVE scale reached `render`, whose `digits.slice(0, -scale)` /
+ *    `digits.slice(-scale)` then produced a string ending in a bare '.'.
+ *    round('1234.00', -2) returned '12.' — not the 1200 it should be, and not
+ *    a decimal at all: feeding it back into add() throws. The module was
+ *    emitting values it could not itself read.
+ *  - a FRACTIONAL or NaN scale reached `10n ** BigInt(scale)` and surfaced as
+ *    `RangeError: The number 2.5 cannot be converted to a BigInt`, a message
+ *    matching neither /decimal/ nor /non-zero integer/, so a caller catching
+ *    dec's errors by message missed it entirely. `round(v)` with the argument
+ *    omitted was this case, via NaN.
+ */
+function checkScale(scale: number): void {
+  if (!Number.isInteger(scale) || scale < 0) {
+    throw new Error(`dec: scale must be a non-negative integer, got ${String(scale)}`);
+  }
+}
+
 /** Move `units` from scale `from` to scale `to`, rounding half-up away from zero. */
 function rescale(units: bigint, from: number, to: number): bigint {
   if (to === from) return units;
@@ -47,22 +73,26 @@ function align(a: string, b: string): { x: bigint; y: bigint; scale: number } {
 }
 
 export function add(a: string, b: string, scale = 2): string {
+  checkScale(scale);
   const { x, y, scale: s } = align(a, b);
   return render(rescale(x + y, s, scale), scale);
 }
 
 export function sub(a: string, b: string, scale = 2): string {
+  checkScale(scale);
   const { x, y, scale: s } = align(a, b);
   return render(rescale(x - y, s, scale), scale);
 }
 
 export function mul(a: string, b: string, scale = 2): string {
+  checkScale(scale);
   const A = split(a);
   const B = split(b);
   return render(rescale(A.units * B.units, A.scale + B.scale, scale), scale);
 }
 
 export function div(a: string, n: number, scale = 2): string {
+  checkScale(scale);
   if (!Number.isInteger(n) || n === 0) {
     throw new Error('dec.div: n must be a non-zero integer');
   }
@@ -83,8 +113,24 @@ export function div(a: string, n: number, scale = 2): string {
   return render(quotient, scale);
 }
 
+/**
+ * Σ round(each line), NOT round(Σ exact) and NOT a running total that is
+ * re-rounded at every step. `reference/money/backend-money.spec.ts:85-101`
+ * calls this distinction load-bearing: the receipt prints each line and a
+ * total that must equal the lines printed above it.
+ *
+ * Reducing through `add(total, v, scale)` rounds the ACCUMULATOR each step,
+ * which is a third semantic and an order-dependent one — the same multiset in
+ * two orders gave 0.02 and -0.01. Each value is rounded once, on its own, and
+ * the already-rounded units are then added exactly.
+ */
 export function sum(values: string[], scale = 2): string {
-  return values.reduce((total, v) => add(total, v, scale), render(0n, scale));
+  checkScale(scale);
+  const total = values.reduce((acc, v) => {
+    const p = split(v);
+    return acc + rescale(p.units, p.scale, scale);
+  }, 0n);
+  return render(total, scale);
 }
 
 export function cmp(a: string, b: string): -1 | 0 | 1 {
@@ -99,7 +145,8 @@ export const lte = (a: string, b: string): boolean => cmp(a, b) <= 0;
 export const isZero = (v: string): boolean => split(v).units === 0n;
 export const isNegative = (v: string): boolean => split(v).units < 0n;
 
-export function round(v: string, scale: number): string {
+export function round(v: string, scale = 2): string {
+  checkScale(scale);
   const A = split(v);
   return render(rescale(A.units, A.scale, scale), scale);
 }

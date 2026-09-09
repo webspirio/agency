@@ -50,3 +50,34 @@ describe('createSeq', () => {
     expect([...ids].sort()).toEqual(ids);
   });
 });
+
+describe('the decorative `error` phrase is never a JS class name', () => {
+  it('maps the statuses outside the ten most common ones', () => {
+    const phrase = (status: number) => envelopeOf(new DomainError(status, 'X', 'x'), '/p', 'T').error;
+    expect(phrase(402)).toBe('Payment Required');
+    expect(phrase(405)).toBe('Method Not Allowed');
+    expect(phrase(413)).toBe('Payload Too Large');
+    expect(phrase(415)).toBe('Unsupported Media Type');
+    expect(phrase(423)).toBe('Locked');
+    expect(phrase(451)).toBe('Unavailable For Legal Reasons');
+    expect(phrase(502)).toBe('Bad Gateway');
+  });
+
+  it('falls back to the status CLASS for an unregistered status, never to "Error"', () => {
+    const phrase = (status: number) => envelopeOf(new DomainError(status, 'X', 'x'), '/p', 'T').error;
+    expect(phrase(499)).toBe('Client Error');
+    expect(phrase(599)).toBe('Server Error');
+  });
+});
+
+describe('requestId', () => {
+  it('is set when the adapter supplies one, and wins over a ctx field of the same name', () => {
+    const e = new DomainError(409, 'X', 'x', { requestId: 'FORGED' });
+    expect(envelopeOf(e, '/p', 'T', 'req-000007').requestId).toBe('req-000007');
+  });
+
+  it('is absent — not undefined-valued — when none was supplied', () => {
+    const env = envelopeOf(new DomainError(409, 'X', 'x'), '/p', 'T');
+    expect('requestId' in env).toBe(false);
+  });
+});

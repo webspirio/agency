@@ -72,6 +72,45 @@ importers:
         specifier: ^4.1.10
         version: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13))
 
+  packages/cli: {}
+
+  packages/dec: {}
+
+  packages/kit:
+    dependencies:
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^1.31.0
+        version: 1.43.0(react@19.2.8)
+      radix-ui:
+        specifier: ^1.6.7
+        version: 1.6.7(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: ^19.2.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.8(react@19.2.8)
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+
+  packages/mock:
+    dependencies:
+      '@agency/dec':
+        specifier: workspace:*
+        version: link:../dec
+      axios:
+        specifier: ^1.20.0
+        version: 1.20.0
+
+  packages/synth: {}
+
 packages:
 
   '@adobe/css-tools@4.5.0':
