@@ -13,3 +13,11 @@ mocks/*/private/
 # their own repos because they quote real client surnames. They are here as
 # STRUCTURE reference for the generated demo/script.md template — never tracked.
 reference/demo-scripts/
+
+# Two of the reference snapshots are full git CLONES, not file copies:
+# `git add reference/` would record them as gitlinks pointing at commits this repo
+# does not contain, and a fresh clone would get two empty directories. They are
+# local reading material (HARD RULE 7: read it, never edit it, never import it),
+# so they stay out of the index entirely rather than half-in as a broken submodule.
+reference/bulletproof-react/
+reference/design-patterns-typescript/

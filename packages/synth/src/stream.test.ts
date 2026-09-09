@@ -8,8 +8,8 @@ const LISTS: (keyof LocaleCorpus)[] = ['given', 'family', 'company', 'street', '
 const draw = <T>(n: number, f: () => T): T[] => Array.from({ length: n }, f);
 
 const ALPHABET: Record<Locale, ReadonlySet<string>> = {
-  de: new Set([...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß']),
-  uk: new Set([...'АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯабвгґдеєжзиіїйклмнопрстуфхцчшщьюя']),
+  de: new Set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß'),
+  uk: new Set('АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯабвгґдеєжзиіїйклмнопрстуфхцчшщьюя'),
 };
 /** Separators a proper name may legitimately contain. */
 const SEPARATORS = new Set([' ', '-', '&', 'ʼ']);
