@@ -32,6 +32,12 @@ const REPORT_PATH = path.join(REPORT_DIR, 'last-run.json');
 const REPORT_SCHEMA = 1;
 
 /**
+ * The interpreter a verdict was produced on. `sourceHash` covers the tree; this
+ * covers the runtime, and a report is only reusable when BOTH match.
+ */
+const ENV_KEY = `${process.version}|${process.platform}|${process.arch}`;
+
+/**
  * Five statuses. Do not collapse them: reporting "lint FAILED" when the linter
  * was merely absent from PATH asserts something about the code that was never
  * tested.
@@ -277,7 +283,7 @@ async function main() {
     } catch {
       /* no usable report; run for real */
     }
-    if (reportCovers(stored, { hash, tier: opts.tier, noSkip: opts.noSkip })) {
+    if (reportCovers(stored, { hash, tier: opts.tier, noSkip: opts.noSkip, envKey: ENV_KEY })) {
       // Reuse is quiet, but never silent about what the reused verdict does NOT
       // cover. In the harness this was ported from, the blind-spot footer was
       // skipped on exactly the two paths production took, so the property held
@@ -359,6 +365,12 @@ async function main() {
     timestamp: started.toISOString(),
     head: gitHead(),
     node: process.version,
+    // Part of the freshness key, not decoration. Without it `--reuse-if-fresh`
+    // will replay a green produced on another interpreter over an unchanged
+    // tree — which is precisely how the `engines` row, whose whole purpose is to
+    // refuse a verdict about the wrong runtime, gets defeated by the cache that
+    // is meant to be reporting its result. Measured, then fixed.
+    envKey: ENV_KEY,
     tier: opts.tier,
     noSkip: opts.noSkip,
     // Scope travels WITH the verdict so a narrow green cannot be quoted as a wide one.

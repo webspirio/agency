@@ -228,12 +228,18 @@ const REAL = [
       'silently-failing files carry their @scaffold-owned marker, the `@source` glob in index.css ' +
       'resolves to a real directory from mocks/<slug>/src/, and the whole rendered tree passes ' +
       '`oxlint --max-warnings=0`. The title is deliberately hostile — an apostrophe, an ampersand ' +
-      'and a double quote — so a missing escaper for any one file type is red.',
+      'and a double quote — and the check reads the escaped BYTES back: the rendered <title> must ' +
+      'carry &amp; and no raw quote or angle bracket, and every rendered .json/.jsonc must still ' +
+      'parse. Disabling the HTML escaper is red; disabling the TypeScript escaper is red because ' +
+      'the mock stops parsing.',
     blindSpot:
       'It does not compile or run anything: the mock is never typechecked, never built and never ' +
       'opened, because all three need `pnpm install` and that is the `build` row. A rendered file ' +
       'that is syntactically fine and semantically wrong passes. It also renders exactly one ' +
-      'combination — de, profiles solo,full — so a locale- or profile-specific path is untested.',
+      'combination — de, profiles solo,full — so a locale- or profile-specific path is untested. ' +
+      'The JSON escaper is asserted but unreachable: only {{slug}} reaches a .json today and the ' +
+      'slug regex already forbids anything needing escape, so that clause is a tripwire for a ' +
+      'future template, not evidence about this one.',
   },
   {
     id: 'build',
