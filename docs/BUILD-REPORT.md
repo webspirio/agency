@@ -132,6 +132,33 @@ tier is 11.8 s so a Stop hook can run it every turn; the full tier is ~19 s.
 
 ---
 
+## Published demo — https://webspirio.github.io/agency/
+
+Added after the build, once the repo was made public. **The site is not a committed `dist/`:**
+`.github/workflows/pages.yml` runs `agency new`, builds the result and uploads that, so the deploy is
+the day-4 gate running on every push — if the scaffolder stops producing a mock that builds, Pages
+goes red. A committed demo would rot silently while the template moved underneath it. `pnpm verify`
+runs before anything is scaffolded, so a red tree never reaches the site, and the workflow greps the
+emitted CSS for `bg-card`/`text-primary`/`rounded-xl` rather than trusting the build.
+
+Its data is synthetic by construction (`packages/synth` is a closed corpus), so nothing published is a
+client artifact. **SPEC §9 is unchanged:** real client mocks still go to one Cloudflare Worker per slug
+behind an Access policy — this is a showcase of the framework, not an entry in the catalogue.
+
+`MOCK_BASE` is derived from the repo name, not hardcoded, so a rename cannot silently break every
+asset URL. Hash routing is what makes it work with no 404.html and no rewrite rule (SPEC §11).
+`packages/cli/src/pages.contract.test.ts` pins the workflow against drift: node from `.nvmrc`, pnpm
+from `packageManager`, verify ordered before scaffold, the uploaded path matching the slug built, and
+least-privilege permissions.
+
+**The first CI run went red, and correctly.** `lint.contract.test.ts` asserted oxlint's stdout was
+byte-empty; the GitHub runner's reporter prints a run summary this machine does not, so the same
+source and the same verdict passed locally and failed in CI. The test was over-specified — it now
+asserts exit 0 and that no `agency(` diagnostic is named. Together with `--reuse-if-fresh` replaying a
+node-24 verdict on node 22, that is twice in one session that a green here and a red there came from
+the host rather than the code: **every assertion over a tool's output is an assertion about that
+tool's host.**
+
 ## Deferred
 
 - **`agency check`, `freeze`, `revive`, `thaw`, `catalog.json`, the portfolio Worker, and the
