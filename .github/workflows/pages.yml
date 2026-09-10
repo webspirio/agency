@@ -1,0 +1,103 @@
+name: Pages
+
+# The published site is a mock scaffolded FROM THE TEMPLATE on every run, not a
+# committed `dist/`. That makes this deploy the day-4 gate running continuously:
+# if `agency new` stops producing a mock that builds, Pages goes red. A committed
+# demo would rot silently while the template moved underneath it.
+#
+# Its data is synthetic by construction — `packages/synth` is a closed corpus —
+# so nothing here is a client artifact. This is a showcase of the framework, not
+# a mock in the catalogue: SPEC §9 routes real client mocks to one Cloudflare
+# Worker per slug behind an Access policy, and that decision is unchanged.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: read the tree, mint an OIDC token for the deploy, write Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. `cancel-in-progress: false` because cancelling a
+# half-finished deploy can leave the site serving a partial upload.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The node major is read from .nvmrc rather than pinned here, so the
+      # workflow cannot drift from what `engines` and the `engines` check row
+      # demand. `packages/cli/src/pages.contract.test.ts` asserts that.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # pnpm comes from `packageManager` in package.json, same reason.
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      # A red tree never reaches the site. The fast tier is ~12s and covers
+      # lint, typecheck, the whole suite, the test partition, the exemption
+      # ratchet and the memo's own claims.
+      - run: pnpm verify
+
+      # The gate itself, as the build step.
+      - name: Scaffold a mock from the template
+        run: node packages/cli/bin/agency.mjs new demo --title "Agency Demo" --locale de --profiles solo,full
+
+      # Scaffolding adds a workspace importer, so the lockfile legitimately
+      # changes here. This is the one install that may not be frozen.
+      - run: pnpm install --no-frozen-lockfile
+
+      - name: Build the mock at the Pages subpath
+        # Pages serves a project site under /<repo>/, and the template builds
+        # `base: process.env.MOCK_BASE ?? '/'`. Derived from the repo name rather
+        # than hardcoded, so renaming the repo cannot silently break every asset
+        # URL. Hash routing means no 404.html and no rewrite rule is needed —
+        # that is why SPEC §11 chose createHashRouter.
+        run: MOCK_BASE="/${{ github.event.repository.name }}/" pnpm --filter demo build
+
+      - run: pnpm --filter demo test
+
+      # The silent failure the day-4 gate exists to catch: with the Tailwind
+      # `@source` line wrong the build succeeds, the app runs, and every kit
+      # surface renders unstyled. Asserted from the emitted bytes, because
+      # "confirm it by eye" is not a check.
+      - name: Assert kit styling reached the emitted CSS
+        run: |
+          set -euo pipefail
+          css=$(ls mocks/demo/dist/assets/*.css)
+          for utility in bg-card text-primary rounded-xl; do
+            grep -q -- "$utility" "$css" || {
+              echo "::error::'$utility' is absent from $css — the @source line is wrong"
+              exit 1
+            }
+          done
+          grep -q -- "/${{ github.event.repository.name }}/assets/" mocks/demo/dist/index.html || {
+            echo "::error::emitted asset paths are not under the Pages subpath"
+            exit 1
+          }
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: mocks/demo/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
