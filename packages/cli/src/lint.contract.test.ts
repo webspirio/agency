@@ -105,7 +105,12 @@ describe('the rules stay quiet on code they have no business touching', () => {
     ['a seq id', 'export const id = (n: number) => `x-${String(n).padStart(6, "0")}`;'],
   ])('allows %s', (_name, source) => {
     const r = lint(source);
-    expect({ code: r.code, out: r.out }).toEqual({ code: 0, out: '' });
+    // Exit code plus "no agency rule is named in the output" — NOT `out === ''`.
+    // oxlint's reporter prints a run summary ("Found 0 warnings and 0 errors…")
+    // on some hosts and not others: this assertion passed locally and failed on
+    // the CI runner, over the same source and the same verdict. A test that
+    // pins a reporter's formatting is testing the reporter.
+    expect({ code: r.code, fired: /agency\(/.test(r.out) }).toEqual({ code: 0, fired: false });
   });
 });
 
