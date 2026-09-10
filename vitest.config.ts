@@ -13,8 +13,19 @@ import { defineConfig } from 'vitest/config';
  * reporting green. `packages/cli/src/workspace.contract.test.ts` now asserts
  * that every test file on disk is collected exactly once, so neither a gap nor
  * an overlap can reappear silently.
+ *
+ * `mocks/verify-build-*` is reserved and excluded. The `build` check row
+ * scaffolds a throwaway mock there, runs it, and removes it — and while it
+ * exists it is inside this glob, so a `pnpm test` overlapping that window
+ * collects a directory that then vanishes underneath it. Measured: a full-suite
+ * run reported `1 failed | 58 passed` for
+ * `mocks/verify-build-88640/src/domain/calc.test.ts` while every one of its
+ * 2820 tests passed. A flaky red is worse than no gate — it is the fastest
+ * route to a gate somebody switches off — and the harness has to be safe to run
+ * while a human is running the suite, because a Stop hook does exactly that.
  */
-const DOM = ['packages/kit/src/**/*.test.{ts,tsx}', 'mocks/*/src/**/*.test.{ts,tsx}'];
+const TRANSIENT = '!mocks/verify-build-*/**';
+const DOM = ['packages/kit/src/**/*.test.{ts,tsx}', 'mocks/*/src/**/*.test.{ts,tsx}', TRANSIENT];
 
 export default defineConfig({
   test: {
@@ -22,7 +33,7 @@ export default defineConfig({
       {
         test: {
           name: 'node',
-          include: ['packages/*/src/**/*.test.ts'],
+          include: ['packages/*/src/**/*.test.ts', TRANSIENT],
           exclude: ['**/node_modules/**', ...DOM],
           environment: 'node',
         },

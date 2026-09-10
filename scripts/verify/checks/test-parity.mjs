@@ -26,6 +26,20 @@ const VITEST = path.join(ROOT, 'node_modules', '.bin', 'vitest');
 const PRUNE = new Set(['node_modules', 'dist', '.git', 'reference', 'coverage']);
 const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
 
+/**
+ * The slug prefix the `build` row scaffolds under, reserved on BOTH sides of
+ * this comparison.
+ *
+ * `vitest.config.ts` excludes it from the projects because a `pnpm test`
+ * overlapping the build row's window collects a directory that then vanishes —
+ * measured as `1 failed | 58 passed` over a run in which all 2820 tests passed.
+ * If the disk walk did not skip the same prefix, the two halves would
+ * contradict each other and THIS check would be the flaky one instead. It is
+ * not a hole: a transient mock's tests are run, by its own vitest, by the very
+ * row that creates it.
+ */
+const TRANSIENT = /^verify-build-/;
+
 /** @param {string} dir @param {string[]} out @returns {string[]} */
 function walk(dir, out = []) {
   /** @type {import('node:fs').Dirent[]} */
@@ -36,7 +50,7 @@ function walk(dir, out = []) {
     return out;
   }
   for (const e of entries) {
-    if (PRUNE.has(e.name)) continue;
+    if (PRUNE.has(e.name) || TRANSIENT.test(e.name)) continue;
     const full = path.join(dir, e.name);
     if (e.isDirectory()) walk(full, out);
     else if (TEST_FILE.test(e.name)) out.push(path.relative(ROOT, full));

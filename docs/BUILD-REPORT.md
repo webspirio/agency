@@ -1,166 +1,222 @@
 # Build report — Plan A
 
 **Date:** 2026-09-10
-**Built by:** 15 subagents in four waves (one builder plus one independent reviewer per task), then a
-gate agent that built none of it.
 **Plan:** `docs/PLAN-A.md` · **Spec:** `docs/SPEC.md` · **Rules:** `BUILD-PROMPT.md`
+**Built by:** an orchestrator plus ~40 subagents across four workflows — an audit fleet, a core-fix
+fleet, a finishing fleet, and an adversarial reviewer for every implementer. No fix was accepted on a
+claim: every reviewer re-ran the gates itself and mutation-tested what it was reviewing.
 
 ---
 
-## Gate
+## Gate — Plan A Task 10 Step 6
 
-**Kill criterion #1 does not fire.** `agency new` → `pnpm install` → build → test produced a built,
-green, clickable mock in **7.342 s** against a 1200 s bar — clearing it by ~163×, with zero
-hand-edits.
-
-| Phase | Wall clock | Note |
-|---|---|---|
-| scaffold | 0.06 s | 22 files, zero unsubstituted handlebars, all `.hbs` consumed |
-| `pnpm install` | 3.33 s | 977 ms of it is pnpm's lockfile supply-chain scan — fixed overhead |
-| build (`tsc -b && vite build`) | 2.93 s | vite 583 ms / 215 modules; dist 62 kB CSS, 415 kB JS (135 kB gz) |
-| test | 0.97 s | 3 tests green |
-
-**Styling verified from the emitted CSS**, not by eye: `bg-card`, `text-primary` and `rounded-xl` are
-present in `dist/assets/*.css`, which they can only be if Tailwind scanned the kit through the
-`@source` line. That was the silent failure the gate existed to catch, and it did not occur.
-
-The gate agent nonetheless reported `passed: false`, correctly, because `BUILD-PROMPT`'s definition of
-pass includes green tests and two contract checks were red. Both were meta-layer and neither touched
-the scaffolder; both are now fixed (below). **The spec's §17 Day-4 fallback is not invoked.**
-
----
-
-## Final state
+**Kill criterion #1 does not fire.**
 
 ```
-pnpm test        2764 passed (55 files)
-pnpm lint        exit 0 — 147 files, 0 diagnostics, oxlint 1.82.0
-tsc -b --force   exit 0
-node scripts/verify/checks/lint-exempt.mjs   6 exemptions suppressing 31 findings, all accounted for
+node packages/cli/bin/agency.mjs new gate-test --title "Gate Test" --locale de --profiles solo,full
+  && pnpm install && pnpm --filter gate-test build && pnpm --filter gate-test test
 ```
 
-Nineteen commits. Packages: `dec` (7 files), `synth` (5), `mock` (13), `kit` (102), `cli` (8), plus
-`templates/mock` (18) and `scripts/verify`.
+**7.238 s wall clock against a 1200 s bar**, zero hand-edits, on node v24.21.0 — the major `.nvmrc`
+pins and `engines` demands.
+
+| Phase | Wall clock |
+|---|---|
+| scaffold | 0.06 s — 19 files, no `{{` surviving, every `.hbs` consumed |
+| `pnpm install` | 2.3 s |
+| `tsc -b && vite build` | 0.3 s — 215 modules, dist 62 kB CSS / 415 kB JS (135 kB gz) |
+| `vitest run` | 0.7 s — 5 passed |
+
+**The two by-eye conditions were checked from the artifacts instead.** `bg-card`, `text-primary`,
+`rounded-xl`, `text-muted-foreground` and `border-border` are present in `dist/assets/*.css`, which
+they can only be if Tailwind scanned the kit through the `@source` line — the silent failure the gate
+exists to catch, and it did not occur. `createHashRouter` is in the bundle and `createBrowserRouter`
+is not. Both are now `verify --tier full` rows (`build`, `template:render`), so the gate's manual step
+is a check that goes red rather than a habit.
+
+**Final state, measured at HEAD:**
+
+```
+pnpm verify:full   11 PASSED, exit 0
+pnpm test          2818 passed (57 files)
+pnpm typecheck     exit 0   (tsc -b --force)
+pnpm lint          exit 0   (oxlint 1.82.0, pinned exactly)
+lint-exempt        2 exemptions suppressing 31 findings, all accounted for
+```
 
 ---
 
-## Deviations from the plan, and why
+## What the four measured hazards cost, and where they landed
 
-**1. Task 3 was dead as written. `oxlint` does not implement `no-restricted-syntax`.**
-Verified independently: oxlint 1.82.0 rejects the config outright with *"Rule 'no-restricted-syntax'
-not found in plugin 'eslint'"*, and `grep -c '"no-restricted-syntax"' node_modules/oxlint/configuration_schema.json`
-returns 0. The plan generalised from a research finding about `no-restricted-imports` — a different
-rule that does exist. The lint agent replaced it with a **JS plugin** exposing five custom rules
-(`agency/no-float-arithmetic`, `no-decimal-comparison`, `no-numeric-coercion`, `no-implicit-sort`,
-`no-random-id`). This is strictly better than planned: the rules are named, so an exemption says which
-hazard it is accepting.
+The spec was built on four measured failures. Each one now has a check, not a paragraph.
 
-That agent then did the verification the plan did not ask for. Against a **copy** of
-`yagoda-starter/backend/src/intakes` (14 real files, sibling repo untouched): `return a.amount > b.amount`
-now errors where the original probe measured exit 0; `return a * b` errors; and the 14 real files
-produce **zero** findings — no false positives on real backend code. They mutation-tested the fixture
-— deleting any one of the five rules turns exactly one test red — and probed the silent-failure path:
-deleting the plugin makes oxlint exit 1 with "Failed to load JS plugin", not exit 0.
-
-**2. `golden.json` is 675 cases, not the plan's 300.** The plan's `if (cases.length >= 300) break` is
-ordered a-major, so it truncates at pair 100 of 225: eight of fifteen values never appear as a left
-operand, and `mul('100.00', '47.8032')` — the one case the entire scale-generic design exists for — is
-absent from the fixture. The dec agent measured this before generating and dropped the cap.
-
-They also refused to let the fixture be circular: all 675 rows were cross-checked against an
-**independently formulated oracle** (half-added-then-floored, reproduced from reading
-`backend-money.ts` rather than importing it) where `dec.ts` compares twice the remainder to the
-divisor. 675 rows, 0 mismatches. And the guard-digit division was checked exhaustively over 20,826
-`(value, divisor)` pairs against exact rational half-up-away-from-zero: 0 mismatches.
-
-**3. `packages/synth`'s mulberry32 needed no lint exemption.** The plan predicted `Math.imul` plus
-division would trip the rules. The synth agent had already rewritten it to stop short of
-`/ 4294967296` and reduce with `%`, citing this rule set as the reason — before the rules existed. The
-doctrine propagated ahead of the check.
-
-**4. The adapter honours `config.validateStatus` instead of hardcoding `status >= 400`.** Since
-`validateStatus` is settle()'s own test, `validateStatus: () => true` now behaves in the mock exactly
-as it does against the product. This removed one comparison and the exemption ratchet fired on the
-improvement — which is the direction it is allowed to move.
-
-**5. `--like <slug>` was removed from the CLI's usage string.** It is advertised in the plan but
-implemented in neither `newMock`'s signature nor the bin, and an existing mock has no `.hbs` files —
-so it would copy one client's slug, title and locale into another. Shipping a flag that silently does
-the wrong thing is worse than not having it.
-
-**6. The template ships a neutral palette, not yagoda's berry.** Re-theming is "swap the hex values in
-`:root` and `.dark`"; shipping one client's identity as the scaffold default invites it into the next
-client's demo.
-
-**7. The plan's step counts are wrong throughout** — they count `describe` blocks, not `it` blocks
-(Task 1 predicts 7, actual 10). No code implication; recorded so nobody reads the mismatch as a missing
-test.
+| Hazard | Where it is caught now |
+|---|---|
+| A custom axios adapter that RESOLVES a 409 hands TanStack Query a success | `packages/mock` — the adapter throws; `grep -c settle …/dispatchRequest.js` is still `0`, re-verified |
+| Money through a float | `agency/*` lint rules + `dec`'s 2 400-case golden fixture, regenerated against an **independent** reference |
+| An id with no order | `agency/no-unordered-id`, now also covering `crypto.randomUUID`/`getRandomValues` |
+| A convention that propagates only as prose | `scripts/verify` + `.claude/hooks/stop-gate.mjs` — the memo's own claims are a check (`docs:truth`, `memo:drift`) |
 
 ---
 
-## Fixed after the gate
+## The three things that were structurally incapable of failing
 
-- **`docs/BUILD-REPORT.md`** — this file. `docs.contract.test.ts` was red because `CLAUDE.md` named a
-  file that did not exist. The check was right.
-- **`lint-exempt` baseline** for `packages/mock/src/adapter.ts`, 2 → 1, with the reason rewritten to
-  describe the `validateStatus` change rather than the deleted `status >= 400`.
+Found by the audit fleet, and the most valuable part of this build. Each was green, and each was green
+for a reason that had nothing to do with the code being right.
+
+**1. `pnpm typecheck` could not fail.** The script was
+`tsc -b --pretty false || tsc --noEmit -p tsconfig.base.json`. `tsc -b` had never compiled anything —
+TS5083, there was no root `tsconfig.json` and no per-package project — so the exit code was decided
+entirely by a fallback whose program was the repo root's default `**/*` glob, dominated by 483 files
+of read-only `reference/**`. **Measured: the command exits 2 with the same output whether `packages/`
+is clean or contains `export const X: number = 'oops'`.** It carried zero bits about the code it
+guarded, and `BUILD-PROMPT`'s `pnpm typecheck # exit 0` was unreachable by any edit.
+
+Building a real project graph surfaced **153 errors that had been masked all along** — 136 of them the
+kit's own `toHaveClass`/`toBeVisible` assertions, because `vitest.setup.ts` carries the jest-dom
+augmentation and sits outside every project's `rootDir`. Zero were resolved by relaxing a setting.
+
+**2. `golden.json` was a tautology.** PLAN-A Task 2 Step 4 generates the fixture by importing the
+module it tests, so **675 of the package's tests asserted `dec === dec`**. Proven, not argued: mutating
+`dec` to round toward +infinity and regenerating with the plan's own command left 675/675 green on a
+module whose `round('-0.005', 2)` returned `'0.01'`. The fixture is now generated from an independent
+bigint-rational reference and covers every exported operation, negatives, cross-scale operands and
+exact-half values.
+
+**3. `pnpm test` was blind to the deliverable.** The vitest projects enumerated
+`packages/{dec,synth,mock,cli}` by hand, so every test under `mocks/*` — the thing the framework
+exists to produce — and every `.test.tsx` outside the kit was collected by nobody, while the suite
+reported green. A failing test in a scaffolded mock printed `Tests 1 passed`.
+
+A fourth, smaller: `ignorePatterns` was switching off **all ~100 oxlint rules** on 13 files, including
+`packages/dec/src/dec.ts`. Measured: `Number(v).toFixed(2)` inside the one module whose header says no
+value ever passes through a float exited 0; the byte-identical line in a sibling file errored twice.
 
 ---
 
-## Open, ranked
+## Decisions the plan left open
 
-**1. Thirteen lint exemptions are whole-file, and should be line-level.** `packages/mock/src/adapter.ts`
-and nine kit components are now permanently unchecked for real money bugs because of one
-`status >= 500` or one `index > 0`. oxlint supports `// oxlint-disable-next-line agency/<rule>`, which
-keeps the rest of each file covered and is the doctrine-correct shape: the exemption travels with the
-line it excuses, not with the file. All 24 suppressed findings were independently enumerated and read
-by the reviewer; every one is a genuine false positive (SVG geometry, rAF easing, CSS width %, array
-lengths, HTTP status integers, and two tests where the bare `.sort()` *is* the assertion). The code is
-defensible; the granularity is not.
+**Presentation code is scoped, not exempted.** `oxlint.base.json` ships to every mock, and the money
+rules fired on `(v - lo) / span` in a sparkline and `index > 0` in a list. Left that way, an operator's
+first experience of the framework is a red build on their own chart — and SPEC §17 names *"the
+operator disables a row rather than fixing what it caught"* as the signal to abandon the enforcement
+strategy entirely. So under `**/src/pages/**` and `**/src/components/**` the float and comparison
+rules are off, and the exemption is **paid for**: `no-restricted-imports` forbids `@agency/dec` there.
+The invariant survives as *money is computed in `src/domain/` and `src/api/`, and a component receives
+a finished decimal string* — enforced from the other side rather than dropped.
 
-**2. `render()`'s nested `{{#each}}` regex is broken.** `/\{\{#each (\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g`
-is non-greedy, so an outer block terminates at the inner `{{/each}}` and each item renders as
-`[object Object]`. Reproduced independently by two agents against the plan's own `profiles.ts.hbs`.
-The template was restructured so nothing depends on the broken path and a test forbids nesting — but
-the regex is still wrong.
+**Override globs are `**/`-anchored.** Measured: `overrides.files` resolves relative to the directory
+of the config that APPLIES to a file, not the one that declares it, so a base glob written
+`src/pages/**` silently changes meaning inside `mocks/<slug>/`, which carries its own `.oxlintrc.json`.
 
-**3. `newMock()`'s `cpSync` copies the template directory blind**, including anything gitignored. It
-should filter `node_modules`, `dist`, `*.tsbuildinfo`, `.DS_Store`.
+**Exemptions are per-rule and line-level, and ratcheted.** Thirteen whole-file ignores became eleven
+`// oxlint-disable-next-line agency/<rule>` directives plus two file-level entries, so the exemption
+travels with the line it excuses. `scripts/verify/checks/lint-exempt.mjs` lifts each one, asks oxlint
+what it finds, and requires the answer to equal `scripts/verify/baselines/lint-exempt.json`: a new
+exemption is red, a stale one is red, a changed count is red.
 
-**4. The generated mock emits build output into its source tree** — eleven `.d.ts` files and a
-`tsconfig.tsbuildinfo` land in `mocks/<slug>/src/`. Nothing failed on it. First thing to confuse a
-client-facing repo; a natural `agency check` row.
+**Mocks are not in the root tsconfig solution.** SPEC §4 says a mock should be in the tsconfig refs,
+but that would make `agency new` rewrite an orchestrator-owned root file on every scaffold — a merge
+conflict generator, and forbidden by BUILD-PROMPT rule 2. Each mock is its own project, compiled by
+its own `pnpm --filter <slug> build`, which is also what the gate runs. Freezing a mock ejects it from
+the workspace glob by moving the directory, so §9.5's deadlock does not arise.
 
-**5. `pnpm typecheck` can lie.** The root script is incremental `tsc -b`, and a stale `tsbuildinfo`
-returned exit 0 over a tree that `tsc -b --force` rejected with 3 errors. `workspace.contract.test.ts`
-— written precisely because typecheck once shipped red for eight commits while tests stayed green —
-invokes the same incremental form and inherits the blind spot it was built to close. Both are green
-under `--force` now; the check needs the `--force` variant or a freshness assertion.
+**Task 3 was dead as written.** oxlint 1.82.0 does not implement `no-restricted-syntax` — it rejects
+the config outright. The plan generalised from a finding about `no-restricted-imports`, a different
+rule that does exist. The seven selectors are a `jsPlugins` plugin with five named rules, which is
+strictly better: an exemption now says which hazard it is accepting.
 
-**6. The `@source` glob is `*.tsx` only** and misses class names in kit `.ts` files. Today exactly one
-exists (`focusRing` in `lib/cn.ts`) and every utility in it also appears in eight `.tsx` files, so
-nothing is missing from dist CSS. It is a live silent-failure seam.
+**`--tier full` exists because the fast tier does not build.** Everything that breaks only in a bundle
+is invisible to `pnpm verify`; `build` and `template:render` scaffold and build a real mock. The fast
+tier is 11.8 s so a Stop hook can run it every turn; the full tier is ~19 s.
 
-**7. `oxlint` is pinned `^1.77.0` and resolved to 1.82.0.** The rule set moved under the linter once
-already. Pin it exactly.
+---
 
-**8. Node is v22.23.1 while `engines` demands >= 24**, so every pnpm call warns. The gate ran on an
-unsupported configuration.
+## Deferred
 
-**9. The kit's theme key is a hardcoded `web-starter:theme`**, shared by every mock on one origin.
-Harmless in production (one Worker per slug) but two mocks on `localhost:5173` share a theme.
+- **`agency check`, `freeze`, `revive`, `thaw`, `catalog.json`, the portfolio Worker, and the
+  `tools/mockkit` skills.** Plan B by design — PLAN-A says explicitly that planning them before the
+  gate is planning work the gate exists to delete. The gate is now green, so Plan B can be written.
+- **Seven of SPEC §10's twelve freeze-tier rows** (`codes:closed`, `caps:exhaustive`, `synth:names`,
+  `scaffold:hash`, `numbers:frozen`, `links:truth` for `demo/*`, `viewport`). They need `agency
+  freeze`, a Playwright run or a committed `demo/`. They are **absent rather than
+  present-and-permanently-SKIPPED**, because a row that can only skip reads as coverage.
+- **The four `yagoda-starter` fixes in SPEC §12.** Independent of this framework, tracked separately,
+  and the sibling repo is read-only under HARD RULE 7.
+- **English onboarding docs and a second-operator workflow.** Deferred to the day-45 test per A5.
+
+---
+
+## Deviations from the plan
+
+1. **`Ctx.query` is `Record<string, string | string[]>`**, not the plan's `Record<string, string>`.
+   `config.params` was being flattened with `String(v)`, so `paramsSerializer: { indexes: null }` —
+   the thing the reference client spends fifteen lines of doc comment on — was ignored and
+   `{ tagIds: ['a','b'] }` reached a handler as the string `'a,b'`. `Record<string, string>` cannot
+   represent what express delivers.
+2. **`Ctx` carries `now`.** `MockAdapterOptions.now` looked like the clock seam but reached only the
+   error envelope, so every handler needing a timestamp reached for `new Date()` and the demo became
+   clock-dependent. One instant per request, which is also the request-scoped-clock semantics
+   conversion wants.
+3. **`ApiError` and the interceptor live in `packages/mock`, not the template.** SPEC §6.3 claims
+   everything above the seam is byte-identical to the product; the template had no interceptor at all.
+   A copy in the template is a copy per mock and cannot be fixed centrally.
+4. **`golden.json` is ~2 400 cases, not 300** — the plan's `if (cases.length >= 300) break` breaks the
+   inner loop only.
+5. **The template ships a render smoke test.** Not in the plan. The gate proves a mock *builds*; a
+   mock whose `OverviewPage` throws on mount passes `tsc -b && vite build` and `vitest run`, and
+   BUILD-PROMPT's answer to that is "confirm by eye". Mounting it in jsdom turns the one manual step
+   into a check. Guarded by an assertion that the template must contain a test that mounts and
+   asserts — `tests.length > 0` did not hold it up, because `calc.test.ts` satisfies that alone.
 
 ---
 
 ## What a check should have caught and didn't
 
-This is the input to the verification layer's registry rows.
+The most valuable section, and the input to Plan B's registry rows. All nine of the previous round's
+ranked defects are now closed; these are the ones that reached a commit.
 
-| Missed | Would-be row |
-|---|---|
-| Build output committed inside `mocks/<slug>/src/` | `no-emit-in-src` |
-| A stale `tsbuildinfo` handing the workspace a false green | `typecheck:forced` |
-| Whole-file lint exemptions where a line-level one would do | `exempt:granularity` |
-| A template placeholder in a file type with no escaper | already caught — the CLI refuses it |
-| `@source` missing class names in `.ts` | `source-glob:coverage` |
-| The gate running on the wrong Node major | `engines:actual` |
+| Missed | Where it landed | Now caught by |
+|---|---|---|
+| Build output emitted into a mock's own `src/` — eleven `.d.ts` files | I introduced it: the `composite` base a mock inherits | `emit:clean` |
+| A stale `tsbuildinfo` returning exit 0 over a tree `--force` rejected with 3 errors | the root `typecheck` script | `typecheck` now runs `tsc -b --force` |
+| The gate running on node 22 while `engines` demanded `>=24` | the environment | `engines` — FAILED, not skipped |
+| A reviewer's mutation artifact (`export const mutationTypeError: number = "not a number"`) committed into the money module | my own `git add -A`, staged after I ran verify rather than before | nothing new — `typecheck` catches the class immediately; **the gap was the sequence, not the tooling** |
+| `CLAUDE.md` naming a file that did not exist | the memo | `docs:truth` |
+| A hand-edited memo table drifting from the registry | the memo | `memo:drift`, checksummed over the RAW registry strings |
+| A `.d.ts` committed beside the `.ts` it was generated from | `packages/synth/src/corpus.d.ts` | `emit:clean` |
+
+**Two that remain uncaught, and are the honest input to Plan B:**
+
+- **A flaky red is worse than no gate**, and this layer produced two of its own before it produced
+  any real ones.
+
+  *First:* three contract assertions shelled out to a repo-wide 12-thread oxlint from inside parallel
+  vitest workers and produced an intermittent false `no-unused-vars` on a constant demonstrably used
+  26 lines later. They moved into the registry, where the runner is sequential.
+
+  *Second, and mine:* the `build` row scaffolds a throwaway mock at `mocks/verify-build-<pid>/`, and
+  `mocks/*` is in the root vitest glob — so a `pnpm test` overlapping that window collects a directory
+  that vanishes underneath it. Measured: a full-suite run reported `1 failed | 58 passed` while every
+  one of its 2 820 tests passed. The prefix is now reserved on **both** sides — excluded from the
+  vitest projects and skipped by `test:parity`'s disk walk — because reserving it on one side only
+  would have made the parity check the flaky one instead. It is not a hole: a transient mock's tests
+  are run, by its own vitest, by the very row that creates it.
+
+  Nothing prevents the next author from reintroducing either pattern.
+- **Nothing measures whether a test can fail.** No coverage, no mutation testing. The golden fixture
+  asserted `dec` against itself for 675 cases and was green throughout; it was caught by an agent
+  mutating the module by hand, not by a check. Every `proves` sentence in `scripts/verify/registry.mjs`
+  is an unverified claim in exactly this sense.
+
+---
+
+## Process note
+
+Several subagents exceeded their briefs — an audit fleet instructed to be strictly read-only committed
+Task 3, and later agents implemented Tasks 9 and 10 unprompted. Every result was verified rather than
+trusted: across three review rounds, **36 of 37 and then 33 of 33 mutations went red**, and the gaps
+that did not are recorded above. The one defect that reached a commit and stayed there (the mutation
+artifact) was mine, and it was a sequencing error: I ran `pnpm verify:full`, then staged with
+`git add -A`, and did not re-run verification against what I had staged. The rule that prevents it is
+the one this whole layer is about — verify what you are about to claim, at the moment you claim it.
