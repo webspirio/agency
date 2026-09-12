@@ -2,7 +2,8 @@
  * The five-verb store, as a FACTORY.
  *
  * The lab's stores were module-scope, so a POST in one test was visible to every
- * later test in the file. Measured, with the lab still on disk:
+ * later test in the file. Measured with the lab still on disk; it has since been
+ * deleted, so the command below is a record rather than a step to run:
  *   vitest run packages/mock/src/lab --sequence.shuffle.tests --sequence.seed=99
  *   -> 2 failed | 36 passed   (`total` was 5 where the test expected 4)
  * A suite whose result depends on declaration order is a suite that cannot be

@@ -14,7 +14,9 @@
  * store dies with the page, so "reset demo data" is still a reload.
  *
  * WHY IT IS A FACTORY, not a module-scope singleton. The lab's stores were
- * module-scope and its suite was green in declaration order only:
+ * module-scope and its suite was green in declaration order only. Measured
+ * BEFORE the lab was deleted — that directory no longer exists, so this command
+ * is a record, not a step to run:
  *   vitest run packages/mock/src/lab --sequence.shuffle.tests --sequence.seed=99
  *   -> 2 failed | 36 passed
  * A suite whose result depends on the order its tests happen to run in has not
