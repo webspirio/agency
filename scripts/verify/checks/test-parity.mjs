@@ -38,7 +38,7 @@ const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
  * not a hole: a transient mock's tests are run, by its own vitest, by the very
  * row that creates it.
  */
-const TRANSIENT = /^verify-build-/;
+const TRANSIENT = /^verify-/;
 
 /** @param {string} dir @param {string[]} out @returns {string[]} */
 function walk(dir, out = []) {

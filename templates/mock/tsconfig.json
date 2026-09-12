@@ -1,7 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["vite/client"],
+    // `vite/client` alone drops the node types the workspace base provides, and a
+    // mock SHIPS A TEST SUITE: the wire golden reads its committed fixture with
+    // node:fs and reads AGENCY_GOLDEN off process.env. Without "node" those are
+    // TS2591/TS2339 and the mock does not compile.
+    "types": ["vite/client", "node"],
 
     // The base turns on `composite` + `emitDeclarationOnly` so the WORKSPACE
     // packages can be a real `tsc -b` project graph. A mock is not part of that

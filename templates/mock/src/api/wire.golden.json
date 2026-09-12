@@ -1,0 +1,20 @@
+{
+  "overview": [
+    "{generated_at:instant,headline:string,rows:number,total:dec2}"
+  ],
+  "listParties": [
+    "{data:[]{address:string,balance:dec2,company:string,created_at:instant,id:seq-id,name:string},limit:number,page:number,total:number}"
+  ],
+  "getParty": [
+    "{address:string,balance:dec2,company:string,created_at:instant,id:seq-id,name:string}"
+  ],
+  "createParty": [
+    "{address:string,balance:dec2,company:string,created_at:instant,id:seq-id,name:string}"
+  ],
+  "renameParty": [
+    "{address:string,balance:dec2,company:string,created_at:instant,id:seq-id,name:string}"
+  ],
+  "removeParty": [
+    "empty-body"
+  ]
+}

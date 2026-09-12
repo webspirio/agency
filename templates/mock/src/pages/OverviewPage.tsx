@@ -1,48 +1,27 @@
 import type { ReactNode } from 'react';
-import { AxiosError } from 'axios';
 import { useQuery } from '@tanstack/react-query';
-import type { ErrorEnvelope } from '@agency/mock';
-import { DataTable, type Column } from '@agency/kit/data-table';
 import { EmptyState } from '@agency/kit/empty-state';
 import { Skeleton } from '@agency/kit/skeleton';
 import { DashboardPage } from '@agency/kit/templates/dashboard-page';
 import { httpClient } from '../api/client';
-import type { Overview, Party } from '../domain/types';
+import { call, codeOf } from '../api/contract';
 import { PROFILE } from '../profiles';
 
 /**
- * The placeholder screen. It exists to prove three things are wired before a
- * single line of client domain is written: the adapter answers, `@agency/kit`
- * is styled (every surface below is a kit component — if they render as
- * unstyled boxes, the `@source` line in index.css is wrong), and the error
- * path reads `code` rather than a message string.
+ * The first screen. It exists to prove four things are wired before a line of
+ * client domain is written: the adapter answers, `@agency/kit` is styled (every
+ * surface below is a kit component — if they render as unstyled boxes the
+ * `@source` line in index.css is wrong), the error path reads `code` rather than
+ * a message string, and the request goes through the CONTRACT rather than a
+ * hand-written URL.
+ *
+ * Note what is NOT here: no path literal and no response type argument. `call`
+ * takes an operation KEY, and both the URL and the response type come from
+ * `src/api/contract.ts`. That is what makes the two sides one claim instead of
+ * two that happen to agree — and it is what `api:bound` checks.
  *
  * Replace it. Do not build the client's screens around it.
  */
-
-const COLUMNS: Column<Party>[] = [
-  { id: 'name', header: 'Name', cell: (row) => row.name },
-  { id: 'company', header: 'Company', cell: (row) => row.company, hideBelow: 'sm' },
-  { id: 'address', header: 'Address', cell: (row) => row.address, hideBelow: 'md' },
-  {
-    id: 'balance',
-    header: 'Balance',
-    align: 'right',
-    // Decimal strings are rendered verbatim. Formatting them through a Number
-    // is how a demo total stops matching the lines above it.
-    className: 'tnum font-mono whitespace-nowrap',
-    cell: (row) => row.balance,
-  },
-];
-
-/** The envelope's `code` is THE discriminator; `message` is for humans and
- *  `error` is decorative. Branching on anything else breaks at conversion. */
-function codeOf(error: unknown): string {
-  if (!(error instanceof AxiosError)) return 'UNKNOWN';
-  const envelope = error.response?.data as ErrorEnvelope | undefined;
-  return envelope?.code ?? 'UNKNOWN';
-}
-
 function Shell({ children }: { children: ReactNode }) {
   return <div className="min-h-dvh bg-background px-4 py-8 sm:px-6">{children}</div>;
 }
@@ -50,7 +29,7 @@ function Shell({ children }: { children: ReactNode }) {
 export function OverviewPage() {
   const { data, isPending, error } = useQuery({
     queryKey: ['overview'],
-    queryFn: async () => (await httpClient.get<Overview>('/overview')).data,
+    queryFn: () => call(httpClient, 'overview', { params: {}, body: undefined }),
   });
 
   if (isPending) {
@@ -63,19 +42,21 @@ export function OverviewPage() {
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
           </div>
-          <Skeleton className="h-72" />
         </div>
       </Shell>
     );
   }
 
   if (error) {
+    // `codeOf` is keyed to the operation, so the set of codes this branch can
+    // see is exactly the set `overview` declares — HARD RULE 5 says branch on
+    // `code` and nothing else.
     return (
       <Shell>
         <div className="mx-auto w-full max-w-[1400px]">
           <EmptyState
             title="The overview request did not come back"
-            hint={`Error code: ${codeOf(error)}. Every handler lives in src/api/routes.ts.`}
+            hint={`Error code: ${codeOf('overview', error) ?? 'UNKNOWN'}. Every handler lives in src/api/routes.ts.`}
           />
         </div>
       </Shell>
@@ -87,7 +68,7 @@ export function OverviewPage() {
       <DashboardPage
         eyebrow={PROFILE.label}
         title={data.headline}
-        description="Deterministic seed data, regenerated on every load. Replace src/domain/{types,seed,calc}.ts and src/api/routes.ts with the client's."
+        description="Deterministic seed data, regenerated on every load. Replace src/domain/{types,seed,rules,calc}.ts and src/api/contract.ts with the client's."
         statColumns={3}
         stats={[
           { label: 'Parties', value: data.rows },
@@ -104,16 +85,10 @@ export function OverviewPage() {
             eyebrow: 'Ledger',
             title: 'Balances',
             span: 'full',
-            // The table draws its own card shell; a card inside a card is two
-            // outlines.
-            card: false,
             content: (
-              <DataTable
-                columns={COLUMNS}
-                rows={data.parties}
-                rowKey={(row) => row.id}
-                empty={<EmptyState title="No parties in the seed" />}
-              />
+              <a className="text-primary underline underline-offset-4" href="#/parties">
+                Open the party book
+              </a>
             ),
           },
         ]}

@@ -220,6 +220,63 @@ const REAL = [
       'about the rest of CLAUDE.md — every line outside the markers is unchecked prose.',
   },
   {
+    id: 'api:bound',
+    tier: 'fast',
+    after: ['typecheck'],
+    cmd: 'node scripts/verify/checks/api-bound.mjs',
+    proves:
+      'For templates/mock and every mocks/<slug>, each HTTP call a screen makes names an operation ' +
+      'the mock\'s own contract declares, and each declared operation is reached by at least one ' +
+      'screen. It reads the TypeScript AST and anchors on the IMPORTED BINDING, so a renamed import ' +
+      'still counts and a `call` from somewhere else does not; a raw httpClient.get/post/patch/' +
+      'delete in a screen is red because it goes around the contract entirely.',
+    blindSpot:
+      'It matches an operation NAME, never a response type: a correct key with an invented response ' +
+      'type is green here, and that is permanently the drift controls\' and the wire golden\'s job. ' +
+      'A call whose operation key is not a string literal is reported as unresolvable rather than ' +
+      'followed. It sees only files under src/pages, so a fetch made from a hook or a component ' +
+      'elsewhere is invisible, and it says nothing about whether a reached operation is reached on a ' +
+      'path a user can actually take.',
+  },
+  {
+    id: 'contract:complete',
+    tier: 'fast',
+    cmd: 'node scripts/verify/checks/contract-complete.mjs',
+    proves:
+      'Every operation in the registry has a handler in routes.ts, an entry in `Io`, and a `qry` slot ' +
+      'on that entry — the slot every operation carries from t=0 because threading one through ' +
+      'CallArgs later is all-or-nothing. Every code an operation declares also appears as a string ' +
+      'literal somewhere in the mock\'s src/ outside the contract, so a declared code nothing can ' +
+      'ever emit is red.',
+    blindSpot:
+      'It does NOT check that two operations share no method+path, nor that a literal segment is ' +
+      'declared before its :param sibling — MEASURED: compile() already throws on both as a ' +
+      'shadowing error before a request is served, so a copy here could only ever agree. The code ' +
+      'clause is reachability by LITERAL, not by proof: routes.ts passes rule-returned codes ' +
+      '(blank.code), so the literal is matched anywhere under src/ rather than at a fail() site for ' +
+      'that operation. The opposite direction — a fail() literal outside the declared set — is held ' +
+      'by the type system, not here.',
+  },
+  {
+    id: 'contract:controls',
+    tier: 'fast',
+    after: ['typecheck'],
+    cmd: 'node scripts/verify/checks/contract-controls.mjs',
+    proves:
+      'Every *.controls.ts under packages/ is genuinely IN the tsc program, read back from ' +
+      '`tsc -b --force --listFiles` rather than inferred from a tsconfig glob, so its ' +
+      '@ts-expect-error directives are actually being compiled; the template\'s controls sit under ' +
+      'templates/mock/src where a scaffolded mock\'s own tsconfig compiles them; and no control is ' +
+      'a tautology — an Equal<X, X> whose two arguments are textually identical asserts nothing, and ' +
+      'the contract lab shipped one.',
+    blindSpot:
+      'Being in the program is not being CORRECT: a control asserting something trivially true is ' +
+      'green here, and textual identity catches only the crudest tautology — Equal<A, B> where A and ' +
+      'B are spelled differently but resolve to the same type is invisible. The template half is ' +
+      'structural only: nothing here compiles templates/mock, and that its controls still bite is ' +
+      'established by the `build` row scaffolding and typechecking a real mock.',
+  },
+  {
     id: 'template:render',
     tier: 'full',
     cmd: 'node scripts/verify/checks/template-render.mjs',
@@ -259,6 +316,27 @@ const REAL = [
       'the stylesheet can still be overridden to nothing. It runs `pnpm install`, which rewrites ' +
       'pnpm-lock.yaml and node_modules and then restores the lockfile byte for byte — if that ' +
       'restoration fails it says so, but a concurrent install in the same tree is not detected.',
+  },
+  {
+    id: 'wire:frozen',
+    tier: 'full',
+    after: ['build'],
+    cmd: 'node scripts/verify/checks/wire-frozen.mjs',
+    proves:
+      'On a mock scaffolded and installed from scratch, every declared operation is driven once ' +
+      'through the REAL adapter, reduced to a structural fingerprint of key names and value DOMAINS ' +
+      '(balance:dec2, created_at:instant, id:seq-id, empty-body for a 204), and compared to the ' +
+      'committed fixture — then REGENERATED and required to be byte-identical, so a fixture that ' +
+      'passes only because the test stopped driving a route is red. This is the one mechanism here ' +
+      'that catches a re-cased wire field: created_at -> createdAt typechecks perfectly when both ' +
+      'sides are renamed together.',
+    blindSpot:
+      'A fingerprint is shapes, not values: a handler returning the wrong NUMBER, the wrong row, or ' +
+      'rows in the wrong order is green. The tokens are a fixed table, so a domain it does not know ' +
+      'reduces to bare `string`. It drives each operation exactly once, with one set of arguments, ' +
+      'against the seeded store — an error envelope, a second page and every refusal path are ' +
+      'unfingerprinted. It runs pnpm install, which rewrites pnpm-lock.yaml and then restores it ' +
+      'byte for byte; a concurrent install in the same tree is not detected.',
   },
 ];
 

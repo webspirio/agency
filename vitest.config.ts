@@ -14,7 +14,8 @@ import { defineConfig } from 'vitest/config';
  * that every test file on disk is collected exactly once, so neither a gap nor
  * an overlap can reappear silently.
  *
- * `mocks/verify-build-*` is reserved and excluded. The `build` check row
+ * `mocks/verify-*` is reserved and excluded — the WHOLE prefix, because the
+ * `build` and `wire:frozen` rows each scaffold one. The `build` check row
  * scaffolds a throwaway mock there, runs it, and removes it — and while it
  * exists it is inside this glob, so a `pnpm test` overlapping that window
  * collects a directory that then vanishes underneath it. Measured: a full-suite
@@ -24,7 +25,7 @@ import { defineConfig } from 'vitest/config';
  * route to a gate somebody switches off — and the harness has to be safe to run
  * while a human is running the suite, because a Stop hook does exactly that.
  */
-const TRANSIENT = '!mocks/verify-build-*/**';
+const TRANSIENT = '!mocks/verify-*/**';
 const DOM = ['packages/kit/src/**/*.test.{ts,tsx}', 'mocks/*/src/**/*.test.{ts,tsx}', TRANSIENT];
 
 export default defineConfig({

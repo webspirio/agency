@@ -85,10 +85,14 @@ Per-row blind spots are in the table below. These are the tier's gaps *as a whol
 | `emit:clean` | fast | No .tsbuildinfo, and no .d.ts / .js / .map sitting beside the .ts or .tsx it was emitted from, exists anywhere under a src/ directory in packages/, templates/ or mocks/. The day-4 gate ran with eleven emitted .d.ts files and a tsconfig.tsbuildinfo inside mocks/<slug>/src/ and nothing was red about it; a stale declaration there is resolved in preference to the source that would have replaced it. | Emit is identified by the SIBLING, so build output whose source has since been deleted is invisible, and so is anything emitted outside a src/ directory. It also passes happily on a declaration a human wrote badly: vite-env.d.ts and testing.d.ts are correct here only because no compiler would produce a file by those names, not because they were inspected. |
 | `docs:truth` | fast | Every backticked path and every `pnpm <script>` CLAUDE.md names resolves — at the repo root, or inside templates/mock/ (with or without a .hbs suffix) for the paths a scaffolded mock owns, or in package.json for the scripts. Nothing is exempted by a heuristic. | Existence, not truth. A file that exists but no longer does what the sentence around it claims is green here, and so is every statement the memo makes that does not happen to contain a path or a script name — which is most of them. Prose is not gated and cannot be. |
 | `memo:drift` | fast | The proves / does-not-prove table inside the generated-region markers in CLAUDE.md is byte-identical to the table rendered from this registry, and the SHA-256 printed beneath it matches a digest taken over the RAW proves and blindSpot strings — which the rendered cells cannot stand in for, because rendering collapses whitespace and two different registry strings can produce one identical cell. | It compares two artifacts to each other, never either against reality. A `proves` sentence that is a lie is copied into the memo faithfully and both go green. It also says nothing about the rest of CLAUDE.md — every line outside the markers is unchecked prose. |
+| `api:bound` | fast (after: typecheck) | For templates/mock and every mocks/<slug>, each HTTP call a screen makes names an operation the mock's own contract declares, and each declared operation is reached by at least one screen. It reads the TypeScript AST and anchors on the IMPORTED BINDING, so a renamed import still counts and a `call` from somewhere else does not; a raw httpClient.get/post/patch/delete in a screen is red because it goes around the contract entirely. | It matches an operation NAME, never a response type: a correct key with an invented response type is green here, and that is permanently the drift controls' and the wire golden's job. A call whose operation key is not a string literal is reported as unresolvable rather than followed. It sees only files under src/pages, so a fetch made from a hook or a component elsewhere is invisible, and it says nothing about whether a reached operation is reached on a path a user can actually take. |
+| `contract:complete` | fast | Every operation in the registry has a handler in routes.ts, an entry in `Io`, and a `qry` slot on that entry — the slot every operation carries from t=0 because threading one through CallArgs later is all-or-nothing. Every code an operation declares also appears as a string literal somewhere in the mock's src/ outside the contract, so a declared code nothing can ever emit is red. | It does NOT check that two operations share no method+path, nor that a literal segment is declared before its :param sibling — MEASURED: compile() already throws on both as a shadowing error before a request is served, so a copy here could only ever agree. The code clause is reachability by LITERAL, not by proof: routes.ts passes rule-returned codes (blank.code), so the literal is matched anywhere under src/ rather than at a fail() site for that operation. The opposite direction — a fail() literal outside the declared set — is held by the type system, not here. |
+| `contract:controls` | fast (after: typecheck) | Every *.controls.ts under packages/ is genuinely IN the tsc program, read back from `tsc -b --force --listFiles` rather than inferred from a tsconfig glob, so its @ts-expect-error directives are actually being compiled; the template's controls sit under templates/mock/src where a scaffolded mock's own tsconfig compiles them; and no control is a tautology — an Equal<X, X> whose two arguments are textually identical asserts nothing, and the contract lab shipped one. | Being in the program is not being CORRECT: a control asserting something trivially true is green here, and textual identity catches only the crudest tautology — Equal<A, B> where A and B are spelled differently but resolve to the same type is invisible. The template half is structural only: nothing here compiles templates/mock, and that its controls still bite is established by the `build` row scaffolding and typechecking a real mock. |
 | `template:render` | full | `agency new` produces a mock in which no {{placeholder}} and no .hbs file survives, all five silently-failing files carry their @scaffold-owned marker, the `@source` glob in index.css resolves to a real directory from mocks/<slug>/src/, and the whole rendered tree passes `oxlint --max-warnings=0`. The title is deliberately hostile — an apostrophe, an ampersand and a double quote — and the check reads the escaped BYTES back: the rendered <title> must carry &amp; and no raw quote or angle bracket, and every rendered .json/.jsonc must still parse. Disabling the HTML escaper is red; disabling the TypeScript escaper is red because the mock stops parsing. | It does not compile or run anything: the mock is never typechecked, never built and never opened, because all three need `pnpm install` and that is the `build` row. A rendered file that is syntactically fine and semantically wrong passes. It also renders exactly one combination — de, profiles solo,full — so a locale- or profile-specific path is untested. The JSON escaper is asserted but unreachable: only {{slug}} reaches a .json today and the slug regex already forbids anything needing escape, so that clause is a tripwire for a future template, not evidence about this one. |
 | `build` | full (after: template:render) | `agency new` then `pnpm install` then `pnpm --filter <slug> build` then `pnpm --filter <slug> test` completes end to end on a mock that did not exist a minute ago, and the emitted dist CSS contains bg-card, text-primary and rounded-xl — which it can only do if Tailwind scanned the kit through the `@source` line. That is the one failure the day-4 gate was designed around and it is otherwise completely silent: the build succeeds and every kit surface renders unstyled in front of the client. | Nothing renders in a browser: no Playwright, no viewport, no deep link, no click. The three utilities checked in dist CSS are a spot check, not the whole kit, and a class present in the stylesheet can still be overridden to nothing. It runs `pnpm install`, which rewrites pnpm-lock.yaml and node_modules and then restores the lockfile byte for byte — if that restoration fails it says so, but a concurrent install in the same tree is not detected. |
+| `wire:frozen` | full (after: build) | On a mock scaffolded and installed from scratch, every declared operation is driven once through the REAL adapter, reduced to a structural fingerprint of key names and value DOMAINS (balance:dec2, created_at:instant, id:seq-id, empty-body for a 204), and compared to the committed fixture — then REGENERATED and required to be byte-identical, so a fixture that passes only because the test stopped driving a route is red. This is the one mechanism here that catches a re-cased wire field: created_at -> createdAt typechecks perfectly when both sides are renamed together. | A fingerprint is shapes, not values: a handler returning the wrong NUMBER, the wrong row, or rows in the wrong order is green. The tokens are a fixed table, so a domain it does not know reduces to bare `string`. It drives each operation exactly once, with one set of arguments, against the seeded store — an error envelope, a second page and every refusal path are unfingerprinted. It runs pnpm install, which rewrites pnpm-lock.yaml and then restores it byte for byte; a concurrent install in the same tree is not detected. |
 
-<!-- registry-checksum: bd1f2a8d94d9823817a1e32a1ce34c0d -->
+<!-- registry-checksum: 66b81291387e506ef69cb7cf3b6c50c3 -->
 <!-- END:verify-table -->
 
 ### The individual commands, and the hooks
@@ -164,6 +168,67 @@ Query as a success.** If this stops holding, the throwing branch needs re-examin
 grep -c settle node_modules/axios/lib/core/dispatchRequest.js   # must be 0
 ```
 
+## The contract
+
+One `as const` registry per mock is the API. `templates/mock/src/api/contract.ts` keys every
+operation by name and carries its method, path, success status, capabilities and closed set of error
+codes; a sibling `interface Io` carries the request, response and query types. The handler map, every
+call site, every refusal and the error branch a screen reads are all derived from that one literal by
+type. Nothing is generated — tsc derives them. The generic half lives in `packages/mock/src/contract.ts`;
+the two meet through `makeContract<Api, Io>(api)`.
+
+A screen never writes a URL. It calls `call(httpClient, '<operation>', { params, body, qry })`, and
+both the path and the response type come from the registry — so the two sides are one claim instead
+of two that happen to agree.
+
+**Five things are load-bearing, and each was measured rather than assumed:**
+
+- **`ParamsOf` binds params, not paths.** Renaming `'/parties/:id'` to `'/party/:id'` compiles
+  clean — every non-param segment is erased. The contract lab's README claimed a path rename goes
+  red on both sides; it does not. What keeps a rename safe is that `call()` takes an operation KEY,
+  so there is no second copy to drift. The weakness is asserted as a live type in
+  `templates/mock/src/api/drift.controls.ts`, so it goes red if the design ever gains whole-path binding.
+- **`JsonSafe` cannot be a constraint.** `T extends JsonSafe<T>` is TS2313 "circular constraint" on a
+  type alias *and* on a function type parameter, in tsc 6.0.3. It ships as a conditional tripwire —
+  one line per contract asserting every declared response at once. A `Date`, a `Map`, or a required
+  key whose value may be `undefined` is refused at declaration.
+- **`wire()` must strip the Promise.** A handler's contextual return type is `Res | Promise<Res>`,
+  and `keyof (Party | Promise<Party>)` is empty, so without `Awaited<T>` every property mapped to
+  `never` and the exactness check was noise. It is DEEP: a shallow exact compares only top-level
+  keys and a wide store row nested in `data[]` sails through it.
+- **`NoInfer` earns its place twice** — once for the reason it is famous for, and once because
+  without it the actual type collapses into the declared one and exactness evaporates entirely.
+- **A never-returning `fail()` narrows only when the callee is a function declaration or a const
+  with an EXPLICIT type annotation.** A destructured `const { fail } = makeContract(...)` does not
+  narrow, and neither does `contract.fail(...)`. That is why each contract exports annotated consts.
+
+`fail(key, status, code, …)` is keyed to the registry, so a code outside an operation's declared set
+is a compile error — the graft that turns an inert `codes` array into a mechanism. `codeOf(key, e)`
+returns that same closed set to the screen, which is what HARD RULE 5 needs to be checkable.
+
+Refusal rules are pure functions over row snapshots in `templates/mock/src/domain/rules.ts`, the
+`reference/contract/intake-lines.ts` shape, so a handler body moves into a Nest service unchanged.
+
+### Decisions, recorded
+
+1. **`templates/mock/src/api/contract.ts` is NOT `@scaffold-owned`.** The marker is for files that fail *silently* when
+   rewritten. This one fails loudly — three tripwires — and it is the one file a mock author must
+   edit for every new endpoint, so a "do not touch" marker would forbid the file's purpose.
+2. **A `JsonSafe` tripwire, not a `Wire<T>` type.** Forced by TS2313 above; a separate wire type
+   would also be a second declaration per endpoint, which is the cost that made the descriptor style
+   expensive.
+3. **No `reason` beside `codes`.** `DomainError` has no such parameter and `ctx` already spreads into
+   the envelope, so a rule's context travels there. A second discriminator beside `code` is exactly
+   what HARD RULE 5 forbids.
+4. **What stops a `packages/contracts`:** `api:bound` and `contract:complete` resolve each mock's
+   registry at its own contract file and fail when it is absent — so hoisting the registry
+   into a shared package turns two rows red. The generic machinery is already shared, in
+   `packages/mock`; what SPEC 5 forbids is sharing the per-mock contract data.
+5. **`api:bound` does not check the response type, permanently.** It cannot: the premise changed.
+   `call()` RETURNS the declared response, so a call site has no type argument to get wrong. The hole
+   the lab measured belonged to `httpClient.get<T>(url)`, and `api:bound` now fails any raw
+   `httpClient` verb in a screen, which is the only way to reintroduce it.
+
 ## Scaffolding a mock
 
 `agency new` is the **only** supported entry point. Do not hand-copy the template.
@@ -178,6 +243,35 @@ Five files carry `@scaffold-owned` because they fail *silently* when rewritten: 
 in `src/index.css`. Without that last one `bg-card` and `text-primary` are simply absent from the
 built CSS with no error anywhere, which is why `pnpm verify:full` greps the emitted stylesheet for
 them rather than trusting the config meant to produce them.
+
+## The reference library
+
+`reference/` is prior art an agent reads before writing. Nothing there ships, nothing there is imported, and
+HARD RULE 7 makes it read-only. It holds two shapes, and the difference is load-bearing:
+
+- **Tracked snapshots** — `reference/money/`, `reference/contract/`, `reference/profiles/`,
+  `reference/verify/`, `reference/print/` — a few files each, present on a fresh checkout.
+- **Gitignored clones** — bulletproof-react, design-patterns-typescript, fsd-documentation, dinero,
+  decimal-js, decimal-dectest, faker, pure-rand, react-router-examples. `git add reference/` would record
+  them as gitlinks pointing at commits this repo does not contain, so they stay out of the index
+  entirely — which means **they do not exist on a fresh checkout, or in CI**.
+
+That last fact is why no path inside a clone is backticked in this file. `docs:truth` checks every
+backticked path here, CI runs `pnpm verify` on a fresh checkout, and a clone path would be green on
+this machine and red there — the same host-not-code failure recorded twice in `docs/BUILD-REPORT.md`.
+
+`reference/CLAUDE.md` is the index: which reference answers which question, for money, determinism,
+the seam and layering. It is tracked, so it may cite clone paths freely. Each clone also carries its
+own `CLAUDE.md` — what it is, where to look, and what not to trust. Those guides live inside an
+ignored directory, so **a re-clone destroys them**; restore the guide if you replace a clone.
+
+Most of these are pinned at majors this repo does not run — bulletproof-react is React 18 and
+Tailwind 3, design-patterns-typescript is TypeScript 3.3. Read those for structure, never for an
+API call. And HARD RULE 6 still applies: dinero, decimal.js, faker and pure-rand are reading
+material, never candidates for a `package.json`.
+
+Read a reference to settle a question, then turn the answer into a test or a registry row. A
+reference that only produces prose has not propagated.
 
 ## Stop and say so, rather than working around it
 

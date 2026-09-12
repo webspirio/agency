@@ -10,12 +10,17 @@
    somebody has to remember to update. */
 import { createHashRouter, type RouteObject } from 'react-router';
 import { OverviewPage } from '../pages/OverviewPage';
+import { PartiesPage } from '../pages/PartiesPage';
 import { CAPS } from '../profiles';
 
 export type Screen = RouteObject & { caps?: readonly string[] };
 
-/** Add a screen here and to `src/api/routes.ts`; nothing else knows about it. */
-export const screens: Screen[] = [{ path: '/', element: <OverviewPage /> }];
+/** Add a screen here and an operation in `src/api/contract.ts`; nothing else
+ *  knows about either. `api:bound` checks the two sides against each other. */
+export const screens: Screen[] = [
+  { path: '/', element: <OverviewPage /> },
+  { path: '/parties', element: <PartiesPage /> },
+];
 
 /** Both the router and any nav render this, never `screens` directly. */
 export const visibleScreens: Screen[] = screens.filter((s) =>

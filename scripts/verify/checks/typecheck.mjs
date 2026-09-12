@@ -21,6 +21,7 @@
  * the same.
  */
 import { spawnSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
@@ -60,6 +61,19 @@ if (leaked.length) {
       `  pulled it in — do not add // @ts-ignore.\n`,
   );
   process.exit(1);
+}
+
+/**
+ * The program's file list, persisted for `contract:controls`, which must prove a
+ * controls file is genuinely IN the program. Written here because this row
+ * already pays for `--force --listFiles`; a second forced build in the fast tier
+ * would roughly double what the Stop hook runs every turn.
+ */
+try {
+  mkdirSync(path.join(ROOT, '.verify'), { recursive: true });
+  writeFileSync(path.join(ROOT, '.verify', 'tsc-files.txt'), `${files.join('\n')}\n`);
+} catch (err) {
+  process.stderr.write(`typecheck: WARNING could not persist the file list: ${err}\n`);
 }
 
 process.stdout.write(

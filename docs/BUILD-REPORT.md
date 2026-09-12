@@ -247,3 +247,99 @@ that did not are recorded above. The one defect that reached a commit and stayed
 artifact) was mine, and it was a sequencing error: I ran `pnpm verify:full`, then staged with
 `git add -A`, and did not re-run verification against what I had staged. The rule that prevents it is
 the one this whole layer is about — verify what you are about to claim, at the moment you claim it.
+
+---
+
+# The contract layer — 2026-09-12
+
+The contract lab (`packages/mock/src/lab/`, three competing styles over one domain) is combined into
+one shipped standard and deleted. A is the spine; B's `NoInfer` and registry-keyed `fail()` and C's
+wire golden are grafted on. The lab was never tracked by git, so its deletion is a working-tree
+removal, not a commit diff — what it contributed is recorded below instead.
+
+## The design was measured, not reasoned
+
+Fourteen type-level probes were run before any of this was written. **Three overturned a design that
+looked right**, and each would have shipped as a check that could not fail:
+
+| Assumption | What tsc 6.0.3 actually does |
+|---|---|
+| `JsonSafe<T>` can constrain a declaration (`Res extends JsonSafe<Res>`) | **TS2313, circular constraint** — on a type alias *and* on a function type parameter. It has to be a conditional tripwire. |
+| A shallow `Exact` stops a wide store row reaching the client | It compares TOP-LEVEL keys only. The wide row nested in `data[]` — the list endpoint, i.e. the one that matters — sailed through. |
+| `wire()` can read its target from the handler's return type | The contextual type is `Res \| Promise<Res>`, and `keyof (A \| Promise<A>)` is empty, so **every property mapped to `never`** and the check was noise until `Awaited<T>` was added. |
+
+Three more findings that are not in any document I could have read:
+
+- **`NoInfer` is load-bearing twice.** Without it the actual type collapses into the declared one and
+  the exactness check evaporates — a second, unadvertised reason beyond the one the lab recorded.
+- **A never-returning `fail()` narrows only from a function declaration or an explicitly-typed
+  const.** A destructured `const { fail } = makeContract(...)` does not narrow, and neither does
+  `contract.fail(...)`. Vitest strips types, so this would have passed the suite and surfaced later
+  as a red `pnpm typecheck`.
+- **`after` in the verify runner is POSITIONAL, not a dependency graph.** `wire:frozen` declared
+  `after: ['build']` but sat above `build` in the array and was reported NOT_RUN — correctly. A row
+  that depends on another must be declared below it.
+
+## Measured defects fixed, with the evidence
+
+| Defect | Measured |
+|---|---|
+| `call()` with an empty path param | `params: { id: '' }` built `/parties/`, the adapter absorbed the one trailing slash, **the LIST route answered 200** and its envelope was cast to the detail type. Now a throw. |
+| A 204 carrying a body | A handler returning `null` puts literal JSON `null` on a 204; returning nothing yields `''`, which is what axios gives against a real Nest 204. The DELETE operation declares `res: void`. |
+| Unclamped paging | `limit:-1` returned rows and echoed `-1`; `'12abc'` became 12; `'0x10'` became 0. Now strict `/^\d+$/` then `Math.max`/`Math.min`, and the CLAMPED values are what the envelope echoes. |
+| Module-scope stores | `vitest run packages/mock/src/lab --sequence.shuffle.tests --sequence.seed=99` gave **2 failed / 36 passed**. Stores are per-caller factories; the new suite passes at three seeds with files and tests both shuffled. |
+| A tautological control | `Equal<{generatedAt:string}, {generatedAt:string}>` in the lab — caught by `contract:controls` on its first run. |
+| A malformed balance | Reached `asDecimal2` and threw, so the adapter returned a 500 where a 400 with a code belongs. |
+
+## What the lab contributed, and where it lives now
+
+`shared/store.ts` → `packages/mock/src/store.ts` (a factory) · `shared/query.ts` →
+`packages/mock/src/query.ts` (clamped) · `shared/type-assert.ts` → `packages/mock/src/contract.ts` ·
+A's registry → the spine plus `KEEP_AS_CONST` · B → `NoInfer`, registry-keyed `fail()`, and the idiom
+of asserting a WEAKNESS as a live type · C → the wire golden, rebuilt from the route table, and
+`bind.ts`'s regex replaced by `api:bound` on the TypeScript AST.
+
+**Three of the lab README's claims were false and are corrected in the code comments**: a path rename
+does NOT go red on both sides (only param renames do), A's `codes` were inert (B's `fail()` was the
+mechanism), and C's "a check that goes red" did not exist.
+
+## Final state, measured at HEAD
+
+```
+pnpm verify        12 PASSED, exit 0        (fast tier)
+pnpm verify:full   15 PASSED, exit 0        (adds template:render, build, wire:frozen)
+```
+
+Four new rows: `api:bound`, `contract:complete`, `contract:controls` (fast) and `wire:frozen` (full).
+A scaffolded mock builds, and its dist CSS carries `bg-card`, `text-primary` and `rounded-xl`, so
+Tailwind still reaches the kit.
+
+## What is still open
+
+- **`contract:complete`'s code clause is reachability by LITERAL.** `routes.ts` passes rule-returned
+  codes (`blank.code`), so the check matches the literal anywhere under `src/` rather than proving a
+  `fail()` site for that operation can emit it. The opposite direction is held by the type system.
+- **The template's drift controls are compiled only inside a scaffolded mock.** `contract:controls`
+  proves the packages' controls are in the tsc program and that the template's sit where a mock's
+  tsconfig will find them; that they still bite is established by the `build` row.
+- **The wire golden drives each operation once**, with one set of arguments, against the seeded
+  store. Error envelopes, second pages and every refusal path are unfingerprinted.
+- **The scaffold is bigger at t=0 than SPEC 5's "one placeholder screen"** — two screens and six
+  operations, because modelling a PATCH and a DELETE/204 was required and `api:bound` insists every
+  operation is reached by a screen.
+- **Nothing measures whether these new tests can fail.** No coverage, no mutation testing. Every
+  `proves` sentence in the four new rows is an unverified claim in exactly that sense.
+
+### One blind spot found in an existing check, while writing the memo
+
+`packages/cli/src/docs.contract.test.ts` asserts that every backticked `src/...` path in `CLAUDE.md`
+names a template file carrying `@scaffold-owned`. Its test is `toMatch(/@scaffold-owned/)` — which a
+sentence saying **NOT** `@scaffold-owned` satisfies just as well. Writing decision 1 into the memo
+produced exactly that: a backticked `src/api/contract.ts` whose file denies the marker, and the test
+went green on the denial.
+
+The memo no longer backticks that path, so nothing currently depends on the weakness. It is recorded
+rather than fixed because the fix is a judgement about the check's intent — presence of a marker, or
+absence of a negation — and that belongs with whoever owns the scaffold-owned list. It is the same
+species as the defects in "what a check should have caught and didn't": the check compares a string
+against a file rather than against the claim.
