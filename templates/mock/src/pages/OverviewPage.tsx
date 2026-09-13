@@ -48,9 +48,15 @@ export function OverviewPage() {
   }
 
   if (error) {
-    // `codeOf` is keyed to the operation, so the set of codes this branch can
-    // see is exactly the set `overview` declares — HARD RULE 5 says branch on
-    // `code` and nothing else.
+    /* NO MESSAGE TABLE HERE, and that is the type's decision rather than an
+       omission: `overview` declares no codes, so `CodeOf<Api, 'overview'>` is
+       `never` and `Record<never, string>` is `{}` — there are no sentences to write.
+       Give the operation a code in the registry and `codeOf` starts returning it
+       here, with no other file to edit. `OverviewHasNoCodesToSay` in
+       drift.controls.ts is where that is asserted.
+
+       HARD RULE 5 says branch on `code` and nothing else; there is nothing to branch
+       on, so the envelope's own code is rendered. Rendering is not branching. */
     return (
       <Shell>
         <div className="mx-auto w-full max-w-[1400px]">

@@ -108,6 +108,35 @@ export function codeRefusals(): void {
 // @ts-expect-error this one returns only `id`.
 export const handlerReturnsTooLittle: HandlersOf<Api>['getParty'] = () => ({ id: 'party-000001' });
 
+/* ── THE SCREEN'S MESSAGE TABLE IS CLOSED ───────────────────────────────── *
+ *
+ * `SAYS` was `Record<string, string>`, so a declared code with no sentence was
+ * invisible and a sentence for a code nothing declares was invisible. One plain
+ * operator closes both directions, and it is the only step in the endpoint path
+ * that nothing held.
+ */
+
+/** A declared code with no sentence is TS2741, naming the code. */
+export const missingSentence = {
+  PARTY_NAME_TAKEN: 'taken',
+  PARTY_NAME_BLANK: 'blank',
+  // @ts-expect-error createParty also declares PARTY_BALANCE_INVALID, which has no sentence here.
+} satisfies Record<CodeOf<Api, 'createParty'>, string>;
+
+/** A sentence for a code the operation does not declare is TS2353, naming the key. */
+export const strangeSentence = {
+  PARTY_NOT_FOUND: 'gone',
+  // @ts-expect-error getParty declares only PARTY_NOT_FOUND.
+  PARTY_ON_FIRE: 'oh no',
+} satisfies Record<CodeOf<Api, 'getParty'>, string>;
+
+/**
+ * An operation that declares no codes has NO sentences to write, and the type says
+ * so rather than a comment: `Record<never, string>` is `{}`. That is why
+ * OverviewPage carries no message table.
+ */
+export type OverviewHasNoCodesToSay = Expect<Equal<CodeOf<Api, 'overview'>, never>>;
+
 /* ── EXACTNESS: a wider row may not reach the client ────────────────────── *
  *
  * The check is at the SINK — `toRoutes` — not at each return. MEASURED 2026-09-13:

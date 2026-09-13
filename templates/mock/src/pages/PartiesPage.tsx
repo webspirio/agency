@@ -9,7 +9,8 @@ import { Skeleton } from '@agency/kit/skeleton';
 import { TextInput } from '@agency/kit/text-input';
 import { ListPage } from '@agency/kit/templates/list-page';
 import { httpClient } from '../api/client';
-import { call, codeOf } from '../api/contract';
+import type { CodeOf } from '@agency/mock';
+import { call, codeOf, type Api } from '../api/contract';
 import type { Party } from '../domain/types';
 
 /**
@@ -26,16 +27,33 @@ import type { Party } from '../domain/types';
  * code the operation cannot emit is unreachable by construction.
  */
 
-/** A refusal message per declared code. Read from `code`, never from `message`. */
-const SAYS: Record<string, string> = {
+/**
+ * A refusal message per declared code. Read from `code`, never from `message`.
+ *
+ * `satisfies Record<CodeOf<Api, …>, string>` closes the table in BOTH directions: a
+ * code these operations declare with no sentence here is TS2741 naming the code, and
+ * a sentence for a code none of them declares is TS2353 naming the key. It was
+ * `Record<string, string>` before, which held neither — the only step in the endpoint
+ * path that nothing checked.
+ */
+const SAYS = {
   PARTY_NAME_TAKEN: 'That name is already in the book.',
   PARTY_NAME_BLANK: 'A party needs a name.',
   PARTY_BALANCE_INVALID: "A balance looks like '1240.00' — two decimals, no separators.",
   PARTY_NOT_FOUND: 'That party is no longer there. Reload the list.',
-};
+} satisfies Record<
+  CodeOf<Api, 'listParties' | 'getParty' | 'createParty' | 'renameParty'>,
+  string
+>;
 
-const says = (error: unknown, code: string | undefined): string =>
-  error ? (SAYS[code ?? ''] ?? `Something went wrong (${code ?? 'UNKNOWN'}).`) : '';
+/**
+ * `undefined` is not a mystery: it is what the product's exception filter sends for
+ * every transport failure and every ValidationPipe 400, so there is nothing to branch
+ * on and the generic sentence is rendered. Rendering is not branching, so HARD RULE 5
+ * holds.
+ */
+const says = (error: unknown, code: keyof typeof SAYS | undefined): string =>
+  error ? (code === undefined ? 'Something went wrong. Try again.' : SAYS[code]) : '';
 
 const LIMIT = '8';
 
