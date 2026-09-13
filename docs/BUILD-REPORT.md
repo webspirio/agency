@@ -478,3 +478,74 @@ checks:bite       11 fixtures, each green with no defect and exit 1 with one
   sentence to the full `templates/mock/…` form, but nothing would have caught it. A convention that
   an ordinary sentence can re-break, silently, is the same species of defect as the rest of this
   section.
+
+---
+
+# The contract layer, second pass — Phase 2, 2026-09-13
+
+Plan: `docs/2026-09-13-contract-layer-plan-phase-2.md`, written only after Phase 1 was green and
+reviewed, and from three independent probes of the post-Phase-1 tree, each re-run by a second agent
+told to refute it. Design: `docs/2026-09-13-contract-layer-design.md` §2.C, §2.E.3, §2.F.
+
+Phase 2 folds `interface Io` into the registry entry through a curried `op<Req, Res, Qry>()` phantom
+and makes `codes` an object mapping each code to the status it answers. It is the all-or-nothing
+commit the design warned about: template, both AST checks and both controls files move together.
+
+## What was measured, and what the measurement changed
+
+| Claim | Measured | Consequence |
+|---|---|---|
+| The design's §4 `ReqOf`/`ResOf`/`QryOf` | **Do not compile.** Four `TS2536: Type '"req"' cannot be used to index type 'IoOf<A[K]>'` — the conditional is unresolved and not indexable | Repaired to `IoOf<A[K]> extends { res: infer R } ? R : never`, which is also strictly better — see the next row |
+| An entry written without `op<…>()` | The obvious repair (intersecting a slot type) yields `never`, and `IsJsonSafe<never>` is `true` while `[never] extends [void]` takes the void branch — **both tripwires blind** | The chosen spelling yields `unknown`, which `AllResJsonSafe` and `Leaks` both refuse. The hole closes for free |
+| §2.C: "`PathsAreLiterals` becomes unnecessary" | **False.** Restated over the new entry it still goes to `never` on a `string`-typed path, an `as string`, an `as Spec`, and a forgotten `op()` | Kept, renamed `KEEP_LITERAL`. It is the only registry-local detector of the forgotten wrapper |
+| `<const S extends Spec>` | Load-bearing. Stripping the `const` modifier turns four literal controls red | Asserted, with its negatives — `PathIsNotString`, `StatusIsNotNumber`, `ResIsNotUnknown`, `ResIsNotNever` — because a positive alone is satisfied by both sides degenerating together |
+| The `qry` slot clause in `contract:complete` | Has no successor and needs none: the slot is a type parameter with a default | Deleted, and recorded in the row's `blindSpot`. The guarantee moved out of a check and into the shape the scaffolder writes at t=0 |
+
+## What a check should have caught and didn't — and what caught it instead
+
+- **`contract:complete`'s `codes` reader would have gone VACUOUS in silence.** The folded initializer
+  is a `CallExpression`, so the old `isObjectLiteralExpression` guard is false, the loop never runs,
+  `codes[key]` stays empty, and the check reports "a literal site for every declared code" having
+  read no codes at all. Measured green with an unemittable code declared. The task was therefore
+  written check-first, and the `unemittable-code` fixture's FIRST red was
+  `UNSOUND FIXTURE — the derived tree is already non-zero with NO defect planted` — the control run
+  added at the end of Phase 1 refusing to certify a bite against a tree the `Io` clause had already
+  broken. Without that run the fixture would have read as passing from the moment the template
+  folded, while proving nothing about the reader.
+- **`compile()` refused the first route ordering, at startup, unprompted.** `'/parties/export'` is a
+  literal segment where `'/parties/:id'` has a param, so declared second it is swallowed. This is the
+  shadowing check `contract:complete` deliberately does not duplicate, doing exactly the job that
+  decision is predicated on.
+- **The wire golden refused the new operation until it had a drive** — "a new one with no drive is
+  red here" — which is the golden behaving as an instrument rather than a record.
+- **A first draft of `OverviewPage` carried a dead `const _noCodesToSay = {}`** to demonstrate that
+  `CodeOf<Api, 'overview'>` is `never`. Nothing would have caught that; it is a worse artifact than
+  the comment it replaced. It moved to a control, which is the right carrier.
+
+## Final state, measured at HEAD
+
+```
+pnpm verify       13 PASSED, exit 0, not narrowed
+pnpm verify:full  16 PASSED, exit 0, not narrowed
+checks:bite       14 fixtures, each green with no defect and exit 1 with one
+wire golden       one section added (exportParties: ["string"]); no existing
+                  fingerprint changed by a byte — the fold is type-only, checked
+```
+
+## What is still open
+
+- **Both exactness residuals are unchanged.** An annotated widening or a cast, and a branch whose
+  union TypeScript subtype-reduces before any check runs. Phase 2 touched neither, and neither is
+  closable at the type level.
+- **`contract:complete` never compares a code's declared STATUS to anything.** The status now lives
+  in the registry, which is what makes one code answer one status — but nothing checks that the
+  status an operation declares is the one the wire carries. The golden fingerprints shapes, not
+  statuses. This is new surface area with no check on it, and it is the most likely place for the
+  next false green.
+- **`unreached` is a string nobody validates.** `'x'` satisfies it exactly as a real sentence does,
+  and nothing checks that the reason is still true or that a date in it has passed.
+- **A reacher is any file under `src/`**, so a module nothing imports still counts. The row says an
+  operation is CALLED somewhere, never that a user can get to it.
+- **`checks:bite` covers 5 of 13 rows.** Unchanged from Phase 1; `intent.md` §5 criterion 2 is still
+  not met.
+- **The template's tests still run only in `verify:full`** — Phase 3.

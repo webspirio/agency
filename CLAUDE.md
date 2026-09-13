@@ -171,12 +171,16 @@ grep -c settle node_modules/axios/lib/core/dispatchRequest.js   # must be 0
 
 ## The contract
 
-One `as const` registry per mock is the API. `templates/mock/src/api/contract.ts` keys every
-operation by name and carries its method, path, success status, capabilities and closed set of error
-codes; a sibling `interface Io` carries the request, response and query types. The handler map, every
-call site, every refusal and the error branch a screen reads are all derived from that one literal by
-type. Nothing is generated — tsc derives them. The generic half lives in `packages/mock/src/contract.ts`;
-the two meet through `makeContract<Api, Io>(api)`.
+One registry per mock is the API, and **one entry per operation**.
+`templates/mock/src/api/contract.ts` keys every operation by name and carries its method, path,
+success status, capabilities, and closed set of error codes **with the status each one answers** —
+`codes: { PARTY_NOT_FOUND: 404 }` — while the request, response and query types ride on the same
+entry through `op<Req, Res, Qry>()`. There is no sibling type map to fall out of step with, and no
+`as const`: `op`'s `<const S extends Spec>` preserves every literal, measured, and stripping the
+`const` modifier turns four controls red. The handler map, every call site, every refusal, the error
+branch a screen reads and **the screen's own message table** are all derived from that one literal by
+type. Nothing is generated — tsc derives them. The generic half lives in
+`packages/mock/src/contract.ts`; the two meet through `makeContract<Api>(api)`.
 
 A screen never writes a URL. It calls `call(httpClient, '<operation>', { params, body, qry })`, and
 both the path and the response type come from the registry — so the two sides are one claim instead
@@ -225,8 +229,13 @@ of two that happen to agree.
   with an EXPLICIT type annotation.** A destructured `const { fail } = makeContract(...)` does not
   narrow, and neither does `contract.fail(...)`. That is why each contract exports annotated consts.
 
-`fail(key, status, code, …)` is keyed to the registry, so a code outside an operation's declared set
-is a compile error — the graft that turns an inert `codes` array into a mechanism. `codeOf(key, e)`
+`fail(key, code, …)` is keyed to the registry, so a code outside an operation's declared set is a
+compile error — the graft that turns an inert `codes` list into a mechanism. **It takes no status**:
+that is read off the code's own registry entry, so one code answers one status everywhere. It was
+hand-typed at every refusal before, and `404` appeared four times across the template's handlers with
+nothing comparing them. A screen's `SAYS` table closes the last open step —
+`satisfies Record<CodeOf<Api, K>, string>` makes a declared code with no sentence TS2741 and a
+sentence for an undeclared code TS2353. `codeOf(key, e)`
 returns that same closed set **or `undefined`**, filtered against `api[key].codes` at runtime as
 well as in the type, which is what HARD RULE 5 needs to be checkable. It reads the code from either
 side of the seam — the mock's `AxiosError.response.data`, or the `ApiError` the product's
@@ -242,8 +251,12 @@ Refusal rules are pure functions over row snapshots in `templates/mock/src/domai
 ### Decisions, recorded
 
 1. **`templates/mock/src/api/contract.ts` is NOT `@scaffold-owned`.** The marker is for files that fail *silently* when
-   rewritten. This one fails loudly — three tripwires — and it is the one file a mock author must
+   rewritten. This one fails loudly — two tripwires — and it is the one file a mock author must
    edit for every new endpoint, so a "do not touch" marker would forbid the file's purpose.
+   *(Three until the registry folded. `IO_COVERS_API` had nothing left to compare once there was one
+   declaration instead of two. `KEEP_AS_CONST` became `KEEP_LITERAL` and stayed, against the design's
+   own recommendation: measured, it is the only check inside that file that an entry was written with
+   `op<…>()` at all, and every other symptom of forgetting the wrapper surfaces in a different file.)*
 2. **A `JsonSafe` tripwire, not a `Wire<T>` type.** Forced by TS2313 above; a separate wire type
    would also be a second declaration per endpoint, which is the cost that made the descriptor style
    expensive.
