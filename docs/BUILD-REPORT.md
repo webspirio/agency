@@ -381,6 +381,17 @@ That is `packages/dec/golden.json` asserting `dec === dec` for 675 cases, one le
   in a tree leaves `checked === 0`, so both checks went red down the empty-root guard — a path with
   nothing to do with the hole. The harness said so in its own words ("went red, but the output never
   mentions …"), which is the first time this layer has caught a *fixture* being wrong.
+- **`checks:bite` itself could not tell FAILED from SKIPPED, and never checked its own baseline.**
+  Found by an adversarial review of the row *after* it was written, which is the point of running
+  one. It counted any non-zero exit as a bite — so a check that SKIPPED because a precondition was
+  absent, or was UNRUNNABLE because it could not start, would have passed as one that failed, and
+  `engines` is exactly where that bites: the registry maps its exit 2 to SKIPPED. Worse, it never
+  ran the derived tree WITHOUT the defect: measured, a templates-only tree already exits 2 from
+  `engines` before anything is planted, so the "red" would not have been caused by the plant at all.
+  Both are fixed — a control run that must be green, and an exit code that must be 1 — and both were
+  measured biting on a stub that goes green on a clean tree and exit-2 on a planted one. That is the
+  `dec === dec` shape a third time: the row written to prove checks can fail could itself not fail
+  correctly.
 - **`Awaited<R>` is load-bearing in the other direction from the one assumed.** Strip it and an
   async LEAK is still reported — `keyof Promise<Party>` is `then | catch | finally`, none of which
   the response declares, so the comparison fails for the wrong reason. What breaks is that every
@@ -405,10 +416,13 @@ checks:bite        8 fixtures, every one red and naming its planted symbol
   type and the wire golden is the ground truth — which is why Phase 3 makes the golden exhaustive.
   If a future reader takes `LeakFree` for a guarantee the way `DeepExact` was taken, the same error
   recurs one layer over. This is the weakest point in the design.
-- **`checks:bite` covers 3 of 13 rows.** `intent.md` §5 criterion 2 asks that EVERY check be
-  observed going red; Phase 1 delivers the row and eight fixtures across `contract:complete`,
-  `contract:controls` and `api:bound`. Criterion 2 is therefore **not yet met**, and saying so is
-  the point of the row.
+- **`checks:bite` covers 5 of 13 rows.** `intent.md` §5 criterion 2 asks that EVERY check be
+  observed going red; Phase 1 delivers the row and ten fixtures across `contract:complete`,
+  `contract:controls`, `api:bound`, `engines` and `emit:clean`. Criterion 2 is therefore **not yet
+  met**, and saying so is the point of the row. The other eight were each measured on 2026-09-13:
+  none is impossible, all need a harness or check change first, and the two largest — `build` and
+  `wire:frozen` — would each need `pnpm install` inside a fixture, which is the cost that keeps them
+  out of the fast tier in the first place.
 - **A fixture can only exist for a check that takes `--root`.** `typecheck` takes none and does not
   compile `templates/mock` at all, so the leak-at-the-sink defect has no fixture and is recorded as
   deliberately absent in the row's `blindSpot` rather than faked.

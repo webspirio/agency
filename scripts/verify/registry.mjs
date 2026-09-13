@@ -286,21 +286,29 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/checks-bite.mjs',
     proves:
-      'Each check named in the fixture table exits non-zero, and mentions the planted symbol, when ' +
-      'run against a tree derived from templates/mock with exactly ONE defect planted in it. Every ' +
-      'other row in this table asserts that something is true when the check passes; this is the ' +
-      'only row that establishes the check could ever have failed.',
+      'For each of the ten fixtures: a tree derived from templates/mock is GREEN with no defect in ' +
+      'it, the same tree with exactly ONE defect planted exits 1 — not merely non-zero, so a ' +
+      'SKIPPED or UNRUNNABLE check cannot pass as a failed one — and the failing output names the ' +
+      'planted symbol. The control run is what makes the rest mean anything: without it a fixture ' +
+      'establishes only that the check exits non-zero on that tree, and a derived tree can be ' +
+      'non-zero for reasons the defect had nothing to do with. Every other row in this table ' +
+      'asserts something is true when its check passes; this is the only row that establishes the ' +
+      'check could ever have failed.',
     blindSpot:
-      'It proves a check is red on THE ONE defect its fixture plants, never that the check is red on ' +
-      'every defect of that class, and a check with no fixture here is entirely unexamined. The ' +
-      'fixture derives from templates/mock only, so nothing is established about mocks/<slug>. It ' +
-      'matches a substring of the output, so a check that goes red for an unrelated reason while ' +
-      'happening to print that substring is counted as biting. Every fixture runs ONE check ' +
-      'directly, so only a check that takes --root can have one at all: `typecheck` cannot, both ' +
-      'because it hardcodes the repo root and because templates/mock is outside the root tsc ' +
-      'solution, so the leak-at-the-sink defect (a store widened to carry an undeclared field) has ' +
-      'NO fixture here and is deliberately absent rather than faked — the `build` row compiling a ' +
-      'scaffolded mock is the only thing that would catch it, and no row proves that row bites.',
+      'FIVE of the thirteen rows have a fixture — engines, emit:clean, api:bound, ' +
+      'contract:complete and contract:controls. The other eight are entirely ' +
+      'unexamined, so this row does NOT establish what docs/intent.md asks of it, that every check ' +
+      'has been observed going red. Where a fixture exists it proves the check is red on THE ONE ' +
+      'defect it plants, never on every defect of that class: emit:clean\'s exercises the ' +
+      'templates arm alone, so deleting packages, mocks or src from that check\'s top-level list ' +
+      'is invisible here. The trees derive from templates/mock, so nothing is established about ' +
+      'mocks/<slug>. It matches a SUBSTRING, so a check going red for an unrelated reason while ' +
+      'printing that substring still counts — the control run narrows this to causes the defect ' +
+      'introduced, it does not remove it. Every fixture spawns ONE check with --root, so a check ' +
+      'that does not take one can have no fixture: typecheck, lint, test, test:parity, lint:exempt, ' +
+      'docs:truth, memo:drift, template:render, build and wire:frozen were each measured on ' +
+      '2026-09-13 and each needs a harness or check change first, which is why the leak-at-the-sink ' +
+      'defect has no fixture and is absent rather than faked.',
   },
   {
     id: 'template:render',

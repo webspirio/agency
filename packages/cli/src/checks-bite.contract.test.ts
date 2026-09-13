@@ -55,6 +55,53 @@ describe('checks:bite tells a biting check from a green one', () => {
     expect(result.ok).toBe(true);
   });
 
+  /**
+   * Without a control run a fixture proves only "this check exits non-zero on this
+   * tree", and a derived tree can be non-zero for reasons the defect had nothing to
+   * do with — MEASURED: a templates-only tree already exits 2 from `engines` before
+   * anything is planted.
+   */
+  it('FAILS a fixture whose tree is already red before the defect is planted', async () => {
+    const h = await harness();
+    const dir = mkdtempSync(join(tmpdir(), 'bite-red-'));
+    const alwaysRed = join(dir, 'always-red.mjs');
+    writeFileSync(alwaysRed, 'process.stderr.write("getParty\\n"); process.exit(1)\n');
+
+    const result = await h.runFixture(fixtureFor(h, 'handler-removed'), { check: alwaysRed });
+
+    expect(result.ok).toBe(false);
+    expect(result.report).toContain('UNSOUND FIXTURE');
+  });
+
+  /**
+   * FAILED, SKIPPED and UNRUNNABLE never collapse into each other. A check that
+   * skipped checked nothing, so counting its non-zero exit as a bite asserts
+   * something about the check that was never tested.
+   */
+  it('FAILS a check that SKIPPED rather than failed, even when the output matches', async () => {
+    const h = await harness();
+    const dir = mkdtempSync(join(tmpdir(), 'bite-skip-'));
+    const skips = join(dir, 'skips.mjs');
+    writeFileSync(
+      skips,
+      [
+        "import { readFileSync } from 'node:fs';",
+        "import path from 'node:path';",
+        "const root = process.argv[process.argv.indexOf('--root') + 1];",
+        "const src = readFileSync(path.join(root, 'templates', 'mock', 'src', 'api', 'routes.ts'), 'utf8');",
+        "if (src.includes('getParty:')) process.exit(0);",
+        "process.stderr.write('SKIPPED - a precondition for getParty was absent\\n');",
+        'process.exit(2);',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await h.runFixture(fixtureFor(h, 'handler-removed'), { check: skips });
+
+    expect(result.ok).toBe(false);
+    expect(result.report).toContain('that is not FAILED');
+  });
+
   it('refuses an unknown defect id rather than planting nothing', async () => {
     const h = await harness();
     await expect(

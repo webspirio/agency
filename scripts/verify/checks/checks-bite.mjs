@@ -12,7 +12,7 @@
  * Usage:
  *   node scripts/verify/checks/checks-bite.mjs [--only <fixture-id>]
  */
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -72,11 +72,52 @@ const DEFECTS = {
     if (cut === src) throw new Error('handler-map-decoy: the getParty handler shape moved');
     writeFileSync(file, `${cut}\nfunction decoy() { return { getParty: 1, overview: 2 }; }\n`);
   },
+  /**
+   * `engines`' subject is the INTERPRETER, which a fixture cannot swap — so the
+   * floor/runtime mismatch of BUILD-REPORT #8 is planted from the other side: a
+   * floor no real node satisfies. The setup above writes a satisfiable floor, so
+   * the single edit here is the floor VALUE.
+   */
+  'floor-above-every-runtime': (root) => {
+    const file = path.join(root, 'package.json');
+    const src = readFileSync(file, 'utf8');
+    const raised = src.replace('">=18"', '">=99"');
+    if (raised === src) throw new Error('floor-above-every-runtime: the setup floor moved');
+    writeFileSync(file, raised);
+  },
+  /**
+   * docs/BUILD-REPORT.md #4 verbatim: a .d.ts emitted beside the .ts it came from,
+   * inside a src/ tree. Planted WITH a sibling, because only the paired form
+   * exercises the discriminator the check is built on — a sibling-less orphan.d.ts
+   * is green there by design, which is what makes vite-env.d.ts legal.
+   */
+  'emit-in-src': (root) => {
+    const impl = path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts');
+    if (!existsSync(impl)) throw new Error('emit-in-src: contract.ts moved; update this defect');
+    writeFileSync(path.join(path.dirname(impl), 'contract.d.ts'), 'export declare const x: number;\n');
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
       file,
       `${readFileSync(file, 'utf8')}\nexport type Tautology = Expect<Equal<{ a: string }, { a: string }>>;\n`,
+    );
+  },
+};
+
+/**
+ * A defect can only be ONE edit if the tree it lands in is already valid for the
+ * check under test. A derived tree is templates/ and nothing else, which is a valid
+ * subject for the AST rows but not, for instance, for `engines` — that row reads
+ * $root/package.json, and a tree without one is already non-zero before anything is
+ * planted. A setup makes the tree valid; the defect is still the single edit, and the
+ * CONTROL RUN below proves the setup alone is green.
+ */
+const SETUPS = {
+  'floor-above-every-runtime': (root) => {
+    writeFileSync(
+      path.join(root, 'package.json'),
+      `${JSON.stringify({ name: 'bite-engines', private: true, engines: { node: '>=18' } }, null, 2)}\n`,
     );
   },
 };
@@ -122,6 +163,20 @@ export const FIXTURES = [
     check: 'scripts/verify/checks/contract-complete.mjs',
     expect: 'getParty',
   },
+  {
+    id: 'floor-above-every-runtime',
+    check: 'scripts/verify/checks/engines.mjs',
+    // NOT 'engines: FAILED'. This substring is unique to the exit-1 branch AND proves
+    // the PLANTED file is the one that was read — 'engines: FAILED' alone is satisfied
+    // by a check that has stopped honouring --root and is reading the repo's own floor
+    // under an unsupported interpreter.
+    expect: 'package.json engines.node is ">=99"',
+  },
+  {
+    id: 'emit-in-src',
+    check: 'scripts/verify/checks/emit-clean.mjs',
+    expect: 'templates/mock/src/api/contract.d.ts',
+  },
 ];
 
 function run(cmd, args, cwd) {
@@ -134,24 +189,79 @@ function run(cmd, args, cwd) {
   });
 }
 
+/**
+ * A check FAILED when it ran and did not succeed. It did not fail when a precondition
+ * was absent (SKIPPED) or when it could not start (UNRUNNABLE) — CLAUDE.md's five
+ * statuses never collapse into each other, and a fixture that accepts any non-zero
+ * exit collapses three of them. `engines` is where it bites: the registry maps its
+ * exit 2 to SKIPPED, so without this a fixture would report a bite on a row that
+ * checked nothing. Overridable per fixture only for a check that signals FAILED
+ * with a different code.
+ */
+const FAILED_EXIT = 1;
+
+/**
+ * Derive a tree, optionally make it valid for the check under test, and return the
+ * directory. `realpathSync` because macOS hands back /var/... while a check that
+ * resolves its own paths reports /private/var/..., and an expect string built from
+ * a path would then never match.
+ */
+function derive(fixture) {
+  const dir = realpathSync(
+    mkdtempSync(path.join(tmpdir(), `bite-${fixture.id}-${path.basename(fixture.check, '.mjs')}-`)),
+  );
+  cpSync(path.join(ROOT, 'templates'), path.join(dir, 'templates'), { recursive: true });
+  SETUPS[fixture.id]?.(dir);
+  return dir;
+}
+
 export async function runFixture(fixture, opts = {}) {
   const plant = DEFECTS[fixture.id];
   if (!plant) throw new Error(`checks:bite: unknown defect '${fixture.id}'`);
 
-  const dir = mkdtempSync(
-    path.join(tmpdir(), `bite-${fixture.id}-${path.basename(fixture.check, '.mjs')}-`),
-  );
-  try {
-    cpSync(path.join(ROOT, 'templates'), path.join(dir, 'templates'), { recursive: true });
-    plant(dir);
+  const check = path.resolve(ROOT, opts.check ?? fixture.check);
+  const wantCode = fixture.expectCode ?? FAILED_EXIT;
 
-    const check = path.resolve(ROOT, opts.check ?? fixture.check);
+  /* THE CONTROL RUN, and it is the half that makes the other half mean anything.
+     Without it a fixture proves only "this check exits non-zero on this tree" — and a
+     derived tree can be non-zero for reasons the defect had nothing to do with.
+     MEASURED: a templates-only tree already exits 2 from `engines` before anything is
+     planted. A red that is not CAUSED by the plant is the same artifact as a test that
+     cannot fail, one level further out. */
+  const control = derive(fixture);
+  try {
+    const { code, out } = await run(process.execPath, [check, '--root', control], ROOT);
+    if (code !== 0) {
+      return {
+        ok: false,
+        report:
+          `${fixture.id} -> ${path.basename(fixture.check)}: UNSOUND FIXTURE — the derived tree ` +
+          `is already non-zero (exit ${code}) with NO defect planted, so a red here would not be ` +
+          `caused by the defect:\n${out}`,
+      };
+    }
+  } finally {
+    rmSync(control, { recursive: true, force: true });
+  }
+
+  const dir = derive(fixture);
+  try {
+    plant(dir);
     const { code, out } = await run(process.execPath, [check, '--root', dir], ROOT);
 
     if (code === 0) {
       return {
         ok: false,
         report: `${fixture.id}: ${fixture.check} did not go red on a planted defect`,
+      };
+    }
+    if (code !== wantCode) {
+      return {
+        ok: false,
+        report:
+          `${fixture.id}: ${fixture.check} exited ${code}, not ${wantCode} — that is not FAILED. ` +
+          `A check that SKIPPED (a precondition was absent) or was UNRUNNABLE (it could not start) ` +
+          `checked nothing, and counting it as a bite is the status collapse CLAUDE.md forbids:\n${out}`,
       };
     }
     if (!out.includes(fixture.expect)) {
@@ -164,7 +274,9 @@ export async function runFixture(fixture, opts = {}) {
     }
     return {
       ok: true,
-      report: `${fixture.id} -> ${path.basename(fixture.check)}: red, and names '${fixture.expect}'`,
+      report:
+        `${fixture.id} -> ${path.basename(fixture.check)}: green with no defect, ` +
+        `exit ${code} with one, and names '${fixture.expect}'`,
     };
   } finally {
     rmSync(dir, { recursive: true, force: true });
