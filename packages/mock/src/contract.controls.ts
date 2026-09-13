@@ -302,9 +302,17 @@ export type NarrowReturnIsNotALeak = Expect<
 // @ts-expect-error too LITTLE is refused by the constraint at the sink, not by Leaks.
 export const tooLittleIsRefusedAtTheSink: Route[] = toRoutes({ ...ok, getParty: () => ({ id: 'p1' }) });
 
-/** A response the contract declares as `void` is exempt: there is nothing to widen. */
+/**
+ * A response the contract declares as `void` is exempt: there is nothing to widen.
+ *
+ * THE WITNESS IS LOAD-BEARING, and the obvious one does not work. `() => undefined`
+ * is swallowed by `DeepExact`'s own primitive guard — `DeepExact<undefined, void>` is
+ * `undefined` — so the control was green with the void branch DISABLED and asserted
+ * nothing about it. Measured 2026-09-13. An object-returning handler for the void
+ * operation is the witness that actually reaches the branch.
+ */
 export type VoidResponseIsNotALeak = Expect<
-  Equal<Leaks<Api, Io, { removeParty: () => undefined }>, never>
+  Equal<Leaks<Api, Io, { removeParty: () => { internalNote: string } }>, never>
 >;
 
 /* ── JsonSafe: the declared response must be the WIRE type ──────────────── */
