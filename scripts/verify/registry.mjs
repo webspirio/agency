@@ -449,7 +449,10 @@ const REAL = [
       'residuals this golden is supposed to be the ground truth for. A TRANSPORT failure declares no ' +
       'code, so it forms no (operation, code) pair and is driven by nothing here. It runs pnpm ' +
       'install, which rewrites pnpm-lock.yaml and then restores it byte for byte; a concurrent ' +
-      'install in the same tree is not detected.',
+      'install in the same tree is not detected. The LIVE replay (AGENCY_LIVE_API) is not exercised ' +
+      'by this row at all: unset, it reports SKIPPED through vitest\'s own describe.skipIf, so every ' +
+      'run this repository can perform says nothing about whether a real backend agrees with the ' +
+      'committed shapes. Only its one-entry equivalence map (seq-id <-> uuid) is tested unconditionally.',
   },
 ];
 

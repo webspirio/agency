@@ -382,6 +382,97 @@ describe('the wire golden pins the shape every screen will receive', () => {
   });
 });
 
+/* ── THE LIVE REPLAY ────────────────────────────────────────────────────── *
+ *
+ * SPEC 15 promises "exactly one migration mechanism". This is it, and it is the
+ * reason the drives read their ids from the store rather than from `party-000001`:
+ * the product assigns UUIDs, so a golden that hard-codes a sequence id cannot be
+ * replayed at all.
+ *
+ *   AGENCY_LIVE_API=https://api.example.com pnpm --filter <slug> test
+ *
+ * SKIPPED when unset, through vitest's own `describe.skipIf` — so the suite REPORTS
+ * skipped rather than passing vacuously. `if (!LIVE) return` would report a pass,
+ * which is the status collapse this whole layer exists to prevent.
+ */
+const LIVE = process.env.AGENCY_LIVE_API;
+
+/**
+ * ONE ENTRY, and it should stay that way. `seq-id` and `uuid` are the same THING — a
+ * store-assigned identifier — fingerprinted differently because this mock's allocator
+ * is a sequence and the product's is a UUID. Every other token must match exactly: a
+ * second entry here would mean the wire has genuinely diverged, and that is the
+ * finding rather than something to configure away.
+ */
+const EQUIVALENT: Readonly<Record<string, readonly string[]>> = { 'seq-id': ['uuid'] };
+
+/** Is the live token an accepted stand-in for the committed one? */
+const equivalent = (committed: string, live: string): boolean =>
+  committed === live || (EQUIVALENT[committed]?.includes(live) ?? false);
+
+/** Compare two fingerprints token by token, allowing only the declared equivalences. */
+export function fingerprintsAgree(committed: string, live: string): boolean {
+  const a = committed.split(/([{},:[\]|])/);
+  const b = live.split(/([{},:[\]|])/);
+  if (a.length !== b.length) return false;
+  return a.every((token, i) => equivalent(token, b[i] ?? ''));
+}
+
+/* The equivalence logic runs in every suite, LIVE or not — otherwise the only code
+   path that decides whether a replay passed would itself be unexercised in every run
+   this repository can perform. */
+describe('the replay allows exactly one equivalence and no more', () => {
+  const PARTY = '{balance:dec2,created_at:instant,id:seq-id,name:string}';
+
+  it('accepts a uuid where the mock committed a seq-id', () => {
+    expect(fingerprintsAgree(PARTY, PARTY.replace('seq-id', 'uuid'))).toBe(true);
+  });
+
+  it('refuses any OTHER substitution, however plausible', () => {
+    expect(fingerprintsAgree(PARTY, PARTY.replace('dec2', 'number'))).toBe(false);
+    expect(fingerprintsAgree(PARTY, PARTY.replace('instant', 'string'))).toBe(false);
+    expect(fingerprintsAgree(PARTY, PARTY.replace('created_at', 'createdAt'))).toBe(false);
+  });
+
+  it('refuses a uuid where the mock did NOT commit a seq-id — the map is one-way', () => {
+    expect(fingerprintsAgree(PARTY.replace('name:string', 'name:uuid'), PARTY)).toBe(false);
+  });
+
+  it('refuses a shape with a different number of tokens', () => {
+    expect(fingerprintsAgree(PARTY, PARTY.replace(',name:string', ''))).toBe(false);
+  });
+
+  it('accepts an identical fingerprint', () => {
+    expect(fingerprintsAgree(PARTY, PARTY)).toBe(true);
+  });
+});
+
+describe.skipIf(LIVE === undefined)('the golden replays against a live API', () => {
+  it('answers every drive with the committed shape, modulo the id allocator', async () => {
+    const live = transport(
+      axios.create({ baseURL: LIVE, paramsSerializer: { indexes: null } }),
+    );
+    const golden = JSON.parse(readFileSync(GOLDEN_PATH, 'utf8')) as Record<string, string[]>;
+    const ids = await idsFrom(live);
+
+    for (const drive of DRIVES) {
+      const seen = shapeOf(await drive.run(live, ids));
+      const committed = golden[drive.key] ?? [];
+      expect({ key: drive.key, agree: seen.length === committed.length }).toEqual({
+        key: drive.key,
+        agree: true,
+      });
+      seen.forEach((token, i) => {
+        expect({ key: drive.key, i, agree: fingerprintsAgree(committed[i] ?? '', token) }).toEqual({
+          key: drive.key,
+          i,
+          agree: true,
+        });
+      });
+    }
+  });
+});
+
 const DEC2 = /^-?\d+\.\d{2}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
 const BUSINESS_DATE = /^\d{4}-\d{2}-\d{2}$/;
