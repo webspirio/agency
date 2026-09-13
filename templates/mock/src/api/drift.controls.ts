@@ -18,9 +18,9 @@
  * Replace these when you replace the domain. Do not delete the file: it is the
  * only thing standing between "the contract exists" and "the contract binds".
  */
-import type { AxiosInstance } from 'axios';
-import type { Equal, Expect, HandlersOf, ParamsOf, Route } from '@agency/mock';
+import type { Equal, Expect, HandlersOf, ParamsOf, Route, Transport } from '@agency/mock';
 import { call, fail, toRoutes, type Api, type Io } from './contract';
+import { httpClient } from './client';
 import { makeHandlers } from './routes';
 import type { Party } from '../domain/types';
 
@@ -45,7 +45,7 @@ export type DeleteReturnsNothing = Expect<Equal<Io['removeParty']['res'], void>>
 
 /* ── WHAT IT REFUSES. Each line must stay an error. ─────────────────────── */
 
-export function callRefusals(http: AxiosInstance): void {
+export function callRefusals(http: Transport): void {
   // @ts-expect-error the path declares ':id'; 'partyId' is not a param of it.
   void call(http, 'getParty', { params: { partyId: 'x' }, body: undefined });
 
@@ -114,6 +114,29 @@ export function sinkRefusesALeak(): void {
   // @ts-expect-error the row carries `internal_note`, which getParty does not declare.
   const table: Route[] = toRoutes({ ...makeHandlers(), getParty: () => wideRow });
   void table;
+}
+
+/* ── A SCREEN CANNOT GO AROUND THE CONTRACT ─────────────────────────────── *
+ *
+ * The page-side client is opaque: only `call()` unwraps it, so a raw verb on it is
+ * TS2339 in EVERY file this mock compiles — hooks, components and helpers included,
+ * which no single-file AST walk could reach.
+ *
+ * This replaces api:bound's /httpClient|axios/i text match against the callee, which
+ * 13 of 19 measured spellings evaded — including the UNALIASED `httpClient({ url })`,
+ * because an AxiosInstance is callable and the callee is then an Identifier, so the
+ * property-access branch never ran at all.
+ */
+
+export function transportIsOpaque(): void {
+  // @ts-expect-error a raw verb on the transport is not a member of it.
+  void httpClient.get('/parties');
+
+  // @ts-expect-error the instance itself is not callable either.
+  void httpClient({ url: '/parties' });
+
+  // @ts-expect-error a verb the old RAW_HTTP set never listed is refused by the same mechanism.
+  void httpClient.postForm('/parties', {});
 }
 
 /* ── THE HONEST RESIDUAL. No directive — it compiles, and that is the point. ──

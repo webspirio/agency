@@ -104,6 +104,26 @@ export function callRefusals(http: Parameters<typeof call>[0]): void {
   void call(http, 'deleteEverything', { params: {}, body: undefined });
 }
 
+/* ── THE PAGE-SIDE CLIENT IS OPAQUE ─────────────────────────────────────── *
+ *
+ * Only `call()` unwraps it, so a raw verb is TS2339 in every file a mock compiles —
+ * hooks, components and helpers included, which no single-file AST walk reaches.
+ * This replaces api:bound's /httpClient|axios/i match against the callee text, which
+ * 13 of 19 measured spellings evaded: the UNALIASED `httpClient({ url })` most of all,
+ * because an AxiosInstance is callable, so the callee is an Identifier and the
+ * property-access branch never ran.
+ */
+export function transportIsOpaque(http: Parameters<typeof call>[0]): void {
+  // @ts-expect-error a raw verb is not a member of the transport.
+  void http.get('/parties');
+
+  // @ts-expect-error the transport is not callable either.
+  void http({ url: '/parties' });
+
+  // @ts-expect-error a verb the old RAW_HTTP set never listed is refused by the same mechanism.
+  void http.postForm('/parties', {});
+}
+
 export function codeRefusals(): void {
   // @ts-expect-error PARTY_NAME_TAKEN is not in getParty's declared code set.
   fail('getParty', 409, 'PARTY_NAME_TAKEN', 'no');

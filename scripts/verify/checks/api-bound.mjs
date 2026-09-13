@@ -23,8 +23,6 @@ import ts from 'typescript';
 const DEFAULT_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 /** The `build` row scaffolds here and removes it; it is mid-flight, not a mock. */
 const TRANSIENT = /^verify-/;
-/** Raw transport in a screen is the thing the contract exists to replace. */
-const RAW_HTTP = new Set(['get', 'post', 'put', 'patch', 'delete', 'request']);
 
 /** @param {string} dir @param {RegExp} match @param {string[]} out */
 function walk(dir, match, out = []) {
@@ -133,14 +131,16 @@ function callsIn(file, mockRoot) {
         else {
           raw.push(`${path.basename(file)}: call() with a non-literal operation key — unresolvable`);
         }
-      } else if (
-        ts.isPropertyAccessExpression(callee) &&
-        RAW_HTTP.has(callee.name.text) &&
-        /httpClient|axios/i.test(callee.expression.getText(source))
-      ) {
-        const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
-        raw.push(`${path.basename(file)}:${line + 1}: ${callee.getText(source)}(...) bypasses the contract`);
       }
+      /* THERE IS NO RAW-TRANSPORT CLAUSE HERE ANY MORE, and its deletion is not a
+         weakening. It was /httpClient|axios/i against the callee text, and 13 of 19
+         measured spellings evaded it — the unaliased `httpClient({ url })` above all,
+         because an AxiosInstance is callable, so the callee is an Identifier and this
+         branch never ran. It also false-red `httpClientCache.get` and `axiosLike.get`.
+         `httpClient` is now an opaque `Transport` that only call() unwraps, so every
+         one of those spellings is TS2339 in every file the mock compiles — hooks and
+         components included, which this walk never visits. `axios` and `fetch` reached
+         directly from a page are held by two oxlint entries in oxlint.base.json. */
     }
     ts.forEachChild(node, visit);
   };

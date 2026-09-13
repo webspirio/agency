@@ -13,7 +13,7 @@ import { compile } from './router';
 import { asDecimal2, type Decimal2, type Paginated } from './types';
 import { createStore } from './store';
 import { MAX_LIMIT, pageQuery } from './query';
-import { makeContract, type Contract, type HandlersOf } from './contract';
+import { makeContract, transport, type Contract, type HandlersOf, type Transport } from './contract';
 
 type Party = { id: string; name: string; balance: Decimal2 };
 
@@ -94,7 +94,17 @@ function makeHandlers() {
 const ACTOR = { id: 'demo-user', role: 'owner' };
 const NOW = () => '2026-09-12T10:00:00.000Z';
 
-function client(caps: string[] = ['crm']): AxiosInstance {
+/**
+ * Wrapped in `transport()`, exactly as a mock's own client.ts does. `call()` takes
+ * an opaque Transport, so a raw verb on it is a compile error in every file a mock
+ * compiles rather than an AST finding in the two directories a walk happens to visit.
+ */
+function client(caps: string[] = ['crm']): Transport {
+  return transport(rawClient(caps));
+}
+
+/** The unwrapped instance, for the cases that must drive the adapter directly. */
+function rawClient(caps: string[] = ['crm']): AxiosInstance {
   return axios.create({
     baseURL: 'http://mock',
     paramsSerializer: { indexes: null },
@@ -215,8 +225,13 @@ describe('the write verbs, which the lab never exercised', () => {
     // Measured: a handler returning null puts literal JSON `null` on a 204,
     // which no Nest 204 ever carries. Returning nothing yields '' , which is
     // what axios gives against the real backend.
-    const c = client();
-    const res = await c.request({ method: 'DELETE', url: '/parties/party-000001' });
+    // The RAW instance and the Transport must be the same client, or they would not
+    // share a store. This is the one test that deliberately goes around the contract —
+    // it is asserting what the transport itself puts on the wire — so it takes the
+    // unwrapped instance explicitly rather than by accident.
+    const raw = rawClient();
+    const c = transport(raw);
+    const res = await raw.request({ method: 'DELETE', url: '/parties/party-000001' });
     expect(res.status).toBe(204);
     expect(res.data).toBe('');
     const after = await call(c, 'listParties', { params: {}, body: undefined, qry: { limit: '99' } });

@@ -205,6 +205,33 @@ export type LeakFree<A extends ApiSpec, I extends IoFor<A>, H, Ok> =
     ? Ok
     : { 'these handlers return keys the contract does not declare': Leaks<A, I, H> };
 
+/* ── the page-side client, opaque ──────────────────────────────────────── */
+
+/**
+ * A raw verb on this is TS2339 in EVERY file a mock compiles — hooks, components
+ * and helpers included, which no single-file AST walk could reach. Only `call()`
+ * unwraps it.
+ *
+ * MEASURED, and the reason this is a type rather than a lint rule: `api:bound`'s
+ * /httpClient|axios/i match against the callee text was evaded by 13 of 19
+ * spellings, the unaliased `httpClient({ url })` among them — an AxiosInstance is
+ * callable, so the callee is an Identifier and the property-access branch never
+ * ran. It also false-red `httpClientCache.get`.
+ *
+ * The property type is `true`, not `unique symbol`: a `unique symbol` type may
+ * only annotate a `const` or a `readonly static`, and TS2331 rejects it here.
+ */
+declare const TRANSPORT: unique symbol;
+export interface Transport {
+  readonly [TRANSPORT]: true;
+}
+
+/**
+ * The ONE place an AxiosInstance becomes a Transport. Anything that needs the raw
+ * instance — an interceptor, say — attaches BEFORE this call, in the same file.
+ */
+export const transport = (http: AxiosInstance): Transport => http as never;
+
 /* ── the handler and call-site shapes ──────────────────────────────────── */
 
 export type HandlerCtxOf<A extends ApiSpec, I extends IoFor<A>, K extends keyof A> =
@@ -230,7 +257,7 @@ export type CallArgsOf<A extends ApiSpec, I extends IoFor<A>, K extends keyof A>
 
 export type Contract<A extends ApiSpec, I extends IoFor<A>> = {
   call<K extends keyof A>(
-    http: AxiosInstance,
+    http: Transport,
     key: K,
     args: CallArgsOf<A, I, K>,
   ): Promise<I[K]['res']>;
@@ -277,7 +304,9 @@ function buildPath(key: string, path: string, params: Record<string, string>): s
 
 export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Contract<A, I> {
   return {
-    async call(http, key, args) {
+    async call(client, key, args) {
+      // The only unwrap in the codebase. Everything else sees an opaque Transport.
+      const http = client as unknown as AxiosInstance;
       const op = api[key] as OperationSpec;
       const url = buildPath(String(key), op.path, args.params as Record<string, string>);
       const res = await http.request({

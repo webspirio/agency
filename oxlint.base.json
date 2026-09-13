@@ -36,8 +36,24 @@
               {
                 "name": "@agency/dec",
                 "message": "Money is computed in src/domain and src/api and reaches a component as a finished decimal string. A component that needs @agency/dec is doing arithmetic the Nest controller will have to do again at conversion."
+              },
+              {
+                // The type holds this for `httpClient`, which is an opaque Transport
+                // only call() unwraps. It cannot hold a SECOND client built here from
+                // axios directly, which is the one way back around the contract.
+                "name": "axios",
+                "message": "A screen talks to the API through call(httpClient, '<operation>', ...) and nothing else. The one axios.create in a mock is src/api/client.ts, which is @scaffold-owned; building a second client here goes around the contract, the capability gate and the wire golden at once."
               }
             ]
+          }
+        ],
+        // Same reasoning, for the transport the type system cannot see at all:
+        // `fetch` is a global, so nothing about it is imported or typed by us.
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "fetch",
+            "message": "A screen talks to the API through call(httpClient, '<operation>', ...) and nothing else. fetch bypasses the adapter, so it bypasses the capability gate, the error envelope and the wire golden."
           }
         ]
       }
