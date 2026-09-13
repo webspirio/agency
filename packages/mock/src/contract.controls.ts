@@ -25,10 +25,14 @@ import type {
   Leaks,
   ParamsOf,
   PathsAreLiterals,
+  CodeOf,
+  QryOf,
+  ReqOf,
+  ResOf,
   AllResJsonSafe,
   IsJsonSafe,
 } from './contract';
-import { makeContract } from './contract';
+import { makeContract, op } from './contract';
 import type { Route } from './router';
 import type { Paginated } from './types';
 
@@ -37,44 +41,72 @@ import type { Paginated } from './types';
 type Party = { id: string; name: string };
 
 const api = {
-  listParties: { method: 'GET', path: '/parties', status: 200, caps: [], codes: [] },
-  getParty: { method: 'GET', path: '/parties/:id', status: 200, caps: [], codes: ['PARTY_NOT_FOUND'] },
-  createParty: { method: 'POST', path: '/parties', status: 201, caps: ['crm'], codes: ['PARTY_NAME_TAKEN'] },
-  removeParty: { method: 'DELETE', path: '/parties/:id', status: 204, caps: ['crm'], codes: ['PARTY_NOT_FOUND'] },
-} as const;
+  listParties: op<void, Paginated<Party>, { page?: string; limit?: string }>()({
+    method: 'GET', path: '/parties', status: 200, caps: [], codes: {},
+  }),
+  getParty: op<void, Party>()({
+    method: 'GET', path: '/parties/:id', status: 200, caps: [], codes: { PARTY_NOT_FOUND: 404 },
+  }),
+  createParty: op<{ name: string }, Party>()({
+    method: 'POST', path: '/parties', status: 201, caps: ['crm'], codes: { PARTY_NAME_TAKEN: 409 },
+  }),
+  removeParty: op<void, void>()({
+    method: 'DELETE', path: '/parties/:id', status: 204, caps: ['crm'], codes: { PARTY_NOT_FOUND: 404 },
+  }),
+};
+/** No `as const`. `op`'s `<const S extends Spec>` preserves every literal — measured. */
 type Api = typeof api;
 
-interface Io {
-  listParties: { req: void; res: Paginated<Party>; qry: { page?: string; limit?: string } };
-  getParty: { req: void; res: Party; qry: Record<string, never> };
-  createParty: { req: { name: string }; res: Party; qry: Record<string, never> };
-  removeParty: { req: void; res: void; qry: Record<string, never> };
-}
+const contract = makeContract<Api>(api);
+const call: Contract<Api>['call'] = contract.call;
+const fail: Contract<Api>['fail'] = contract.fail;
+const toRoutes: Contract<Api>['toRoutes'] = contract.toRoutes;
 
-const contract = makeContract<Api, Io>(api);
-const call: Contract<Api, Io>['call'] = contract.call;
-const fail: Contract<Api, Io>['fail'] = contract.fail;
-const toRoutes: Contract<Api, Io>['toRoutes'] = contract.toRoutes;
+/* ── THE LITERALS SURVIVE WITHOUT `as const` ────────────────────────────── */
+
+export type PathIsTheLiteral = Expect<Equal<Api['getParty']['path'], '/parties/:id'>>;
+/** The NEGATIVE too: a positive alone is satisfied by `string` degenerating. */
+export type PathIsNotString = Expect<Equal<Equal<Api['getParty']['path'], string>, false>>;
+export type StatusIsTheLiteral = Expect<Equal<Api['createParty']['status'], 201>>;
+export type StatusIsNotNumber = Expect<Equal<Equal<Api['getParty']['status'], number>, false>>;
+export type MethodIsTheLiteral = Expect<Equal<Api['createParty']['method'], 'POST'>>;
+export type CapsIsATuple = Expect<Equal<Api['getParty']['caps'], readonly []>>;
+export type CodeStatusIsTheLiteral = Expect<Equal<Api['getParty']['codes']['PARTY_NOT_FOUND'], 404>>;
+
+/* ── THE PHANTOM RESOLVES, THROUGH AN OPTIONAL PROPERTY ─────────────────── */
+
+export type ResIsTheDeclaredType = Expect<Equal<ResOf<Api, 'getParty'>, Party>>;
+export type ResIsVoidForA204 = Expect<Equal<ResOf<Api, 'removeParty'>, void>>;
+export type ResIsTheEnvelope = Expect<Equal<ResOf<Api, 'listParties'>, Paginated<Party>>>;
+export type ReqIsTheDeclaredBody = Expect<Equal<ReqOf<Api, 'createParty'>, { name: string }>>;
+export type ReqIsVoidForAGet = Expect<Equal<ReqOf<Api, 'getParty'>, void>>;
+export type QryIsDeclared = Expect<
+  Equal<QryOf<Api, 'listParties'>, { page?: string; limit?: string }>
+>;
+/** The DEFAULT closes the slot `interface Io` used to declare by hand. */
+export type QryDefaultsClosed = Expect<Equal<QryOf<Api, 'getParty'>, Record<string, never>>>;
+
+/* ── NOTHING IS GREEN BY DEGENERATION ───────────────────────────────────── */
+
+export type ResIsNotUnknown = Expect<Equal<Equal<ResOf<Api, 'getParty'>, unknown>, false>>;
+export type ResIsNotNever = Expect<Equal<Equal<ResOf<Api, 'getParty'>, never>, false>>;
 
 /* ── WHAT THE REGISTRY GUARANTEES, asserted positively ──────────────────── */
-
-/** Every operation in the registry has exactly one entry in the type map. */
-export type IoCoversApi = Expect<Equal<keyof Io, keyof Api>>;
 
 /** The path LITERAL produces the params — not a hand-written declaration. */
 export type ParamsComeFromThePath = Expect<Equal<ParamsOf<Api['getParty']['path']>, { id: string }>>;
 
 /** Error codes are a closed union per operation, never bare `string`. */
-export type CodesAreClosed = Expect<Equal<Api['createParty']['codes'][number], 'PARTY_NAME_TAKEN'>>;
+export type CodesAreClosed = Expect<Equal<CodeOf<Api, 'createParty'>, 'PARTY_NAME_TAKEN'>>;
 
 /** An operation that declares no codes may refuse with NOTHING. */
-export type NoCodesMeansNever = Expect<Equal<Api['listParties']['codes'][number], never>>;
+export type NoCodesMeansNever = Expect<Equal<CodeOf<Api, 'listParties'>, never>>;
 
 /** `as const` is intact, so call-site parameter checking still exists at all. */
 export type KeepAsConst = Expect<Equal<PathsAreLiterals<Api>, true>>;
 
 /** Every declared response is a shape JSON can actually carry. */
-export type ResponsesAreWireShaped = Expect<AllResJsonSafe<Api, Io>>;
+export type ResponsesAreWireShaped = Expect<AllResJsonSafe<Api>>;
 
 /** A 204 handler returns nothing, and `void` is a legitimate wire response. */
 export type VoidIsWireSafe = Expect<IsJsonSafe<void>>;
@@ -137,11 +169,11 @@ export function codeRefusals(): void {
 
 /** A handler must return everything the contract declares. */
 // @ts-expect-error this one returns only `id`.
-export const handlerReturnsTooLittle: HandlersOf<Api, Io>['getParty'] = () => ({ id: 'p1' });
+export const handlerReturnsTooLittle: HandlersOf<Api>['getParty'] = () => ({ id: 'p1' });
 
 /** Every declared operation needs a handler. */
 // @ts-expect-error 'removeParty' is missing from the map.
-export const handlerMapIsIncomplete: HandlersOf<Api, Io> = {
+export const handlerMapIsIncomplete: HandlersOf<Api> = {
   listParties: () => ({ data: [], total: 0, page: 1, limit: 20 }),
   getParty: () => ({ id: 'p1', name: 'x' }),
   createParty: () => ({ id: 'p1', name: 'x' }),
@@ -171,7 +203,7 @@ const makeOkHandlers = () =>
     getParty: () => ({ id: 'p1', name: 'x' }),
     createParty: () => ({ id: 'p1', name: 'x' }),
     removeParty: () => undefined,
-  }) satisfies HandlersOf<Api, Io>;
+  }) satisfies HandlersOf<Api>;
 
 const ok = makeOkHandlers();
 
@@ -189,7 +221,7 @@ export const noLeak: Route[] = toRoutes(ok);
 
 /** The factory's return type is the LITERAL map, not the declared one. */
 export type FactoryNotWidened = Expect<
-  Equal<Equal<ReturnType<typeof makeOkHandlers>, HandlersOf<Api, Io>>, false>
+  Equal<Equal<ReturnType<typeof makeOkHandlers>, HandlersOf<Api>>, false>
 >;
 
 /* ── WHAT IS ACTUALLY LOAD-BEARING IN `Leaks` ───────────────────────────── *
@@ -202,12 +234,12 @@ export type FactoryNotWidened = Expect<
 
 /** The comparison target is read from the REGISTRY, not inferred from the handler. */
 export type ExactnessTargetComesFromTheRegistry = Expect<
-  Equal<Leaks<Api, Io, { getParty: () => Party }>, never>
+  Equal<Leaks<Api, { getParty: () => Party }>, never>
 >;
 
 /** A wide return IS a leak, and `Leaks` names the operation rather than saying `true`. */
 export type LeakNamesTheOperation = Expect<
-  Equal<Leaks<Api, Io, { getParty: () => StoredParty }>, 'getParty'>
+  Equal<Leaks<Api, { getParty: () => StoredParty }>, 'getParty'>
 >;
 
 /**
@@ -216,7 +248,7 @@ export type LeakNamesTheOperation = Expect<
  * unwrap every property maps to `never` and an async leak is invisible.
  */
 export type AsyncLeakIsStillALeak = Expect<
-  Equal<Leaks<Api, Io, { getParty: () => Promise<StoredParty> }>, 'getParty'>
+  Equal<Leaks<Api, { getParty: () => Promise<StoredParty> }>, 'getParty'>
 >;
 
 /**
@@ -228,7 +260,7 @@ export type AsyncLeakIsStillALeak = Expect<
  * becomes noise rather than a guard. Only this control goes red on that.
  */
 export type AsyncExactIsNotALeak = Expect<
-  Equal<Leaks<Api, Io, { getParty: () => Promise<Party> }>, never>
+  Equal<Leaks<Api, { getParty: () => Promise<Party> }>, never>
 >;
 
 /**
@@ -241,12 +273,12 @@ export type AsyncExactIsNotALeak = Expect<
  * the same wide row returned unconditionally was red.
  */
 export type UnionReturnIsALeak = Expect<
-  Equal<Leaks<Api, Io, { getParty: () => StoredParty | Party }>, 'getParty'>
+  Equal<Leaks<Api, { getParty: () => StoredParty | Party }>, 'getParty'>
 >;
 
 /** …and a union of two EXACT shapes is still not a leak. */
 export type ExactUnionIsNotALeak = Expect<
-  Equal<Leaks<Api, Io, { getParty: () => Party | Party }>, never>
+  Equal<Leaks<Api, { getParty: () => Party | Party }>, never>
 >;
 
 declare const unrelated: { id: string; extra: number };
@@ -296,7 +328,7 @@ export type BranchInfersAsTheDeclaredRow = Expect<
  * `H extends HandlersOf<A, I>`, which is what the next control asserts.
  */
 export type NarrowReturnIsNotALeak = Expect<
-  Equal<Leaks<Api, Io, { getParty: () => { id: string } }>, never>
+  Equal<Leaks<Api, { getParty: () => { id: string } }>, never>
 >;
 
 // @ts-expect-error too LITTLE is refused by the constraint at the sink, not by Leaks.
@@ -312,7 +344,7 @@ export const tooLittleIsRefusedAtTheSink: Route[] = toRoutes({ ...ok, getParty: 
  * operation is the witness that actually reaches the branch.
  */
 export type VoidResponseIsNotALeak = Expect<
-  Equal<Leaks<Api, Io, { removeParty: () => { internalNote: string } }>, never>
+  Equal<Leaks<Api, { removeParty: () => { internalNote: string } }>, never>
 >;
 
 /* ── JsonSafe: the declared response must be the WIRE type ──────────────── */
@@ -362,5 +394,5 @@ export type ParamRenameIsVisible = Expect<
 
 /** The args type is derived per operation, so two operations cannot share one. */
 export type ArgsArePerOperation = Expect<
-  Equal<Equal<CallArgsOf<Api, Io, 'getParty'>, CallArgsOf<Api, Io, 'listParties'>>, false>
+  Equal<Equal<CallArgsOf<Api, 'getParty'>, CallArgsOf<Api, 'listParties'>>, false>
 >;

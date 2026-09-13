@@ -59,35 +59,85 @@ export type Equal<A, B> =
 
 /* ── what a registry entry is ──────────────────────────────────────────── */
 
-export type OperationSpec = {
-  readonly method: Method;
-  /** Express-style, e.g. '/parties/:id'. A LITERAL — see `PathsAreLiterals`. */
-  readonly path: string;
-  readonly status: number;
-  readonly caps: readonly string[];
-  /** The closed set this operation may refuse with. Empty means it never does. */
-  readonly codes: readonly string[];
-};
-
-export type ApiSpec = Record<string, OperationSpec>;
-
 /**
  * A query as it travels on the wire: strings, or repeated keys as arrays. Never
  * a number — `?page=1` is the string '1' on both sides of the seam.
  */
 export type QuerySpec = Record<string, string | string[] | undefined>;
 
-export type IoSpec = { req: unknown; res: unknown; qry: QuerySpec };
+export type Spec = {
+  readonly method: Method;
+  /** Express-style, e.g. '/parties/:id'. A LITERAL — `op`'s `<const S>` keeps it one. */
+  readonly path: string;
+  readonly status: number;
+  readonly caps: readonly string[];
+  /**
+   * The closed set this operation may refuse with, each code mapped to the STATUS
+   * it answers. `{}` means it never refuses. The status lives HERE rather than at
+   * each `fail()` site so two handlers cannot disagree about one code — `getParty`
+   * and `renameParty` each spelled `404` by hand before this, and nothing compared
+   * them.
+   */
+  readonly codes: Readonly<Record<string, number>>;
+  /**
+   * Why this operation has no screen yet. Present and unreached is green; present
+   * and REACHED is red as stale, exactly as `reportUnusedDisableDirectives` is.
+   */
+  readonly unreached?: string;
+};
 
-/** The sibling type map every registry must have exactly one entry in. */
-export type IoFor<A extends ApiSpec> = { [K in keyof A]: IoSpec };
+export type ApiSpec = Record<string, Spec>;
 
 /**
- * The `as const` tripwire. A literal path is assignable to `string`, but
- * `string` is not assignable back — so this is `true` only while every path is
- * still a literal, and becomes an error the moment someone drops `as const`.
- * Without it that deletion silently removes call-site parameter checking across
- * the whole mock, and ONLY the handler stays red.
+ * CURRIED, and the currying is the whole trick: the first call takes the types
+ * EXPLICITLY, the second infers the spec. One call taking both would force the
+ * author to spell the spec's type as well, which is the descriptor cost SPEC 14
+ * rejected.
+ *
+ * `<const S extends Spec>` is what preserves `'/parties/:id'`, `200` and `'POST'`
+ * as literals with NO `as const` on the registry object — measured on tsc 6.0.3.
+ * Drop the `const` modifier and every path widens to `string`; `PathsAreLiterals`
+ * below is what catches that.
+ *
+ * `__io` is OPTIONAL and type-only: measured, `'__io' in entry` is false at
+ * runtime, `Object.keys` is unchanged, and declaration order is preserved — which
+ * matters because declaration order IS the route table's order.
+ */
+export const op =
+  <Req, Res, Qry extends QuerySpec = Record<string, never>>() =>
+  <const S extends Spec>(spec: S): S & { readonly __io?: { req: Req; res: Res; qry: Qry } } =>
+    spec;
+
+/**
+ * `IoOf<Bare>` is `never` for an entry written without `op()`, and
+ * `never extends { res: infer R }` is TRUE with `R` inferred as `unknown` — so a
+ * forgotten `op()` yields `unknown`, which `AllResJsonSafe` and `Leaks` both refuse.
+ *
+ * That is deliberate and it is the cheap remedy. MEASURED 2026-09-13: the
+ * alternative spelling — intersecting a slot type to make `IoOf` indexable — yields
+ * `never` instead, `IsJsonSafe<never>` is `true`, `[never] extends [void]` takes the
+ * void branch, and BOTH tripwires go blind. The only remaining signal there was a
+ * `TS2739 … Promise<never>` at the handler, in another file, naming neither the
+ * operation nor the missing `op()`.
+ */
+type IoOf<S> = S extends { readonly __io?: infer I } ? NonNullable<I> : never;
+
+export type ReqOf<A extends ApiSpec, K extends keyof A> =
+  IoOf<A[K]> extends { req: infer R } ? R : never;
+export type ResOf<A extends ApiSpec, K extends keyof A> =
+  IoOf<A[K]> extends { res: infer R } ? R : never;
+export type QryOf<A extends ApiSpec, K extends keyof A> =
+  IoOf<A[K]> extends { qry: infer Q } ? Q : never;
+
+/**
+ * KEPT, against design §2.C's "PathsAreLiterals becomes unnecessary".
+ *
+ * MEASURED: restated over the new entry shape it still holds on a real registry and
+ * still goes to `never` on three separate widenings — a `string`-typed variable,
+ * `as string`, and `as Spec` — and on an entry written without `op()`. It is the
+ * only REGISTRY-LOCAL detector of the forgotten-`op()` mistake; everything else
+ * about that mistake surfaces in another file. What genuinely became unnecessary is
+ * the `as const` it was named for, so the name moves with the mechanism.
  */
 export type PathsAreLiterals<A extends ApiSpec> =
   string extends A[keyof A]['path'] ? never : true;
@@ -104,8 +154,8 @@ type Names<P extends string> = P extends `${infer A}/${infer B}` ? Seg<A> | Name
  */
 export type ParamsOf<P extends string> = { [K in Names<P>]: string };
 
-/** The closed code set of one operation, straight off `as const`. */
-export type CodeOf<A extends ApiSpec, K extends keyof A> = A[K]['codes'][number];
+/** The closed code set of one operation — the KEYS of its `codes` object. */
+export type CodeOf<A extends ApiSpec, K extends keyof A> = keyof A[K]['codes'] & string;
 
 /* ── JsonSafe: the declared response must be the WIRE type ─────────────── */
 
@@ -143,12 +193,12 @@ export type IsJsonSafe<T> = [T] extends [JsonSafe<T>] ? true : false;
 /**
  * Every operation's response at once, as one assertable claim.
  *
- * Constrained on `IoFor<A>` and mapped over `keyof A`, NOT `Record<string, IoSpec>`:
- * an `interface` gets no implicit index signature (only a type alias does), so the
- * Record form is TS2344 against the very declaration every mock writes. Measured.
+ * It also refuses an entry written WITHOUT `op<…>()`: that entry carries no phantom,
+ * so `ResOf` resolves to `unknown`, and `IsJsonSafe<unknown>` is false. That is the
+ * cheap half of the replacement for the deleted `IO_COVERS_API` — see `ResOf`.
  */
-export type AllResJsonSafe<A extends ApiSpec, I extends IoFor<A>> =
-  [{ [K in keyof A]: IsJsonSafe<I[K]['res']> }[keyof A]] extends [true] ? true : false;
+export type AllResJsonSafe<A extends ApiSpec> =
+  [{ [K in keyof A]: IsJsonSafe<ResOf<A, K>> }[keyof A]] extends [true] ? true : false;
 
 /* ── exactness: a wider store row may not reach the client ─────────────── */
 
@@ -198,12 +248,12 @@ type EveryConstituentExact<A, T> = A extends unknown
   ? ([A] extends [DeepExact<A, T>] ? true : false)
   : never;
 
-export type Leaks<A extends ApiSpec, I extends IoFor<A>, H> = {
-  [K in keyof A]: [I[K]['res']] extends [void]
+export type Leaks<A extends ApiSpec, H> = {
+  [K in keyof A]: [ResOf<A, K>] extends [void]
     ? never
     : K extends keyof H
       ? H[K] extends (c: never) => infer R
-        ? [EveryConstituentExact<Awaited<R>, I[K]['res']>] extends [true]
+        ? [EveryConstituentExact<Awaited<R>, ResOf<A, K>>] extends [true]
           ? never
           : K
         : never
@@ -215,10 +265,10 @@ export type Leaks<A extends ApiSpec, I extends IoFor<A>, H> = {
  * sentence — so the failure is read at the assignment rather than decoded from a
  * structural mismatch, and the value of that key names the operation.
  */
-export type LeakFree<A extends ApiSpec, I extends IoFor<A>, H, Ok> =
-  [Leaks<A, I, H>] extends [never]
+export type LeakFree<A extends ApiSpec, H, Ok> =
+  [Leaks<A, H>] extends [never]
     ? Ok
-    : { 'these handlers return keys the contract does not declare': Leaks<A, I, H> };
+    : { 'these handlers return keys the contract does not declare': Leaks<A, H> };
 
 /* ── the page-side client, opaque ──────────────────────────────────────── */
 
@@ -249,36 +299,39 @@ export const transport = (http: AxiosInstance): Transport => http as never;
 
 /* ── the handler and call-site shapes ──────────────────────────────────── */
 
-export type HandlerCtxOf<A extends ApiSpec, I extends IoFor<A>, K extends keyof A> =
+export type HandlerCtxOf<A extends ApiSpec, K extends keyof A> =
   Omit<Ctx, 'params' | 'body'> & {
     params: ParamsOf<A[K]['path']>;
-    body: I[K]['req'];
+    body: ReqOf<A, K>;
   };
 
-export type HandlersOf<A extends ApiSpec, I extends IoFor<A>> = {
-  [K in keyof A]: (c: HandlerCtxOf<A, I, K>) => I[K]['res'] | Promise<I[K]['res']>;
+export type HandlersOf<A extends ApiSpec> = {
+  [K in keyof A]: (c: HandlerCtxOf<A, K>) => ResOf<A, K> | Promise<ResOf<A, K>>;
 };
 
-export type CallArgsOf<A extends ApiSpec, I extends IoFor<A>, K extends keyof A> = {
+export type CallArgsOf<A extends ApiSpec, K extends keyof A> = {
   /**
    * Required even when the path declares none, so a parameterless GET reads
    * `{ params: {}, body: undefined }`. An honest ergonomic wart.
    */
   params: ParamsOf<A[K]['path']>;
-  body: I[K]['req'];
+  body: ReqOf<A, K>;
   /** Declared per operation from t=0; the default `Record<string, never>` refuses every key. */
-  qry?: I[K]['qry'];
+  qry?: QryOf<A, K>;
 };
 
-export type Contract<A extends ApiSpec, I extends IoFor<A>> = {
+export type Contract<A extends ApiSpec> = {
   call<K extends keyof A>(
     http: Transport,
     key: K,
-    args: CallArgsOf<A, I, K>,
-  ): Promise<I[K]['res']>;
+    args: CallArgsOf<A, K>,
+  ): Promise<ResOf<A, K>>;
+  /**
+   * NO `status` PARAMETER. It is read from the registry entry's `codes` object, so
+   * one code answers one status everywhere.
+   */
   fail<K extends keyof A>(
     key: K,
-    status: number,
     code: CodeOf<A, K>,
     message: string | string[],
     ctx?: Record<string, unknown>,
@@ -289,7 +342,7 @@ export type Contract<A extends ApiSpec, I extends IoFor<A>> = {
    * `Leaks`; annotate the parameter instead and `H` collapses into the declared
    * type, leaving nothing to compare.
    */
-  toRoutes<H extends HandlersOf<A, I>>(handlers: H): LeakFree<A, I, H, Route[]>;
+  toRoutes<H extends HandlersOf<A>>(handlers: H): LeakFree<A, H, Route[]>;
 };
 
 const PARAM = /:([A-Za-z_][A-Za-z0-9_]*)/g;
@@ -317,15 +370,15 @@ function buildPath(key: string, path: string, params: Record<string, string>): s
   });
 }
 
-export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Contract<A, I> {
+export function makeContract<A extends ApiSpec>(api: A): Contract<A> {
   return {
     async call(client, key, args) {
       // The only unwrap in the codebase. Everything else sees an opaque Transport.
       const http = client as unknown as AxiosInstance;
-      const op = api[key] as OperationSpec;
-      const url = buildPath(String(key), op.path, args.params as Record<string, string>);
+      const entry = api[key] as Spec;
+      const url = buildPath(String(key), entry.path, args.params as Record<string, string>);
       const res = await http.request({
-        method: op.method,
+        method: entry.method,
         url,
         params: args.qry,
         data: args.body,
@@ -333,10 +386,19 @@ export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Con
       return res.data as never;
     },
 
-    fail(key, status, code, message, ctx) {
+    fail(key, code, message, ctx) {
+      const entry = api[key] as Spec;
+      const status = entry.codes[code as string];
+      if (status === undefined) {
+        // Unreachable through the type, reachable through a cast. A thrown Error is
+        // better than a 500 whose envelope says nothing about why.
+        throw new Error(
+          `fail(${String(key)}): the code '${String(code)}' is not in that operation's ` +
+            `registry entry, so there is no status to answer with`,
+        );
+      }
       // String(code): the closed set is a TYPE-level guarantee; DomainError
       // carries the plain string the envelope puts on the wire.
-      void key;
       throw new DomainError(status, String(code), message, ctx);
     },
 
@@ -359,7 +421,7 @@ export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Con
       // is true by construction rather than by discipline. Without this a stray
       // `new DomainError(409, 'ANYTHING')` in one handler widens what every screen
       // reading that operation can see, while the type keeps promising it cannot.
-      const declared = (api[key] as OperationSpec).codes as readonly string[];
+      const declared = Object.keys((api[key] as Spec).codes);
       if (!declared.includes(code)) {
         console.error(
           `[mock] ${String(key)} produced the code '${code}', which its registry entry does not ` +
@@ -390,15 +452,15 @@ export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Con
       // the first matching route wins, and `compile()` refuses a table where an
       // earlier route shadows a later one.
       const table = (Object.keys(api) as (keyof A)[]).map((key) => {
-        const op = api[key] as OperationSpec;
+        const entry = api[key] as Spec;
         return {
-          method: op.method,
-          path: op.path,
+          method: entry.method,
+          path: entry.path,
           // Copied ACROSS, deliberately, and asserted by the test: a derivation
           // that drops `caps` silently un-gates every route, and SPEC 8 promises
           // a typed URL cannot surface another client's product.
-          caps: [...op.caps],
-          status: op.status,
+          caps: [...entry.caps],
+          status: entry.status,
           handler: (c: Ctx) => (handlers[key] as (ctx: Ctx) => unknown)(c),
         };
       });

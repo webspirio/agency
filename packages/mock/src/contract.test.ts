@@ -14,7 +14,7 @@ import { ApiError } from './api-error';
 import { asDecimal2, type Decimal2, type Paginated } from './types';
 import { createStore } from './store';
 import { MAX_LIMIT, pageQuery } from './query';
-import { makeContract, transport, type Contract, type HandlersOf, type Transport } from './contract';
+import { makeContract, op, transport, type Contract, type HandlersOf, type Transport } from './contract';
 
 type Party = { id: string; name: string; balance: Decimal2 };
 
@@ -24,23 +24,29 @@ const SEED: readonly Omit<Party, 'id'>[] = [
 ];
 
 export const api = {
-  listParties: { method: 'GET', path: '/parties', status: 200, caps: [], codes: [] },
-  getParty: { method: 'GET', path: '/parties/:id', status: 200, caps: [], codes: ['PARTY_NOT_FOUND'] },
-  createParty: { method: 'POST', path: '/parties', status: 201, caps: ['crm'], codes: ['PARTY_NAME_TAKEN'] },
-  renameParty: { method: 'PATCH', path: '/parties/:id', status: 200, caps: ['crm'], codes: ['PARTY_NOT_FOUND', 'PARTY_NAME_TAKEN'] },
-  removeParty: { method: 'DELETE', path: '/parties/:id', status: 204, caps: ['crm'], codes: ['PARTY_NOT_FOUND'] },
-} as const;
+  listParties: op<void, Paginated<Party>, { page?: string; limit?: string; tag?: string[] }>()({
+    method: 'GET', path: '/parties', status: 200, caps: [], codes: {},
+  }),
+  getParty: op<void, Party>()({
+    method: 'GET', path: '/parties/:id', status: 200, caps: [], codes: { PARTY_NOT_FOUND: 404 },
+  }),
+  createParty: op<{ name: string; balance: string }, Party>()({
+    method: 'POST', path: '/parties', status: 201, caps: ['crm'],
+    codes: { PARTY_NAME_TAKEN: 409 },
+  }),
+  renameParty: op<{ name: string }, Party>()({
+    method: 'PATCH', path: '/parties/:id', status: 200, caps: ['crm'],
+    codes: { PARTY_NOT_FOUND: 404, PARTY_NAME_TAKEN: 409 },
+  }),
+  removeParty: op<void, void>()({
+    method: 'DELETE', path: '/parties/:id', status: 204, caps: ['crm'],
+    codes: { PARTY_NOT_FOUND: 404 },
+  }),
+};
+/** No `as const`. `op`'s `<const S extends Spec>` preserves every literal. */
 export type Api = typeof api;
 
-export interface Io {
-  listParties: { req: void; res: Paginated<Party>; qry: { page?: string; limit?: string; tag?: string[] } };
-  getParty: { req: void; res: Party; qry: Record<string, never> };
-  createParty: { req: { name: string; balance: string }; res: Party; qry: Record<string, never> };
-  renameParty: { req: { name: string }; res: Party; qry: Record<string, never> };
-  removeParty: { req: void; res: void; qry: Record<string, never> };
-}
-
-const contract = makeContract<Api, Io>(api);
+const contract = makeContract<Api>(api);
 
 /**
  * ANNOTATED, not destructured. MEASURED: a never-returning `fail()` narrows only
@@ -50,10 +56,10 @@ const contract = makeContract<Api, Io>(api);
  * leave `row` possibly-undefined and each handler would need a non-null assertion.
  * This is the idiom each mock's src/api/contract.ts writes.
  */
-const call: Contract<Api, Io>['call'] = contract.call;
-const fail: Contract<Api, Io>['fail'] = contract.fail;
-const codeOf: Contract<Api, Io>['codeOf'] = contract.codeOf;
-const toRoutes: Contract<Api, Io>['toRoutes'] = contract.toRoutes;
+const call: Contract<Api>['call'] = contract.call;
+const fail: Contract<Api>['fail'] = contract.fail;
+const codeOf: Contract<Api>['codeOf'] = contract.codeOf;
+const toRoutes: Contract<Api>['toRoutes'] = contract.toRoutes;
 
 /**
  * A fresh store per call — the whole point. NO return-type annotation, and the
@@ -72,24 +78,24 @@ function makeHandlers() {
     listParties: (c) => parties.list(pageQuery(c.query)),
     getParty: (c) => {
       const row = parties.get(c.params.id);
-      if (!row) fail('getParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
+      if (!row) fail('getParty', 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
       return row;
     },
     createParty: (c) => {
-      if (byName(c.body.name)) fail('createParty', 409, 'PARTY_NAME_TAKEN', 'Taken', { field: 'name' });
+      if (byName(c.body.name)) fail('createParty', 'PARTY_NAME_TAKEN', 'Taken', { field: 'name' });
       return parties.create({ name: c.body.name, balance: asDecimal2(c.body.balance) });
     },
     renameParty: (c) => {
-      if (!parties.get(c.params.id)) fail('renameParty', 404, 'PARTY_NOT_FOUND', 'No such party');
-      if (byName(c.body.name)) fail('renameParty', 409, 'PARTY_NAME_TAKEN', 'Taken', { field: 'name' });
+      if (!parties.get(c.params.id)) fail('renameParty', 'PARTY_NOT_FOUND', 'No such party');
+      if (byName(c.body.name)) fail('renameParty', 'PARTY_NAME_TAKEN', 'Taken', { field: 'name' });
       const updated = parties.update(c.params.id, { name: c.body.name });
-      if (!updated) fail('renameParty', 404, 'PARTY_NOT_FOUND', 'No such party');
+      if (!updated) fail('renameParty', 'PARTY_NOT_FOUND', 'No such party');
       return updated;
     },
     removeParty: (c) => {
-      if (!parties.remove(c.params.id)) fail('removeParty', 404, 'PARTY_NOT_FOUND', 'No such party');
+      if (!parties.remove(c.params.id)) fail('removeParty', 'PARTY_NOT_FOUND', 'No such party');
     },
-  } satisfies HandlersOf<Api, Io>;
+  } satisfies HandlersOf<Api>;
 }
 
 const ACTOR = { id: 'demo-user', role: 'owner' };
@@ -274,15 +280,47 @@ describe('the write verbs, which the lab never exercised', () => {
  * an HttpException constructed with an object; a Nest 404, a 500 and a ValidationPipe
  * 400 all carry none.
  */
-describe('codeOf returns the declared set, and nothing else', () => {
-  const rejection = async (run: () => Promise<unknown>): Promise<AxiosError> =>
-    run().then(
-      () => {
-        throw new Error('expected a rejection, got a resolved response');
-      },
-      (e: unknown) => e as AxiosError,
-    );
+/** A rejection, or a loud failure if the call resolved. Shared by both suites below. */
+const rejection = async (run: () => Promise<unknown>): Promise<AxiosError> =>
+  run().then(
+    () => {
+      throw new Error('expected a rejection, got a resolved response');
+    },
+    (e: unknown) => e as AxiosError,
+  );
 
+/**
+ * The status appeared FOUR times by hand across the template's handlers before this,
+ * and nothing compared them. It now appears once, on the code, in the registry.
+ */
+describe('fail reads the status off the registry, so two handlers cannot disagree', () => {
+  it('answers a declared 404 code with 404', async () => {
+    const err = await rejection(() =>
+      call(client(), 'getParty', { params: { id: 'party-999999' }, body: undefined }),
+    );
+    expect(err.response?.status).toBe(404);
+    expect(codeOf('getParty', err)).toBe('PARTY_NOT_FOUND');
+  });
+
+  it('answers a declared 409 code with 409, from the same mechanism', async () => {
+    const c = client();
+    await call(c, 'createParty', { params: {}, body: { name: 'Zed', balance: '1.00' } });
+    const err = await rejection(() =>
+      call(c, 'createParty', { params: {}, body: { name: 'Zed', balance: '1.00' } }),
+    );
+    expect(err.response?.status).toBe(409);
+    expect(codeOf('createParty', err)).toBe('PARTY_NAME_TAKEN');
+  });
+
+  it('throws loudly for a code the entry does not declare, rather than a silent 500', () => {
+    // Unreachable through the type, reachable through a cast.
+    expect(() => fail('getParty', 'NOT_DECLARED' as never, 'x')).toThrow(
+      /is not in that operation's registry entry/,
+    );
+  });
+});
+
+describe('codeOf returns the declared set, and nothing else', () => {
   it('returns undefined for a capability-gated 404', async () => {
     const err = await rejection(() =>
       call(client([]), 'createParty', { params: {}, body: { name: 'X', balance: '1.00' } }),
