@@ -42,6 +42,7 @@
  */
 import type { AxiosInstance } from 'axios';
 import { apiErrorCode } from './api-error';
+import { check, type Shape } from './shape';
 import { DomainError, type ErrorEnvelope } from './errors';
 import type { Ctx, Method, Route } from './router';
 
@@ -347,6 +348,14 @@ export type CallArgsOf<A extends ApiSpec, K extends keyof A> = {
   qry?: QryOf<A, K>;
 };
 
+/**
+ * A body check per operation, all optional: a GET declares none, and an existing mock
+ * that declares none keeps behaving exactly as it did. What a declaration buys is the
+ * product's bytes for a malformed request — 400 with `message: string[]` — where the
+ * mock otherwise answers 500 for an empty body and 201 for a forged field it ignores.
+ */
+export type BodiesOf<A extends ApiSpec> = { readonly [K in keyof A]?: Shape };
+
 export type Contract<A extends ApiSpec> = {
   call<K extends keyof A>(
     http: Transport,
@@ -397,7 +406,7 @@ function buildPath(key: string, path: string, params: Record<string, string>): s
   });
 }
 
-export function makeContract<A extends ApiSpec>(api: A): Contract<A> {
+export function makeContract<A extends ApiSpec>(api: A, bodies?: BodiesOf<A>): Contract<A> {
   return {
     async call(client, key, args) {
       // The only unwrap in the codebase. Everything else sees an opaque Transport.
@@ -498,7 +507,20 @@ export function makeContract<A extends ApiSpec>(api: A): Contract<A> {
           // a typed URL cannot surface another client's product.
           caps: [...entry.caps],
           status: entry.status,
-          handler: (c: Ctx) => (handlers[key] as (ctx: Ctx) => unknown)(c),
+          handler: (c: Ctx) => {
+            /* BEFORE the handler, so a handler body never sees a shape it was not
+               written for — and so the refusal is the product's, not a 500 from
+               whatever the handler did with the missing field. 400, `message` as an
+               ARRAY, and NO code: that is exactly what a ValidationPipe rejection
+               becomes in AllExceptionsFilter, and a code here would be a
+               discriminator the product never sends. */
+            const declared = bodies?.[key];
+            if (declared !== undefined) {
+              const problems = check(declared, c.body);
+              if (problems.length !== 0) throw new DomainError(400, undefined, problems);
+            }
+            return (handlers[key] as (ctx: Ctx) => unknown)(c);
+          },
         };
       });
       // `as never`: the declared return is LeakFree<...>, which is Route[] exactly

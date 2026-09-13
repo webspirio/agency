@@ -53,5 +53,19 @@
       "404",
       "{code:string,error:string,id:seq-id,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
     ]
+  },
+  "malformed": {
+    "createParty.emptyBody": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createParty.forgedId": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "renameParty.wrongType": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ]
   }
 }

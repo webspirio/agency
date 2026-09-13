@@ -354,7 +354,7 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/checks-bite.mjs',
     proves:
-      'For each fixture in the table — 19 today, over 17 distinct planted defects: a tree derived ' +
+      'For each fixture in the table — 20 today, over 18 distinct planted defects: a tree derived ' +
       'from templates/mock is GREEN with no defect in ' +
       'it, the same tree with exactly ONE defect planted exits 1 — not merely non-zero, so a ' +
       'SKIPPED or UNRUNNABLE check cannot pass as a failed one — and the failing output names the ' +
@@ -431,8 +431,9 @@ const REAL = [
       'with the exhaustiveness loop running at RUNTIME over Object.keys(api[key].codes) so a cast in ' +
       'the drive table cannot evade it. Each response reduces to a structural fingerprint of key ' +
       'names and value DOMAINS (balance:dec2, created_at:instant, id:seq-id, empty-body for a 204), ' +
-      'each refusal to its STATUS plus the envelope\'s fingerprint, and both are compared to the ' +
-      'committed fixture — then REGENERATED and required to be byte-identical, so a fixture that ' +
+      'each refusal to its STATUS plus the envelope\'s fingerprint, each MALFORMED body to the 400 ' +
+      'and the `message: string[]` envelope a ValidationPipe rejection becomes, and all three are ' +
+      'compared to the committed fixture — then REGENERATED and required to be byte-identical, so a fixture that ' +
       'passes only because the test stopped driving a route is red. This is the one mechanism here ' +
       'that catches a re-cased wire field: created_at -> createdAt typechecks perfectly when both ' +
       'sides are renamed together. The status is pinned in the COMMITTED file, not read from the ' +

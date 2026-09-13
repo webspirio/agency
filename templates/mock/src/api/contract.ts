@@ -26,6 +26,8 @@
 import {
   makeContract,
   op,
+  s,
+  shape,
   type AllResJsonSafe,
   type Contract,
   type Expect,
@@ -122,7 +124,43 @@ export type RESPONSES_ARE_WIRE_SHAPED = Expect<AllResJsonSafe<Api>>;
 
 /* ── the bound helpers ──────────────────────────────────────────────────── */
 
-const contract = makeContract<Api>(api);
+/**
+ * WHAT A MALFORMED REQUEST GETS, and it is the product's answer rather than a
+ * convenient one. MEASURED 2026-09-13 before this existed: `POST /parties` with `{}`
+ * answered **500 Internal server error** — the demo's most common mistake looking like
+ * a crash — and a forged `id` was accepted with 201 and silently ignored. The product
+ * answers 400 with one sentence per failed field, and refuses the unknown property
+ * outright because its global ValidationPipe runs `forbidNonWhitelisted: true`.
+ *
+ * Only operations with a request BODY appear here; a GET declares nothing. Add an
+ * endpoint with a body and add its shape — the check runs before the handler, so the
+ * handler body stays the Nest service body it becomes.
+ */
+const bodies = {
+  createParty: shape({
+    name: s.str(),
+    company: s.str(),
+    address: s.str(),
+    /**
+     * `s.str()`, NOT `s.dec2()`, and the distinction is load-bearing.
+     *
+     * A shape check answers "is this the right SHAPE"; a DOMAIN RULE answers "is this
+     * a legal value here", and only the second has a declared code. `'1.5'` is a
+     * perfectly good string, so it passes here and `invalidBalance` in
+     * `src/domain/rules.ts` refuses it with PARTY_BALANCE_INVALID.
+     *
+     * Measured the moment this was written as `s.dec2()`: the shape check ran BEFORE
+     * the handler, so it intercepted the malformed balance and answered a codeless
+     * 400 — and PARTY_BALANCE_INVALID became a declared code nothing could emit,
+     * while `contract:complete` stayed green because the `fail()` site still existed.
+     * A shape that duplicates a domain rule silently deletes that rule's code.
+     */
+    balance: s.str(),
+  }),
+  renameParty: shape({ name: s.str() }),
+};
+
+const contract = makeContract<Api>(api, bodies);
 
 /**
  * ANNOTATED CONSTS, not a destructure, and the annotation is load-bearing on

@@ -219,6 +219,43 @@ const declaredPairs = (): string[] => {
   return out;
 };
 
+/**
+ * MALFORMED BODIES, which are NOT refusals.
+ *
+ * A validation failure declares no `code` — the product's ValidationPipe produces one
+ * and `AllExceptionsFilter` puts it on the wire as a 400 with `message: string[]` and
+ * nothing else — so it forms no (operation, code) pair and the exhaustiveness loop
+ * above must keep passing without it. Putting these in REFUSALS would make that loop
+ * demand a code that does not exist, which is the tell that they belong apart.
+ *
+ * MEASURED 2026-09-13, before `shape()`: `{}` answered 500 `Internal server error`,
+ * and a forged `id` was accepted with 201 and silently ignored.
+ */
+const MALFORMED: { name: string; run: (c: AxiosInstance) => Promise<unknown> }[] = [
+  {
+    name: 'createParty.emptyBody',
+    run: (c) => c.post('/parties', {}).then(() => null, (e: unknown) => e),
+  },
+  {
+    name: 'createParty.forgedId',
+    run: (c) =>
+      c
+        .post('/parties', {
+          id: 'party-999999',
+          created_at: '1999-01-01T00:00:00.000Z',
+          name: 'Forged',
+          company: 'x',
+          address: 'y',
+          balance: '1.00',
+        })
+        .then(() => null, (e: unknown) => e),
+  },
+  {
+    name: 'renameParty.wrongType',
+    run: (c) => c.patch('/parties/party-000001', { name: 4 }).then(() => null, (e: unknown) => e),
+  },
+];
+
 describe('the wire golden pins the shape every screen will receive', () => {
   it('covers EVERY declared operation — a new one with no drive is red here', () => {
     // Without this, adding an operation silently adds an uncovered route and the
@@ -279,7 +316,7 @@ describe('the wire golden pins the shape every screen will receive', () => {
     }
   });
 
-  it('emits the committed wire shape for every route AND every refusal', async () => {
+  it('emits the committed wire shape for every route, refusal and malformed body', async () => {
     const seen: Record<string, string[]> = {};
     for (const drive of DRIVES) {
       const t = wired();
@@ -306,13 +343,21 @@ describe('the wire golden pins the shape every screen will receive', () => {
       ];
     }
 
+    const malformed: Record<string, string[]> = {};
+    for (const bad of MALFORMED) {
+      const err = (await bad.run(client())) as
+        | { response?: { status?: number; data?: unknown } }
+        | null;
+      malformed[bad.name] = [`${err?.response?.status ?? 'RESOLVED'}`, ...shapeOf(err?.response?.data)];
+    }
+
     if (WRITING) {
-      writeFileSync(GOLDEN_PATH, `${JSON.stringify({ ...seen, refusals }, null, 2)}\n`);
+      writeFileSync(GOLDEN_PATH, `${JSON.stringify({ ...seen, refusals, malformed }, null, 2)}\n`);
       return;
     }
 
     const golden = JSON.parse(readFileSync(GOLDEN_PATH, 'utf8')) as Record<string, unknown>;
-    expect({ ...seen, refusals }).toEqual(golden);
+    expect({ ...seen, refusals, malformed }).toEqual(golden);
   });
 
   it('would notice a re-cased wire field, which no type here can', () => {

@@ -238,6 +238,18 @@ const DEFECTS = {
     if (gutted === src) throw new Error('code-declared-but-never-failed: the getParty refusal moved');
     writeFileSync(file, gutted);
   },
+  /**
+   * The body checks are unhooked from the contract. Every malformed request then falls
+   * through to the handler, which is what answered 500 for an empty body and 201 for a
+   * forged field before `shape()` existed.
+   */
+  'bodies-unhooked': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts');
+    const src = readFileSync(file, 'utf8');
+    const unhooked = src.replace('makeContract<Api>(api, bodies)', 'makeContract<Api>(api)');
+    if (unhooked === src) throw new Error('bodies-unhooked: the makeContract call moved');
+    writeFileSync(file, unhooked);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -369,6 +381,11 @@ export const FIXTURES = [
     id: 'handler-leaks-a-field',
     check: 'scripts/verify/checks/template-check.mjs',
     expect: 'these handlers return keys the contract does not declare',
+  },
+  {
+    id: 'bodies-unhooked',
+    check: 'scripts/verify/checks/template-check.mjs',
+    expect: 'createParty.emptyBody',
   },
   { id: 'stale-unreached', check: 'scripts/verify/checks/api-bound.mjs', expect: 'but IS reached' },
   {
