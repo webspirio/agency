@@ -351,6 +351,20 @@ export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Con
     },
 
     toRoutes(handlers) {
+      /* A handler for something the registry does not declare can never be routed:
+         toRoutes maps over the REGISTRY's keys, so the extra one is silently dropped
+         and the author is left with a function they believe is serving traffic.
+         Checked at runtime because that is the only place it holds for every
+         construction — a spread and a cast both slip past tsc's excess-property
+         check, and the spread is exactly how a handler map gets extended. */
+      for (const k of Object.keys(handlers as object)) {
+        if (!Object.hasOwn(api, k)) {
+          throw new Error(
+            `toRoutes: handler '${k}' names no operation in the registry — it can never be routed`,
+          );
+        }
+      }
+
       // Object.keys is DECLARATION ORDER, which is the route table's contract:
       // the first matching route wins, and `compile()` refuses a table where an
       // earlier route shadows a later one.

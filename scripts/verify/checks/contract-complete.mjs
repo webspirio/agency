@@ -218,12 +218,12 @@ function checkMock(label, dir, problems) {
   for (const key of Object.keys(io)) {
     if (!keys.includes(key)) problems.push(`${label}: \`Io\` declares '${key}', which the registry does not`);
   }
-  for (const key of handlers) {
-    if (!keys.includes(key) && key !== '__proto__') {
-      // A handler for something undeclared is dead code at best.
-      if (io[key] !== undefined || keys.includes(key)) continue;
-    }
-  }
+  /* THE REVERSE DIRECTION — a handler for an operation the registry does not declare —
+     is NOT checked here, and was not checked by the loop that used to sit at this line
+     either: its entire body was `continue`, under a comment describing a check. It is
+     held by `toRoutes`, which throws "handler '<k>' names no operation in the registry",
+     and which fires for every construction including the spread and the cast that tsc's
+     excess-property check does not see. */
   return { parsed: true, operations: keys.length };
 }
 

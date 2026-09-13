@@ -139,6 +139,24 @@ describe('the derived table is a real route table', () => {
   });
 });
 
+/**
+ * The direction contract-complete.mjs's dead loop (`for (...) { continue }`, under a
+ * comment describing a check) pretended to hold. It lives here instead, where it fires
+ * for EVERY construction — including the spread and the cast that tsc's
+ * excess-property check does not see.
+ */
+describe('toRoutes refuses a handler the registry does not declare', () => {
+  it('REFUSES a handler for an operation the registry does not declare', () => {
+    const wide = { ...makeHandlers(), archiveParty: () => undefined };
+    expect(() => toRoutes(wide as never)).toThrow(/names no operation in the registry/);
+  });
+
+  it('names the offending key, so the message says what to delete', () => {
+    const wide = { ...makeHandlers(), archiveParty: () => undefined };
+    expect(() => toRoutes(wide as never)).toThrow(/archiveParty/);
+  });
+});
+
 describe('call() builds the request from the registry, never from a second copy', () => {
   it('reads a list through the declared path', async () => {
     const page = await call(client(), 'listParties', { params: {}, body: undefined, qry: { limit: '1' } });

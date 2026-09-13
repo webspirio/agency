@@ -60,6 +60,18 @@ const DEFECTS = {
     }
     writeFileSync(file, swapped);
   },
+  /**
+   * MEASURED 2026-09-13 against the pre-anchor check at eb6259f: it exited 0,
+   * reporting "6 operation(s) — each has a handler", on exactly this tree. The
+   * decoy's `return {…}` restored a key whose real handler was gone.
+   */
+  'handler-map-decoy': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'routes.ts');
+    const src = readFileSync(file, 'utf8');
+    const cut = src.replace(/\n {4}getParty: \(c\) => \{[\s\S]*?\n {4}\},\n/, '\n');
+    if (cut === src) throw new Error('handler-map-decoy: the getParty handler shape moved');
+    writeFileSync(file, `${cut}\nfunction decoy() { return { getParty: 1, overview: 2 }; }\n`);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -104,6 +116,11 @@ export const FIXTURES = [
     id: 'bare-specifier-contract',
     check: 'scripts/verify/checks/api-bound.mjs',
     expect: 'does not resolve to this mock',
+  },
+  {
+    id: 'handler-map-decoy',
+    check: 'scripts/verify/checks/contract-complete.mjs',
+    expect: 'getParty',
   },
 ];
 
