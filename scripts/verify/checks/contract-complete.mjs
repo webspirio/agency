@@ -100,11 +100,15 @@ function ioOf(file) {
  * turned a red green.
  *
  * Anchoring on the satisfies clause rather than on the `return` also resolves the
- * `const h = {…} satisfies HandlersOf<…>; return h;` spelling for free, and refuses
- * the annotated spelling `function makeHandlers(): HandlersOf<Api, Io>` — which is
- * not pedantry: an annotation widens the map, `H` collapses into the declared type,
- * and the exactness check at `toRoutes` silently stops comparing anything. No anchor
- * is therefore a LOUD failure rather than an empty key set.
+ * `const h = {…} satisfies HandlersOf<…>; return h;` spelling for free, and no anchor is
+ * a LOUD failure rather than an empty key set.
+ *
+ * The anchor ALONE is not enough, and believing it was cost a green: an annotation
+ * REPLACING `satisfies` leaves no anchor and is caught, but an annotation ADDED beside
+ * it kept `anchors` at 1 and passed — while doing the same damage, because either
+ * spelling widens the map, collapses `H` into the declared type and silently stops the
+ * exactness check at `toRoutes` from comparing anything. So the annotation is detected
+ * directly, independently of the anchor count.
  *
  * @returns {{keys: Set<string>, anchors: number}}
  */
@@ -112,7 +116,23 @@ function handlersOf(file) {
   const source = parse(file);
   const keys = new Set();
   let anchors = 0;
+  const annotated = [];
   const visit = (node) => {
+    /* A return-type ANNOTATION of HandlersOf<…> on a function, whether or not a
+       `satisfies` clause is also present. Both spellings widen the factory's return to
+       the declared type, `H` collapses into it, and the exactness check at toRoutes
+       stops comparing anything — silently. The redundant annotation-AND-satisfies form
+       kept `anchors` at 1 and was green until 2026-09-13. */
+    if (
+      (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) &&
+      node.type &&
+      ts.isTypeReferenceNode(node.type) &&
+      ts.isIdentifier(node.type.typeName) &&
+      node.type.typeName.text === 'HandlersOf'
+    ) {
+      const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+      annotated.push(line + 1);
+    }
     if (
       ts.isSatisfiesExpression(node) &&
       ts.isTypeReferenceNode(node.type) &&
@@ -130,7 +150,7 @@ function handlersOf(file) {
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return { keys, anchors };
+  return { keys, anchors, annotated };
 }
 
 /** Every string literal anywhere under `dir`, so a code's emitter can be found. */
@@ -183,7 +203,15 @@ function checkMock(label, dir, problems) {
   }
 
   const io = ioOf(contractFile);
-  const { keys: handlers, anchors } = handlersOf(routesFile);
+  const { keys: handlers, anchors, annotated } = handlersOf(routesFile);
+  for (const line of annotated) {
+    problems.push(
+      `${label}: src/api/routes.ts:${line} gives the handler factory a return-type annotation ` +
+        `of HandlersOf<…>. That widens the map: H collapses into the declared type and the ` +
+        `exactness check at toRoutes stops comparing anything, silently. End the literal in ` +
+        `\`satisfies HandlersOf<…>\` and give the function no return type.`,
+    );
+  }
   if (anchors === 0) {
     problems.push(
       `${label}: src/api/routes.ts contains no handler map — nothing in it ends in ` +

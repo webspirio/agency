@@ -41,6 +41,7 @@
  *     `export const fail: Contract<Api, Io>['fail'] = contract.fail;`.
  */
 import type { AxiosInstance } from 'axios';
+import { apiErrorCode } from './api-error';
 import { DomainError, type ErrorEnvelope } from './errors';
 import type { Ctx, Method, Route } from './router';
 
@@ -183,12 +184,26 @@ export type DeepExact<A, T> =
  * A `void` response is exempt: a 204 handler returns nothing, so there is nothing
  * to widen, and `DeepExact<undefined, void>` would report it as one.
  */
+/**
+ * Exact CONSTITUENT BY CONSTITUENT. `A extends unknown ?` is the distribution, and it
+ * is load-bearing: `DeepExact`'s object branch is a homomorphic mapped type, so a union
+ * argument distributed through it and
+ * `[Wide | Narrow] extends [DeepExact<Wide, Res> | DeepExact<Narrow, Res>]` was
+ * satisfied by the Narrow constituent — Wide being ASSIGNABLE to Narrow. Comparing the
+ * whole union in one step therefore passed a handler that returns the wide row on one
+ * branch and the declared row on the other, which is the shape a capability check takes:
+ * `return c.actor.role === 'admin' ? { ...row, internalNote } : row`.
+ */
+type EveryConstituentExact<A, T> = A extends unknown
+  ? ([A] extends [DeepExact<A, T>] ? true : false)
+  : never;
+
 export type Leaks<A extends ApiSpec, I extends IoFor<A>, H> = {
   [K in keyof A]: [I[K]['res']] extends [void]
     ? never
     : K extends keyof H
       ? H[K] extends (c: never) => infer R
-        ? [Awaited<R>] extends [DeepExact<Awaited<R>, I[K]['res']>]
+        ? [EveryConstituentExact<Awaited<R>, I[K]['res']>] extends [true]
           ? never
           : K
         : never
@@ -326,12 +341,18 @@ export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Con
     },
 
     codeOf(key, error) {
-      // The envelope is the only source at runtime, and HARD RULE 5 says branch on
-      // `code` and nothing else.
+      /* TWO SHAPES, because the seam has two sides and a screen is written once for
+         both. In the mock the adapter rejects with a real AxiosError carrying
+         `.response.data`. After conversion the client keeps its axios.create, drops the
+         `adapter:` line and gains the product's `attachErrorInterceptor`, which rejects
+         with an `ApiError` that has NO `.response` at all — so reading only the envelope
+         returned undefined for every refusal the moment the mock became the product, and
+         every screen fell back to its generic message. HARD RULE 5 is unaffected: this
+         reads `code` and nothing else, from whichever shape arrived. */
       const envelope = (error as { response?: { data?: unknown } } | undefined)?.response?.data as
         | ErrorEnvelope
         | undefined;
-      const code = envelope?.code;
+      const code = apiErrorCode(error) ?? envelope?.code;
       if (typeof code !== 'string') return undefined as never;
 
       // FILTERED against the operation's own declared set, so `CodeOf<A, K> | undefined`

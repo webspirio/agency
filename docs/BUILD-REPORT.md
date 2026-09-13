@@ -370,8 +370,11 @@ That is `packages/dec/golden.json` asserting `dec === dec` for 675 cases, one le
 - **`contract-complete.mjs` harvested every `return {…}` in `routes.ts`.** Measured against the
   pre-anchor pair (check and template at `eb6259f`): with the `getParty` handler deleted and only
   `function decoy() { return { getParty: 1, overview: 2 }; }` appended, it exits **0** and prints
-  "6 operation(s) — each has a handler". Now anchored on `satisfies HandlersOf<…>`, which also makes
-  the annotated-factory spelling a LOUD red rather than a silent loss of exactness.
+  "6 operation(s) — each has a handler". Now anchored on `satisfies HandlersOf<…>`.
+  *(Corrected after an adversarial review: the anchor alone catches only an annotation that
+  REPLACES `satisfies`. An annotation ADDED beside it — one token, the shape an explicit-return-types
+  habit produces — kept the anchor count at 1 and passed, while doing the same damage. The annotation
+  is now detected directly, and `checks:bite`'s `annotated-factory` fixture holds it.)*
 - **A loop whose entire body was `continue`**, under a comment describing a check. Deleted; the
   direction it pretended to hold is now `toRoutes` throwing at runtime, which fires for the spread
   and the cast that tsc's excess-property check does not see.
@@ -401,12 +404,48 @@ That is `packages/dec/golden.json` asserting `dec === dec` for 675 cases, one le
   raw `httpClient` verb in a screen was red after that clause was deleted. `memo:drift` cannot catch
   this: it compares the registry to the memo, never either to reality.
 
+## What the Phase 1 review found, after the phase was green
+
+Four review dimensions, every finding independently attacked by a second agent told to refute it.
+17 findings, 3 confirmed. All three were real and all three are fixed; two had the right defect and
+the wrong mechanism, which is why the mechanism was measured rather than accepted.
+
+- **`Leaks` distributed over a union.** `DeepExact`'s object branch is a homomorphic mapped type, so
+  `[Wide | Narrow] extends [DeepExact<Wide, Res> | DeepExact<Narrow, Res>]` was satisfied by the
+  Narrow constituent — Wide being *assignable* to Narrow. It now compares constituent by
+  constituent. But the reviewer's scenario — a handler branching on a capability — is **not** what
+  that hole made green: measured, TypeScript subtype-reduces `Wide | Narrow` to `Narrow` at
+  inference, so no union ever reached the check. Both facts are now live controls: the union fix is
+  pinned at the sink with a pair of unrelated shapes, and the reduction is pinned where it happens,
+  at inference. A second permanent residual, recorded as such.
+- **A return-type annotation ADDED beside `satisfies` silently disabled the sink**, while the
+  anchor count stayed at 1 and the row stayed green. One token, and the shape an explicit-return-
+  types habit produces, in the one file a mock author edits for every endpoint. The annotation is
+  now detected directly and `checks:bite`'s `annotated-factory` fixture holds it. The check's own
+  comment and this report both claimed that spelling was already a loud red; both are corrected.
+- **`codeOf` could not read an `ApiError`.** It read `error.response.data` only, and the product's
+  `attachErrorInterceptor` throws an `ApiError` with no `.response` — so every refusal code became
+  `undefined` the moment a mock was converted, and every screen fell back to its generic message.
+  The defect predates Phase 1 (it landed in `1f6078f`); Phase 1 only added the declared-set filter
+  on top of it. `codeOf` now reads either shape, and the closed-set filter applies to both.
+
+Of the other 14, none survived refutation. Two were refuted for being already disclosed — in a
+registry `blindSpot` or in this report — which is the disclosure doing its job.
+
+**One environment finding, unrelated to the diff:** a measurement subagent left ten emitted
+CommonJS `.js` files beside their `.ts` sources in `packages/mock/src/`, from a bare `tsc` probe run
+against the checkout despite an explicit read-only instruction. `emit:clean` went red on exactly
+that — the row whose fixture was written the same afternoon — and the files were deleted by
+explicit path. This is the `node_modules` hazard of `docs/2026-09-13-contract-layer-execute.md` §4
+in a milder form: a subagent writing into a shared tree is the recurring failure mode, and a check
+that reads the filesystem is what catches it.
+
 ## Final state, measured at HEAD
 
 ```
 pnpm verify       13 PASSED, exit 0, not narrowed
 pnpm verify:full  16 PASSED, exit 0, not narrowed
-checks:bite        8 fixtures, every one red and naming its planted symbol
+checks:bite       11 fixtures, each green with no defect and exit 1 with one
 ```
 
 ## What is still open

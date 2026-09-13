@@ -109,12 +109,32 @@ export const handlerReturnsTooLittle: HandlersOf<Api, Io>['getParty'] = () => ({
 
 type StoredParty = Party & { internal_note: string };
 declare const wideRow: StoredParty;
+declare const narrowRow: Party;
 
 export function sinkRefusesALeak(): void {
   // @ts-expect-error the row carries `internal_note`, which getParty does not declare.
   const table: Route[] = toRoutes({ ...makeHandlers(), getParty: () => wideRow });
   void table;
 }
+
+/* ── A SECOND RESIDUAL. No directive — it compiles, and that is the point. ───
+ *
+ * The shape a capability check takes: one branch returns the wide row, the other the
+ * declared one. MEASURED 2026-09-13: TypeScript SUBTYPE-REDUCES
+ * `StoredParty | Party` to `Party` at inference, because StoredParty is a subtype of
+ * Party — so no union ever reaches the exactness check and the handler's return type
+ * is `Party` however it is examined. An adversarial review reported this as a union
+ * hole in the check; the union hole was real and is fixed, but it is not what makes
+ * THIS green, and no type-level scheme closes it.
+ *
+ * The wire golden is the ground truth here as it is for `annotatedWideningIsGreen` —
+ * with the same limit: it drives each operation once, with one actor, so it fingerprints
+ * whichever branch that actor takes.
+ */
+export const subtypeReducedBranchIsGreen: Route[] = toRoutes({
+  ...makeHandlers(),
+  getParty: (c) => (c.actor.role === 'admin' ? wideRow : narrowRow),
+});
 
 /* ── A SCREEN CANNOT GO AROUND THE CONTRACT ─────────────────────────────── *
  *

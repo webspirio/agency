@@ -204,10 +204,15 @@ of two that happen to agree.
   load-bearing: an annotation widens the
   map, `H` collapses into the declared type and the sink has nothing left to compare —
   `FactoryNotWidened` pins that, and `contract:complete` goes red if the anchor disappears.
-  **What it does not survive:** an annotated widening or a cast (`const out: Party = wide; return
-  out`) is green under `wire()`, under a brand and under `LeakFree` alike. Nothing type-level closes
-  that. `annotatedWideningIsGreen` in `templates/mock/src/api/drift.controls.ts` is that residual
-  written down as a live type, and **the wire golden is the ground truth for it.**
+  **What it does not survive — two things, both measured, both written down as live types in
+  `templates/mock/src/api/drift.controls.ts`:** an annotated widening or a cast
+  (`const out: Party = wide; return out`), which is green under `wire()`, under a brand and under
+  `LeakFree` alike; and a BRANCH (`c.actor.role === 'admin' ? wideRow : row`), because TypeScript
+  subtype-reduces `Wide | Narrow` to `Narrow` at inference, so no union ever reaches the check and
+  the handler's return type is the declared row however it is examined. A union that survives
+  reduction — two unrelated shapes — *is* caught, constituent by constituent. Nothing type-level
+  closes either residual, and **the wire golden is the ground truth for both**, with its own limit:
+  it drives each operation once, with one actor, so it fingerprints whichever branch that actor takes.
 - **`Awaited<R>` is the load-bearing token in `Leaks`, and `NoInfer` never was.** The claim that
   `NoInfer` earned its place twice did not reproduce — stripping both occurrences left every
   diagnostic byte-identical — and the word now appears nowhere in `packages/mock`. `Awaited` does
@@ -223,7 +228,10 @@ of two that happen to agree.
 `fail(key, status, code, …)` is keyed to the registry, so a code outside an operation's declared set
 is a compile error — the graft that turns an inert `codes` array into a mechanism. `codeOf(key, e)`
 returns that same closed set **or `undefined`**, filtered against `api[key].codes` at runtime as
-well as in the type, which is what HARD RULE 5 needs to be checkable. `undefined` is not a mystery:
+well as in the type, which is what HARD RULE 5 needs to be checkable. It reads the code from either
+side of the seam — the mock's `AxiosError.response.data`, or the `ApiError` the product's
+`attachErrorInterceptor` throws, which carries no `.response` at all — so a screen written once keeps
+branching after conversion instead of falling back to its generic message. `undefined` is not a mystery:
 it is what the product's `AllExceptionsFilter` sends for every transport failure, so the adapter
 mints no `NOT_FOUND`, the router no `BAD_REQUEST`, and `DomainError.code` is optional. Rendering the
 envelope's own message is not branching, so the rule holds.

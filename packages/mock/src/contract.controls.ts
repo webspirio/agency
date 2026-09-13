@@ -232,6 +232,65 @@ export type AsyncExactIsNotALeak = Expect<
 >;
 
 /**
+ * A UNION return is a leak if ANY constituent leaks. Found on 2026-09-13 by an
+ * adversarial review of Phase 1: `DeepExact`'s object branch is a homomorphic mapped
+ * type, so it distributed over a union argument, and
+ * `[Wide | Narrow] extends [DeepExact<Wide, Res> | DeepExact<Narrow, Res>]` was
+ * satisfied by the Narrow constituent — because Wide is ASSIGNABLE to Narrow. So
+ * `return c.actor.role === 'admin' ? { ...row, internalNote } : row` was green while
+ * the same wide row returned unconditionally was red.
+ */
+export type UnionReturnIsALeak = Expect<
+  Equal<Leaks<Api, Io, { getParty: () => StoredParty | Party }>, 'getParty'>
+>;
+
+/** …and a union of two EXACT shapes is still not a leak. */
+export type ExactUnionIsNotALeak = Expect<
+  Equal<Leaks<Api, Io, { getParty: () => Party | Party }>, never>
+>;
+
+declare const unrelated: { id: string; extra: number };
+declare const narrowParty: Party;
+declare const flag: boolean;
+
+/** And it bites at the SINK, not only when `Leaks` is applied by hand. */
+// @ts-expect-error one constituent carries `extra`, which getParty does not declare.
+export const leakUnion: Route[] = toRoutes({ ...ok, getParty: () => (flag ? unrelated : narrowParty) });
+
+/* ── A THIRD RESIDUAL, and it is NOT the union hole above ────────────────── *
+ *
+ * No directive: this compiles, and that is the point.
+ *
+ * MEASURED 2026-09-13. An adversarial review reported that a handler branching
+ * `c.actor.role === 'admin' ? wideRow : row` evades `Leaks`, and read it as the union
+ * hole. It is not. TypeScript SUBTYPE-REDUCES `StoredParty | Party` to `Party` at
+ * inference, because StoredParty is a subtype of Party — so no union ever reaches
+ * `Leaks`, and the handler's return type is `Party` however it is examined. The union
+ * fix above is real and necessary (an UNRELATED union survives reduction and is caught,
+ * measured), but it cannot close this: the type stopped describing the value before any
+ * of our machinery ran.
+ *
+ * This sits beside the annotated widening as a residual no type-level scheme closes,
+ * and the wire golden is the ground truth for both.
+ */
+export const subtypeReducedBranchIsGreen: Route[] = toRoutes({
+  ...ok,
+  getParty: () => (flag ? wideRow : narrowParty),
+});
+
+/**
+ * The reduction itself, pinned where it actually happens — at INFERENCE. A written
+ * `StoredParty | Party` is not reduced (measured: `Equal<StoredParty | Party, Party>`
+ * is false), which is exactly why `UnionReturnIsALeak` above can be written at all.
+ * If TypeScript ever stops reducing the inferred branch, this goes red and the residual
+ * above has closed itself.
+ */
+const branchedHandler = () => (flag ? wideRow : narrowParty);
+export type BranchInfersAsTheDeclaredRow = Expect<
+  Equal<ReturnType<typeof branchedHandler>, Party>
+>;
+
+/**
  * `Leaks` is about EXCESS only, and deliberately. A handler returning LESS than
  * declared is not a leak — it is refused one step earlier, by `toRoutes`'s constraint
  * `H extends HandlersOf<A, I>`, which is what the next control asserts.

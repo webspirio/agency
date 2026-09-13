@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import axios, { AxiosError, type AxiosInstance } from 'axios';
 import { mockAdapter } from './adapter';
 import { compile } from './router';
+import { ApiError } from './api-error';
 import { asDecimal2, type Decimal2, type Paginated } from './types';
 import { createStore } from './store';
 import { MAX_LIMIT, pageQuery } from './query';
@@ -314,6 +315,26 @@ describe('codeOf returns the declared set, and nothing else', () => {
       call(client(), 'getParty', { params: { id: 'party-999999' }, body: undefined }),
     );
     expect(codeOf('getParty', err)).toBe('PARTY_NOT_FOUND');
+  });
+
+  /**
+   * THE CONVERSION CASE, and the one that made this worth a test. After conversion the
+   * client keeps its axios.create, drops the `adapter:` line and gains the product's
+   * `attachErrorInterceptor` — which rejects with an `ApiError` that has NO `.response`.
+   * A codeOf that reads only `error.response.data` therefore returns undefined for every
+   * refusal the moment the mock becomes the product, and every screen falls back to its
+   * generic message. Found by an adversarial review on 2026-09-13; the defect predates
+   * Phase 1 (it landed in 1f6078f) and Phase 1 only added the declared-set filter on top.
+   */
+  it('reads a code off an ApiError, which carries no `.response` at all', () => {
+    const err = new ApiError(409, 'Taken', undefined, 'PARTY_NAME_TAKEN');
+    expect(err).not.toHaveProperty('response');
+    expect(codeOf('createParty', err)).toBe('PARTY_NAME_TAKEN');
+  });
+
+  it('still closes the set against an ApiError carrying an undeclared code', () => {
+    const err = new ApiError(409, 'nope', undefined, 'ANYTHING');
+    expect(codeOf('createParty', err)).toBeUndefined();
   });
 
   it('puts no `code` key on the wire for a transport failure', async () => {

@@ -96,6 +96,23 @@ const DEFECTS = {
     if (!existsSync(impl)) throw new Error('emit-in-src: contract.ts moved; update this defect');
     writeFileSync(path.join(path.dirname(impl), 'contract.d.ts'), 'export declare const x: number;\n');
   },
+  /**
+   * The spelling that slips the anchor: a return-type ANNOTATION added while the
+   * `satisfies` clause stays. The annotation widens the factory, `H` collapses into the
+   * declared type and the exactness check at toRoutes stops comparing anything — while
+   * `anchors` is still 1, so the check was green. Found by an adversarial review of
+   * Phase 1 on 2026-09-13.
+   */
+  'annotated-factory': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'routes.ts');
+    const src = readFileSync(file, 'utf8');
+    const annotated = src.replace(
+      'export function makeHandlers() {',
+      'export function makeHandlers(): HandlersOf<Api, Io> {',
+    );
+    if (annotated === src) throw new Error('annotated-factory: the factory signature moved');
+    writeFileSync(file, annotated);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -176,6 +193,11 @@ export const FIXTURES = [
     id: 'emit-in-src',
     check: 'scripts/verify/checks/emit-clean.mjs',
     expect: 'templates/mock/src/api/contract.d.ts',
+  },
+  {
+    id: 'annotated-factory',
+    check: 'scripts/verify/checks/contract-complete.mjs',
+    expect: 'return-type annotation',
   },
 ];
 
