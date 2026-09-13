@@ -277,6 +277,22 @@ const REAL = [
       'established by the `build` row scaffolding and typechecking a real mock.',
   },
   {
+    id: 'checks:bite',
+    tier: 'fast',
+    cmd: 'node scripts/verify/checks/checks-bite.mjs',
+    proves:
+      'Each check named in the fixture table exits non-zero, and mentions the planted symbol, when ' +
+      'run against a tree derived from templates/mock with exactly ONE defect planted in it. Every ' +
+      'other row in this table asserts that something is true when the check passes; this is the ' +
+      'only row that establishes the check could ever have failed.',
+    blindSpot:
+      'It proves a check is red on THE ONE defect its fixture plants, never that the check is red on ' +
+      'every defect of that class, and a check with no fixture here is entirely unexamined. The ' +
+      'fixture derives from templates/mock only, so nothing is established about mocks/<slug>. It ' +
+      'matches a substring of the output, so a check that goes red for an unrelated reason while ' +
+      'happening to print that substring is counted as biting.',
+  },
+  {
     id: 'template:render',
     tier: 'full',
     cmd: 'node scripts/verify/checks/template-render.mjs',
