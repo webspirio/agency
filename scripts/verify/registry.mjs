@@ -296,6 +296,29 @@ const REAL = [
       'established by the `build` row scaffolding and typechecking a real mock.',
   },
   {
+    id: 'seam:settle',
+    tier: 'fast',
+    skipExit: 2,
+    cmd: 'node scripts/verify/checks/seam-settle.mjs',
+    proves:
+      'node_modules/axios/lib/core/dispatchRequest.js contains no reference to `settle` — the module ' +
+      'where validateStatus lives, and which each BUILT-IN adapter calls itself. So a CUSTOM adapter ' +
+      'owns status handling, which is why the mock adapter must throw on a refusal: one that ' +
+      'RESOLVES a 409 hands it to TanStack Query as a success, the error branch never runs, the ' +
+      'screen renders undefined, and nothing is red. Verified in axios 1.20.0 and carried as a ' +
+      'hand-run grep in CLAUDE.md until this row existed. SKIPPED, not FAILED, when axios is absent: ' +
+      'a fresh checkout before pnpm install looks exactly like that, and reporting FAILED would ' +
+      'assert something about axios that was never read.',
+    blindSpot:
+      'It counts ONE token in ONE file. It does not read what dispatchRequest does with the value, ' +
+      'so a refactor that moves settle into a differently named module, or inlines its logic, is ' +
+      'invisible — the row would stay green while the premise it guards had changed. It also says ' +
+      'nothing about what the MOCK adapter does with a status: that the adapter throws on a ' +
+      'refusal is asserted by adapter.test.ts and by the wire golden\'s refusal drives, not here. ' +
+      'And it reads the axios INSTALLED IN THIS TREE, so it is a verdict about this machine\'s ' +
+      'node_modules rather than about the version range package.json declares.',
+  },
+  {
     id: 'checks:bite',
     tier: 'fast',
     cmd: 'node scripts/verify/checks/checks-bite.mjs',

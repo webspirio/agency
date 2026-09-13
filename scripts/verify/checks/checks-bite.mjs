@@ -193,6 +193,19 @@ const DEFECTS = {
     if (bad === src) throw new Error('refusal-status-2xx: the getParty codes object moved');
     writeFileSync(file, bad);
   },
+  /**
+   * An axios whose dispatchRequest calls `settle` itself. If that ever became true,
+   * the built-in status handling would run for a custom adapter too and the mock
+   * adapter's throwing branch would need re-examining — the seam's single load-bearing
+   * fact, and prose with an instruction to run a grep until this row existed.
+   */
+  'axios-settles-itself': (root) => {
+    const file = path.join(root, 'node_modules', 'axios', 'lib', 'core', 'dispatchRequest.js');
+    const src = readFileSync(file, 'utf8');
+    const settling = src.replace('return response;', 'return settle(config, response);');
+    if (settling === src) throw new Error('axios-settles-itself: the setup shape moved');
+    writeFileSync(file, settling);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -211,6 +224,22 @@ const DEFECTS = {
  * CONTROL RUN below proves the setup alone is green.
  */
 const SETUPS = {
+  /**
+   * A derived tree is templates/ and nothing else, so `seam:settle` SKIPs there —
+   * correctly, and the control run refuses to certify a bite against a SKIP. The
+   * setup writes a CLEAN dispatchRequest, the one axios 1.20.0 actually ships; the
+   * defect then makes it call `settle`. The single edit is that call.
+   */
+  'axios-settles-itself': (root) => {
+    const dir = path.join(root, 'node_modules', 'axios', 'lib', 'core');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      path.join(dir, 'dispatchRequest.js'),
+      'export default function dispatchRequest(config) {\n' +
+        '  return adapter(config).then(function onAdapterResolution(response) { return response; });\n' +
+        '}\n',
+    );
+  },
   'floor-above-every-runtime': (root) => {
     writeFileSync(
       path.join(root, 'package.json'),
@@ -293,6 +322,11 @@ export const FIXTURES = [
     id: 'refusal-status-2xx',
     check: 'scripts/verify/checks/contract-complete.mjs',
     expect: 'not a refusal status',
+  },
+  {
+    id: 'axios-settles-itself',
+    check: 'scripts/verify/checks/seam-settle.mjs',
+    expect: 'reference(s) to `settle`',
   },
   { id: 'stale-unreached', check: 'scripts/verify/checks/api-bound.mjs', expect: 'but IS reached' },
   {
