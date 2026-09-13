@@ -148,7 +148,7 @@ function fail(
   } catch {
     // The ctx that poisoned the first attempt cannot be reused, so the fallback
     // envelope is built and serialised from scratch.
-    const internal = new DomainError(500, 'INTERNAL', 'Internal server error');
+    const internal = new DomainError(500, undefined, 'Internal server error');
     return { status: 500, data: serialise(envelopeOf(internal, path, now, requestId)) };
   }
 }
@@ -186,7 +186,7 @@ export function mockAdapter(routes: Route[], opts: MockAdapterOptions): AxiosAda
       // another client's product. (compile() refuses a table where declaration
       // order could shadow a gated route.)
       if (!hit || (hit.route.caps?.some((c) => !opts.caps.has(c)) ?? false)) {
-        throw new DomainError(404, 'NOT_FOUND', 'Not found');
+        throw new DomainError(404, undefined, 'Not found');
       }
 
       const ctx: Ctx = {
@@ -206,7 +206,7 @@ export function mockAdapter(routes: Route[], opts: MockAdapterOptions): AxiosAda
         // Sanitised on the wire, recorded for the developer: a 500 with no
         // stack anywhere is the symptom this package exists to prevent.
         console.error('[mock] unhandled handler error', e);
-        domain = new DomainError(500, 'INTERNAL', 'Internal server error');
+        domain = new DomainError(500, undefined, 'Internal server error');
         cause = e;
       }
       const out = fail(domain, path, now, requestId);

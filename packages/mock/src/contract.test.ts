@@ -245,6 +245,65 @@ describe('the write verbs, which the lab never exercised', () => {
   });
 });
 
+/**
+ * MEASURED 2026-09-13: the adapter minted NOT_FOUND and INTERNAL, the router
+ * BAD_REQUEST, and no operation declares any of them. So
+ * `const code: undefined = codeOf('listParties', err)` typechecked and equalled
+ * 'NOT_FOUND' at runtime — the mock was MORE informative than the product, and a
+ * screen branching on it worked in the demo and silently stopped after conversion.
+ * reference/contract/all-exceptions.filter.ts emits a `code` only from the extras of
+ * an HttpException constructed with an object; a Nest 404, a 500 and a ValidationPipe
+ * 400 all carry none.
+ */
+describe('codeOf returns the declared set, and nothing else', () => {
+  const rejection = async (run: () => Promise<unknown>): Promise<AxiosError> =>
+    run().then(
+      () => {
+        throw new Error('expected a rejection, got a resolved response');
+      },
+      (e: unknown) => e as AxiosError,
+    );
+
+  it('returns undefined for a capability-gated 404', async () => {
+    const err = await rejection(() =>
+      call(client([]), 'createParty', { params: {}, body: { name: 'X', balance: '1.00' } }),
+    );
+    expect(err.response?.status).toBe(404);
+    expect(codeOf('createParty', err)).toBeUndefined();
+  });
+
+  it('returns undefined for an unmatched route', async () => {
+    const err = await rejection(() => rawClient().request({ method: 'GET', url: '/no-such-path' }));
+    expect(err.response?.status).toBe(404);
+    expect(codeOf('listParties', err)).toBeUndefined();
+  });
+
+  it('returns undefined for a malformed escape, which express answers 400 with no code', async () => {
+    const err = await rejection(() => rawClient().request({ method: 'GET', url: '/parties/%E0%A4%A' }));
+    expect(err.response?.status).toBe(400);
+    expect(codeOf('getParty', err)).toBeUndefined();
+  });
+
+  it('returns undefined for a code the operation does not declare', () => {
+    // A stray `new DomainError(409, 'ANYTHING')` in a handler must not widen what a
+    // screen sees. The type says the set is closed; this makes it closed at runtime too.
+    const stray = { response: { data: { statusCode: 409, code: 'ANYTHING' } } };
+    expect(codeOf('listParties', stray)).toBeUndefined();
+  });
+
+  it('still returns a code the operation DOES declare', async () => {
+    const err = await rejection(() =>
+      call(client(), 'getParty', { params: { id: 'party-999999' }, body: undefined }),
+    );
+    expect(codeOf('getParty', err)).toBe('PARTY_NOT_FOUND');
+  });
+
+  it('puts no `code` key on the wire for a transport failure', async () => {
+    const err = await rejection(() => rawClient().request({ method: 'GET', url: '/no-such-path' }));
+    expect(err.response?.data).not.toHaveProperty('code');
+  });
+});
+
 describe('capabilities gate the route, not merely the menu', () => {
   it('404s a create for a profile without the capability', async () => {
     const err = await call(client([]), 'createParty', {

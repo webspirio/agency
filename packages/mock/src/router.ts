@@ -134,7 +134,7 @@ export function compile(routes: Route[]) {
             // express answers a malformed escape with a 400, not a 500, and
             // never with the raw segment — that would invent a param value no
             // server would produce.
-            throw new DomainError(400, 'BAD_REQUEST', 'Malformed URL');
+            throw new DomainError(400, undefined, 'Malformed URL');
           }
         });
         return { route: c.route, params: Object.fromEntries(params) };

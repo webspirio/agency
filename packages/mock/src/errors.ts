@@ -24,7 +24,15 @@ export class DomainError extends Error {
 
   constructor(
     readonly status: number,
-    readonly code: string,
+    /**
+     * OPTIONAL, and the option is the point. A transport failure — an unmatched
+     * route, a malformed escape, an unhandled throw — carries NO code, because
+     * reference/contract/all-exceptions.filter.ts emits one only from the extras of
+     * an HttpException constructed with an object. A mock that invents NOT_FOUND
+     * here is more informative than the product it stands in for, and a screen that
+     * branches on it works in the demo and silently stops after conversion.
+     */
+    readonly code: string | undefined,
     message: string | string[],
     readonly ctx?: Record<string, unknown>,
   ) {
@@ -73,6 +81,10 @@ function phraseOf(status: number): string {
 }
 
 /**
+ * `code` and `requestId` are both written AFTER the context spread and only when
+ * present — a ctx field of either name cannot forge one, and an absent one leaves
+ * no key at all rather than an `undefined`-valued key JSON would drop anyway.
+ *
  * `requestId` is the correlation id the real filter stamps on every error
  * (`all-exceptions.filter.ts` sets it from `request.id`). The adapter passes a
  * store-assigned one per request; it is written LAST so a ctx field of the same
@@ -91,10 +103,14 @@ export function envelopeOf(
     statusCode: e.status,
     error: phraseOf(e.status),
     message: e.messages,
-    code: e.code,
     path,
     timestamp: now,
   };
+  // The `delete` is not redundant with the assignment: without it a ctx field named
+  // `code` would survive the spread and put a code on the wire that no operation
+  // declared and no `fail()` ever raised.
+  if (e.code === undefined) delete envelope.code;
+  else envelope.code = e.code;
   if (requestId !== undefined) envelope.requestId = requestId;
   return envelope;
 }

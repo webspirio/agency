@@ -82,3 +82,30 @@ describe('requestId', () => {
     expect('requestId' in env).toBe(false);
   });
 });
+
+/**
+ * A transport failure carries NO code, because
+ * reference/contract/all-exceptions.filter.ts emits one only from the extras of an
+ * HttpException constructed with an object. The mock minted NOT_FOUND, INTERNAL and
+ * BAD_REQUEST until 2026-09-13, which made it MORE informative than the product it
+ * stands in for — a screen branching on one worked in the demo and stopped silently
+ * after conversion.
+ */
+describe('code', () => {
+  it('is absent — not undefined-valued — when the error carries none', () => {
+    const env = envelopeOf(new DomainError(404, undefined, 'Not found'), '/p', 'T');
+    expect('code' in env).toBe(false);
+  });
+
+  it('cannot be forged by a ctx field of the same name', () => {
+    // Without the explicit delete this is the ONE way a code the registry never
+    // declared reaches a screen: ctx is spread first, so it would simply survive.
+    const e = new DomainError(500, undefined, 'boom', { code: 'FORGED' });
+    expect('code' in envelopeOf(e, '/p', 'T')).toBe(false);
+  });
+
+  it('still wins over a ctx field when the error DOES carry one', () => {
+    const e = new DomainError(409, 'PARTY_NAME_TAKEN', 'taken', { code: 'FORGED' });
+    expect(envelopeOf(e, '/p', 'T').code).toBe('PARTY_NAME_TAKEN');
+  });
+});

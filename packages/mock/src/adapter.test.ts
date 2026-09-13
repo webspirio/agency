@@ -101,7 +101,11 @@ describe('capabilities gate the ROUTE, not just the menu', () => {
     const c = client([{ method: 'GET', path: '/fleet/pnl', caps: ['fleet'], handler: () => ({ secret: 1 }) }], []);
     const err = await c.get('/fleet/pnl').then(() => null, (e: AxiosError) => e);
     expect(err?.response?.status).toBe(404);
-    expect(err?.response?.data).toMatchObject({ code: 'NOT_FOUND' });
+    // NO code. A gated route is a transport 404, and the product's exception filter
+    // emits no code on one — so a screen that branched on NOT_FOUND here would work
+    // in the demo and silently stop after conversion.
+    expect(err?.response?.data).toMatchObject({ statusCode: 404 });
+    expect(err?.response?.data).not.toHaveProperty('code');
   });
 
   it('serves the route when the capability is present', async () => {
@@ -189,7 +193,9 @@ describe('serialisation happens inside the guard, so it can never escape as a ra
     const err = await c.get('/x').then(() => null, (e: unknown) => e);
     expect(err).toBeInstanceOf(AxiosError);
     expect((err as AxiosError).response?.status).toBe(500);
-    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 500, code: 'INTERNAL' });
+    // NO code: the filter's non-HttpException path emits none.
+    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 500 });
+    expect((err as AxiosError).response?.data).not.toHaveProperty('code');
   });
 
   it('turns a circular payload into a 500 envelope', async () => {
@@ -206,7 +212,9 @@ describe('serialisation happens inside the guard, so it can never escape as a ra
     const err = await c.get('/x').then(() => null, (e: unknown) => e);
     expect(err).toBeInstanceOf(AxiosError);
     expect((err as AxiosError).response?.status).toBe(500);
-    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 500, code: 'INTERNAL' });
+    // NO code, AND the original 409's LOGIN_TAKEN must not survive the re-serialisation.
+    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 500 });
+    expect((err as AxiosError).response?.data).not.toHaveProperty('code');
   });
 });
 
@@ -258,7 +266,8 @@ describe('validateStatus is the caller\'s, exactly as settle() reads it', () => 
     const c = client([]);
     const res = await c.get('/nope', { validateStatus: () => true });
     expect(res.status).toBe(404);
-    expect(res.data).toMatchObject({ code: 'NOT_FOUND' });
+    expect(res.data).toMatchObject({ statusCode: 404 });
+    expect(res.data).not.toHaveProperty('code');
   });
 
   it('rejects a 3xx under the default validateStatus, as every built-in adapter does', async () => {
@@ -419,7 +428,9 @@ describe('a malformed url is a 400 envelope, not a raw URIError', () => {
     const err = await c.get('/suppliers/100%').then(() => null, (e: unknown) => e);
     expect(err).toBeInstanceOf(AxiosError);
     expect((err as AxiosError).response?.status).toBe(400);
-    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 400, code: 'BAD_REQUEST' });
+    // express and Nest answer a malformed escape with a 400 carrying no code.
+    expect((err as AxiosError).response?.data).toMatchObject({ statusCode: 400 });
+    expect((err as AxiosError).response?.data).not.toHaveProperty('code');
   });
 });
 

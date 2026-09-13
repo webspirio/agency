@@ -86,6 +86,8 @@ describe('match', () => {
     const err = (() => { try { t.match('GET', '/suppliers/100%'); return null; } catch (e) { return e; } })();
     expect(err).toBeInstanceOf(DomainError);
     expect((err as DomainError).status).toBe(400);
-    expect((err as DomainError).code).toBe('BAD_REQUEST');
+    // NO code. express answers a malformed escape with a bare 400; inventing
+    // BAD_REQUEST here made the mock more informative than the product.
+    expect((err as DomainError).code).toBeUndefined();
   });
 });

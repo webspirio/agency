@@ -325,14 +325,29 @@ export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Con
       throw new DomainError(status, String(code), message, ctx);
     },
 
-    codeOf(_key, error) {
-      // The key exists to CLOSE the return type. At runtime the envelope is the
-      // only source, and HARD RULE 5 says branch on `code` and nothing else.
+    codeOf(key, error) {
+      // The envelope is the only source at runtime, and HARD RULE 5 says branch on
+      // `code` and nothing else.
       const envelope = (error as { response?: { data?: unknown } } | undefined)?.response?.data as
         | ErrorEnvelope
         | undefined;
       const code = envelope?.code;
-      return (typeof code === 'string' ? code : undefined) as never;
+      if (typeof code !== 'string') return undefined as never;
+
+      // FILTERED against the operation's own declared set, so `CodeOf<A, K> | undefined`
+      // is true by construction rather than by discipline. Without this a stray
+      // `new DomainError(409, 'ANYTHING')` in one handler widens what every screen
+      // reading that operation can see, while the type keeps promising it cannot.
+      const declared = (api[key] as OperationSpec).codes as readonly string[];
+      if (!declared.includes(code)) {
+        console.error(
+          `[mock] ${String(key)} produced the code '${code}', which its registry entry does not ` +
+            `declare — the screen is being told undefined, because that is what the product's ` +
+            `exception filter would send.`,
+        );
+        return undefined as never;
+      }
+      return code as never;
     },
 
     toRoutes(handlers) {
