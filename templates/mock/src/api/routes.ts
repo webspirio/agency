@@ -1,5 +1,5 @@
 /**
- * THE IMPLEMENTATION SIDE. `HandlersOf<Api, Io>` is a mapped type over the
+ * THE IMPLEMENTATION SIDE. `HandlersOf<Api>` is a mapped type over the
  * contract, so a declared operation with no handler is an error naming the
  * missing key, and a handler returning the wrong shape is an error naming the
  * missing fields.
@@ -18,7 +18,7 @@ import {
   type HandlersOf,
   type Route,
 } from '@agency/mock';
-import { fail, toRoutes, type Api, type Io } from './contract';
+import { fail, toRoutes, type Api } from './contract';
 import { overview } from '../domain/calc';
 import { blankName, duplicateName, invalidBalance, type PartyNameRow } from '../domain/rules';
 import { buildSeed } from '../domain/seed';
@@ -26,7 +26,7 @@ import type { Party } from '../domain/types';
 
 /**
  * NO RETURN-TYPE ANNOTATION, and the literal below ends in `satisfies`. That is
- * load-bearing: an annotation widens the factory's return to `HandlersOf<Api, Io>`,
+ * load-bearing: an annotation widens the factory's return to `HandlersOf<Api>`,
  * `H` collapses into the declared type, and the exactness check at `toRoutes`
  * has nothing left to compare. `satisfies` keeps the actual shape AND still
  * refuses a missing operation or a return that is too narrow.
@@ -59,20 +59,20 @@ export function makeHandlers() {
 
     getParty: (c) => {
       const row = parties.get(c.params.id);
-      if (!row) fail('getParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
+      if (!row) fail('getParty', 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
       // A plain return: this body IS the Nest service body it becomes.
       return row;
     },
 
     createParty: (c) => {
       const blank = blankName(c.body.name);
-      if (blank) fail('createParty', 400, blank.code, blank.message, blank.ctx);
+      if (blank) fail('createParty', blank.code, blank.message, blank.ctx);
 
       const bad = invalidBalance(c.body.balance);
-      if (bad) fail('createParty', 400, bad.code, bad.message, bad.ctx);
+      if (bad) fail('createParty', bad.code, bad.message, bad.ctx);
 
       const taken = duplicateName(book(), c.body.name);
-      if (taken) fail('createParty', 409, taken.code, taken.message, taken.ctx);
+      if (taken) fail('createParty', taken.code, taken.message, taken.ctx);
 
       // The handler brands the money, not the store: `balance` arrives off the
       // wire as a plain string and `asDecimal2` ASSERTS rather than coerces.
@@ -89,19 +89,19 @@ export function makeHandlers() {
 
     renameParty: (c) => {
       if (!parties.get(c.params.id)) {
-        fail('renameParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
+        fail('renameParty', 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
       }
 
       const blank = blankName(c.body.name);
-      if (blank) fail('renameParty', 400, blank.code, blank.message, blank.ctx);
+      if (blank) fail('renameParty', blank.code, blank.message, blank.ctx);
 
       // `exceptId` is what lets a row keep its own name. Without it the first
       // rename succeeds and every later save of the same row is refused.
       const taken = duplicateName(book(), c.body.name, c.params.id);
-      if (taken) fail('renameParty', 409, taken.code, taken.message, taken.ctx);
+      if (taken) fail('renameParty', taken.code, taken.message, taken.ctx);
 
       const updated = parties.update(c.params.id, { name: c.body.name });
-      if (!updated) fail('renameParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
+      if (!updated) fail('renameParty', 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
       return updated;
     },
 
@@ -109,10 +109,10 @@ export function makeHandlers() {
      *  JSON `null` on a 204, which no Nest 204 ever carries. */
     removeParty: (c) => {
       if (!parties.remove(c.params.id)) {
-        fail('removeParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
+        fail('removeParty', 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
       }
     },
-  } satisfies HandlersOf<Api, Io>;
+  } satisfies HandlersOf<Api>;
 }
 
 /**

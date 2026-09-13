@@ -18,8 +18,18 @@
  * Replace these when you replace the domain. Do not delete the file: it is the
  * only thing standing between "the contract exists" and "the contract binds".
  */
-import type { Equal, Expect, HandlersOf, ParamsOf, Route, Transport } from '@agency/mock';
-import { call, fail, toRoutes, type Api, type Io } from './contract';
+import type {
+  CodeOf,
+  Equal,
+  Expect,
+  HandlersOf,
+  ParamsOf,
+  ReqOf,
+  ResOf,
+  Route,
+  Transport,
+} from '@agency/mock';
+import { call, fail, toRoutes, type Api } from './contract';
 import { httpClient } from './client';
 import { makeHandlers } from './routes';
 import type { Party } from '../domain/types';
@@ -31,17 +41,17 @@ export type ParamsComeFromThePath = Expect<Equal<ParamsOf<Api['getParty']['path'
 
 /** Error codes are a closed union per operation, never bare `string`. */
 export type CodesAreClosed = Expect<
-  Equal<Api['removeParty']['codes'][number], 'PARTY_NOT_FOUND'>
+  Equal<CodeOf<Api, 'removeParty'>, 'PARTY_NOT_FOUND'>
 >;
 
 /** An operation that declares no codes may refuse with NOTHING. */
-export type NoCodesMeansNever = Expect<Equal<Api['listParties']['codes'][number], never>>;
+export type NoCodesMeansNever = Expect<Equal<CodeOf<Api, 'listParties'>, never>>;
 
 /** The declared request body reaches the handler as a real type, not `unknown`. */
-export type BodyIsTyped = Expect<Equal<Io['createParty']['req']['name'], string>>;
+export type BodyIsTyped = Expect<Equal<ReqOf<Api, 'createParty'>['name'], string>>;
 
 /** A 204 operation declares no body at all. */
-export type DeleteReturnsNothing = Expect<Equal<Io['removeParty']['res'], void>>;
+export type DeleteReturnsNothing = Expect<Equal<ResOf<Api, 'removeParty'>, void>>;
 
 /* ── WHAT IT REFUSES. Each line must stay an error. ─────────────────────── */
 
@@ -85,18 +95,18 @@ export function callRefusals(http: Transport): void {
 
 export function codeRefusals(): void {
   // @ts-expect-error PARTY_NAME_TAKEN is not in getParty's declared code set.
-  fail('getParty', 409, 'PARTY_NAME_TAKEN', 'no');
+  fail('getParty', 'PARTY_NAME_TAKEN', 'no');
 
   // @ts-expect-error an undeclared code — the graft that turns inert `codes` into a mechanism.
-  fail('getParty', 404, 'PARTY_MISPELLED', 'no');
+  fail('getParty', 'PARTY_MISPELLED', 'no');
 
   // @ts-expect-error listParties declares NO codes, so every code is refused here.
-  fail('listParties', 500, 'ANYTHING', 'no');
+  fail('listParties', 'ANYTHING', 'no');
 }
 
 /** A handler must return everything the contract declares. */
 // @ts-expect-error this one returns only `id`.
-export const handlerReturnsTooLittle: HandlersOf<Api, Io>['getParty'] = () => ({ id: 'party-000001' });
+export const handlerReturnsTooLittle: HandlersOf<Api>['getParty'] = () => ({ id: 'party-000001' });
 
 /* ── EXACTNESS: a wider row may not reach the client ────────────────────── *
  *
@@ -170,7 +180,7 @@ export function transportIsOpaque(): void {
  * If this line ever goes RED, the design has gained something no measurement here
  * found, and both the memo and the registry rows have to be rewritten.
  */
-export const annotatedWideningIsGreen: HandlersOf<Api, Io>['getParty'] = () => {
+export const annotatedWideningIsGreen: HandlersOf<Api>['getParty'] = () => {
   const out: Party = wideRow; // assignability, not exactness
   return out;
 };
