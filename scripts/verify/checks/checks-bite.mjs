@@ -12,7 +12,7 @@
  * Usage:
  *   node scripts/verify/checks/checks-bite.mjs [--only <fixture-id>]
  */
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -29,6 +29,27 @@ const DEFECTS = {
       throw new Error('handler-removed: the getParty handler shape moved; update this defect');
     }
     writeFileSync(file, cut);
+  },
+  /**
+   * The shape intent.md actually measured: one contract parses, a SECOND mock has
+   * none. `contract-deleted` alone cannot reproduce it — removing the only contract
+   * in the tree leaves `checked === 0`, which the empty-root guard already catches,
+   * so the check goes red down a path that has nothing to do with the hole.
+   */
+  'mock-without-contract': (root) => {
+    const pages = path.join(root, 'mocks', 'silent', 'src', 'pages');
+    mkdirSync(pages, { recursive: true });
+    writeFileSync(
+      path.join(pages, 'SilentPage.tsx'),
+      "import { httpClient } from '../api/client';\n" +
+        'export function SilentPage() {\n' +
+        "  void httpClient.get('/parties');\n" +
+        '  return null;\n' +
+        '}\n',
+    );
+  },
+  'contract-deleted': (root) => {
+    rmSync(path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts'));
   },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
@@ -50,6 +71,26 @@ export const FIXTURES = [
     check: 'scripts/verify/checks/contract-controls.mjs',
     expect: 'tautolog',
   },
+  {
+    id: 'contract-deleted',
+    check: 'scripts/verify/checks/api-bound.mjs',
+    expect: 'no src/api/contract.ts',
+  },
+  {
+    id: 'contract-deleted',
+    check: 'scripts/verify/checks/contract-complete.mjs',
+    expect: 'no src/api/contract.ts',
+  },
+  {
+    id: 'mock-without-contract',
+    check: 'scripts/verify/checks/api-bound.mjs',
+    expect: 'no src/api/contract.ts',
+  },
+  {
+    id: 'mock-without-contract',
+    check: 'scripts/verify/checks/contract-complete.mjs',
+    expect: 'no src/api/contract.ts',
+  },
 ];
 
 function run(cmd, args, cwd) {
@@ -66,7 +107,9 @@ export async function runFixture(fixture, opts = {}) {
   const plant = DEFECTS[fixture.id];
   if (!plant) throw new Error(`checks:bite: unknown defect '${fixture.id}'`);
 
-  const dir = mkdtempSync(path.join(tmpdir(), `bite-${fixture.id}-`));
+  const dir = mkdtempSync(
+    path.join(tmpdir(), `bite-${fixture.id}-${path.basename(fixture.check, '.mjs')}-`),
+  );
   try {
     cpSync(path.join(ROOT, 'templates'), path.join(dir, 'templates'), { recursive: true });
     plant(dir);
@@ -88,7 +131,10 @@ export async function runFixture(fixture, opts = {}) {
           `it may be red for an unrelated reason:\n${out}`,
       };
     }
-    return { ok: true, report: `${fixture.id}: red, and names '${fixture.expect}'` };
+    return {
+      ok: true,
+      report: `${fixture.id} -> ${path.basename(fixture.check)}: red, and names '${fixture.expect}'`,
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

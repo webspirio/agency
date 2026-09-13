@@ -122,21 +122,34 @@ function callsIn(file) {
   return { named, raw };
 }
 
+/**
+ * @returns {{parsed: boolean, operations: number}} `parsed` is whether a registry was
+ * actually READ here, not whether a directory was visited. The two were the same number
+ * until 2026-09-13, when a contract-less mock counted itself as checked and pushed no
+ * problem — so a fabricated root with one real contract and one hoisted one exited 0
+ * from this check reporting "2 contract(s)".
+ */
 function checkMock(label, dir, problems) {
   const contractFile = path.join(dir, 'src', 'api', 'contract.ts');
-  if (!existsSync(contractFile)) return 0;
+  if (!existsSync(contractFile)) {
+    problems.push(
+      `${label}: no src/api/contract.ts — every mock owns its registry (CLAUDE.md decision 4); ` +
+        `a hoisted or missing contract cannot be bound`,
+    );
+    return { parsed: false, operations: 0 };
+  }
 
   const declared = operationsOf(contractFile);
   if (declared.length === 0) {
     problems.push(`${label}: src/api/contract.ts declares no operations — the registry did not parse`);
-    return 0;
+    return { parsed: false, operations: 0 };
   }
 
   const pagesDir = path.join(dir, 'src', 'pages');
   const screens = walk(pagesDir, /\.tsx?$/).filter((f) => !/\.test\.tsx?$/.test(f));
   if (screens.length === 0) {
     problems.push(`${label}: no screens under src/pages, so no operation can be reached`);
-    return 0;
+    return { parsed: true, operations: declared.length };
   }
 
   const reached = new Set();
@@ -156,7 +169,7 @@ function checkMock(label, dir, problems) {
       problems.push(`${label}: operation '${key}' is declared but no screen calls it — a handler written for nothing`);
     }
   }
-  return declared.length;
+  return { parsed: true, operations: declared.length };
 }
 
 function main() {
@@ -166,30 +179,38 @@ function main() {
   let operations = 0;
   let checked = 0;
 
+  // The DIRECTORY is what makes a mock this row's business; the contract is what it
+  // must then have. Guarding on the contract instead is how a mock without one made
+  // itself invisible rather than red.
   const templateDir = path.join(root, 'templates', 'mock');
-  if (existsSync(path.join(templateDir, 'src', 'api', 'contract.ts'))) {
-    operations += checkMock('templates/mock', templateDir, problems);
-    checked += 1;
-  }
-
   const mocksDir = path.join(root, 'mocks');
+  const targets = existsSync(templateDir) ? [['templates/mock', templateDir]] : [];
   let slugs = [];
   try { slugs = readdirSync(mocksDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { /* no mocks yet */ }
   for (const slug of slugs) {
     if (TRANSIENT.test(slug)) continue;
-    operations += checkMock(`mocks/${slug}`, path.join(mocksDir, slug), problems);
-    checked += 1;
+    targets.push([`mocks/${slug}`, path.join(mocksDir, slug)]);
   }
 
-  if (checked === 0) {
-    process.stderr.write('api:bound: no contract found in templates/mock or mocks/* — nothing was checked\n');
-    process.exit(1);
+  for (const [label, dir] of targets) {
+    const { parsed, operations: n } = checkMock(label, dir, problems);
+    if (parsed) {
+      checked += 1;
+      operations += n;
+    }
   }
 
+  // Problems FIRST. `checked === 0` is empty-root protection and nothing more; while it
+  // was evaluated first it also swallowed the specific diagnosis of a contract-less tree.
   if (problems.length) {
     process.stderr.write(`api:bound: FAILED — ${problems.length} binding problem(s)\n`);
     for (const p of problems) process.stderr.write(`  ${p}\n`);
     process.stderr.write('  A screen talks to the API through call(http, \'<operation>\', ...) and nothing else.\n');
+    process.exit(1);
+  }
+
+  if (checked === 0) {
+    process.stderr.write('api:bound: no contract found in templates/mock or mocks/* — nothing was checked\n');
     process.exit(1);
   }
 

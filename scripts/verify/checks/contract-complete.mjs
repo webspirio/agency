@@ -133,19 +133,30 @@ function literalsUnder(dir, skip) {
   return found;
 }
 
+/**
+ * @returns {{parsed: boolean, operations: number}} `parsed` is whether a registry was
+ * actually READ here, not whether a directory was visited — see the same note in
+ * api-bound.mjs. A contract-less mock counted itself as checked and pushed no problem.
+ */
 function checkMock(label, dir, problems) {
   const contractFile = path.join(dir, 'src', 'api', 'contract.ts');
   const routesFile = path.join(dir, 'src', 'api', 'routes.ts');
-  if (!existsSync(contractFile)) return 0;
+  if (!existsSync(contractFile)) {
+    problems.push(
+      `${label}: no src/api/contract.ts — every mock owns its registry (CLAUDE.md decision 4); ` +
+        `a hoisted or missing contract cannot be bound`,
+    );
+    return { parsed: false, operations: 0 };
+  }
   if (!existsSync(routesFile)) {
     problems.push(`${label}: src/api/contract.ts exists but src/api/routes.ts does not`);
-    return 0;
+    return { parsed: false, operations: 0 };
   }
 
   const { keys, codes } = registryOf(contractFile);
   if (keys.length === 0) {
     problems.push(`${label}: the api registry did not parse — no operations found`);
-    return 0;
+    return { parsed: false, operations: 0 };
   }
 
   const io = ioOf(contractFile);
@@ -183,7 +194,7 @@ function checkMock(label, dir, problems) {
       if (io[key] !== undefined || keys.includes(key)) continue;
     }
   }
-  return keys.length;
+  return { parsed: true, operations: keys.length };
 }
 
 function main() {
@@ -193,11 +204,11 @@ function main() {
   let operations = 0;
   let checked = 0;
 
+  // The DIRECTORY is what makes a mock this row's business; the contract is what it
+  // must then have. Guarding on the contract instead is how a mock without one made
+  // itself invisible rather than red.
   const templateDir = path.join(root, 'templates', 'mock');
-  if (existsSync(path.join(templateDir, 'src', 'api', 'contract.ts'))) {
-    operations += checkMock('templates/mock', templateDir, problems);
-    checked += 1;
-  }
+  const targets = existsSync(templateDir) ? [['templates/mock', templateDir]] : [];
   let slugs = [];
   try {
     slugs = readdirSync(path.join(root, 'mocks'), { withFileTypes: true })
@@ -205,17 +216,26 @@ function main() {
   } catch { /* no mocks yet */ }
   for (const slug of slugs) {
     if (TRANSIENT.test(slug)) continue;
-    operations += checkMock(`mocks/${slug}`, path.join(root, 'mocks', slug), problems);
-    checked += 1;
+    targets.push([`mocks/${slug}`, path.join(root, 'mocks', slug)]);
   }
 
-  if (checked === 0) {
-    process.stderr.write('contract:complete: no contract found — nothing was checked\n');
-    process.exit(1);
+  for (const [label, dir] of targets) {
+    const { parsed, operations: n } = checkMock(label, dir, problems);
+    if (parsed) {
+      checked += 1;
+      operations += n;
+    }
   }
+
+  // Problems FIRST. `checked === 0` is empty-root protection and nothing more; while it
+  // was evaluated first it also swallowed the specific diagnosis of a contract-less tree.
   if (problems.length) {
     process.stderr.write(`contract:complete: FAILED — ${problems.length} problem(s)\n`);
     for (const p of problems) process.stderr.write(`  ${p}\n`);
+    process.exit(1);
+  }
+  if (checked === 0) {
+    process.stderr.write('contract:complete: no contract found — nothing was checked\n');
     process.exit(1);
   }
   process.stdout.write(

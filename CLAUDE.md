@@ -223,8 +223,13 @@ Refusal rules are pure functions over row snapshots in `templates/mock/src/domai
    what HARD RULE 5 forbids.
 4. **What stops a `packages/contracts`:** `api:bound` and `contract:complete` resolve each mock's
    registry at its own contract file and fail when it is absent — so hoisting the registry
-   into a shared package turns two rows red. The generic machinery is already shared, in
-   `packages/mock`; what SPEC 5 forbids is sharing the per-mock contract data.
+   into a shared package turns two rows red. *(Measured false on 2026-09-13 and made true in the
+   same commit: both checks returned early with no problem pushed when `src/api/contract.ts` was
+   absent, and counted the directory as checked anyway — a root with one real contract and one
+   hoisted one exited 0 from both, reporting "2 contract(s)". `checks:bite`'s `mock-without-contract`
+   fixture is what holds it now, and `contract-deleted` holds the whole-tree case.)* The generic
+   machinery is already shared, in `packages/mock`; what SPEC 5 forbids is sharing the per-mock
+   contract data.
 5. **`api:bound` does not check the response type, permanently.** It cannot: the premise changed.
    `call()` RETURNS the declared response, so a call site has no type argument to get wrong. The hole
    the lab measured belonged to `httpClient.get<T>(url)`, and `api:bound` now fails any raw
