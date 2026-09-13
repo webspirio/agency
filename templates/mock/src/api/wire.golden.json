@@ -19,5 +19,39 @@
   ],
   "removeParty": [
     "empty-body"
-  ]
+  ],
+  "refusals": {
+    "getParty.PARTY_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,id:seq-id,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createParty.PARTY_NAME_TAKEN": [
+      "409",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createParty.PARTY_NAME_BLANK": [
+      "400",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createParty.PARTY_BALANCE_INVALID": [
+      "400",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "renameParty.PARTY_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,id:seq-id,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "renameParty.PARTY_NAME_TAKEN": [
+      "409",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "renameParty.PARTY_NAME_BLANK": [
+      "400",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "removeParty.PARTY_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,id:seq-id,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ]
+  }
 }

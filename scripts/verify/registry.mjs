@@ -373,19 +373,28 @@ const REAL = [
     cmd: 'node scripts/verify/checks/wire-frozen.mjs',
     proves:
       'On a mock scaffolded and installed from scratch, every declared operation is driven once ' +
-      'through the REAL adapter, reduced to a structural fingerprint of key names and value DOMAINS ' +
-      '(balance:dec2, created_at:instant, id:seq-id, empty-body for a 204), and compared to the ' +
+      'through the REAL adapter AND every declared (operation, code) pair is driven as a refusal, ' +
+      'with the exhaustiveness loop running at RUNTIME over Object.keys(api[key].codes) so a cast in ' +
+      'the drive table cannot evade it. Each response reduces to a structural fingerprint of key ' +
+      'names and value DOMAINS (balance:dec2, created_at:instant, id:seq-id, empty-body for a 204), ' +
+      'each refusal to its STATUS plus the envelope\'s fingerprint, and both are compared to the ' +
       'committed fixture — then REGENERATED and required to be byte-identical, so a fixture that ' +
       'passes only because the test stopped driving a route is red. This is the one mechanism here ' +
       'that catches a re-cased wire field: created_at -> createdAt typechecks perfectly when both ' +
-      'sides are renamed together.',
+      'sides are renamed together. The status is pinned in the COMMITTED file, not read from the ' +
+      'registry: asserting the wire status against api[key].codes cannot fail, because fail() ' +
+      'derives one from the other.',
     blindSpot:
       'A fingerprint is shapes, not values: a handler returning the wrong NUMBER, the wrong row, or ' +
-      'rows in the wrong order is green. The tokens are a fixed table, so a domain it does not know ' +
-      'reduces to bare `string`. It drives each operation exactly once, with one set of arguments, ' +
-      'against the seeded store — an error envelope, a second page and every refusal path are ' +
-      'unfingerprinted. It runs pnpm install, which rewrites pnpm-lock.yaml and then restores it ' +
-      'byte for byte; a concurrent install in the same tree is not detected.',
+      'rows in the wrong order is green, and so is a refusal whose MESSAGE is wrong. The tokens are ' +
+      'a fixed table, so a domain it does not know reduces to bare `string`. It drives each ' +
+      'operation and each refusal exactly ONCE, with one set of arguments and ONE actor against the ' +
+      'seeded store — so a second page is unfingerprinted, and a handler that branches on the actor ' +
+      'is fingerprinted only for the branch that actor takes, which is one of the two exactness ' +
+      'residuals this golden is supposed to be the ground truth for. A TRANSPORT failure declares no ' +
+      'code, so it forms no (operation, code) pair and is driven by nothing here. It runs pnpm ' +
+      'install, which rewrites pnpm-lock.yaml and then restores it byte for byte; a concurrent ' +
+      'install in the same tree is not detected.',
   },
 ];
 

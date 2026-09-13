@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import axios, { type AxiosInstance } from 'axios';
+import { byCodepoint } from '@agency/mock';
 import { mockAdapter, toRoutesOf } from './wire.golden.helpers';
 import { api } from './contract';
 
@@ -76,27 +77,193 @@ const DRIVES: { key: keyof typeof api; run: (c: AxiosInstance) => Promise<unknow
   { key: 'removeParty', run: (c) => c.delete('/parties/party-000002').then((r) => r.data) },
 ];
 
+/**
+ * ONE DRIVE PER DECLARED (operation, code) PAIR.
+ *
+ * This is the half that makes the golden an INSTRUMENT rather than a record. No
+ * type-level scheme in this repo survives a cast or a subtype-reduced branch — both
+ * residuals are written down as live types in `drift.controls.ts` — so the only thing
+ * that can establish what a refusal actually puts on the wire is driving it and
+ * looking.
+ */
+const REFUSALS: { key: keyof typeof api; code: string; run: (c: AxiosInstance) => Promise<unknown> }[] = [
+  {
+    key: 'getParty',
+    code: 'PARTY_NOT_FOUND',
+    run: (c) => c.get('/parties/party-999999').then(() => null, (e: unknown) => e),
+  },
+  {
+    key: 'createParty',
+    code: 'PARTY_NAME_TAKEN',
+    run: async (c) => {
+      const { name } = await someParty(c);
+      return c
+        .post('/parties', { name, company: 'x', address: 'y', balance: '1.00' })
+        .then(() => null, (e: unknown) => e);
+    },
+  },
+  {
+    key: 'createParty',
+    code: 'PARTY_NAME_BLANK',
+    run: (c) =>
+      c
+        .post('/parties', { name: '  ', company: 'x', address: 'y', balance: '1.00' })
+        .then(() => null, (e: unknown) => e),
+  },
+  {
+    key: 'createParty',
+    code: 'PARTY_BALANCE_INVALID',
+    run: (c) =>
+      c
+        .post('/parties', { name: 'Ganz Neu', company: 'x', address: 'y', balance: '1.5' })
+        .then(() => null, (e: unknown) => e),
+  },
+  {
+    key: 'renameParty',
+    code: 'PARTY_NOT_FOUND',
+    run: (c) => c.patch('/parties/party-999999', { name: 'X' }).then(() => null, (e: unknown) => e),
+  },
+  {
+    key: 'renameParty',
+    code: 'PARTY_NAME_TAKEN',
+    run: async (c) => {
+      const [first, second] = await twoParties(c);
+      return c
+        .patch(`/parties/${first.id}`, { name: second.name })
+        .then(() => null, (e: unknown) => e);
+    },
+  },
+  {
+    key: 'renameParty',
+    code: 'PARTY_NAME_BLANK',
+    run: async (c) => {
+      const { id } = await someParty(c);
+      return c.patch(`/parties/${id}`, { name: '  ' }).then(() => null, (e: unknown) => e);
+    },
+  },
+  {
+    key: 'removeParty',
+    code: 'PARTY_NOT_FOUND',
+    run: (c) => c.delete('/parties/party-999999').then(() => null, (e: unknown) => e),
+  },
+];
+
+/**
+ * The rows come from the STORE, never from a literal.
+ *
+ * The seed's names are synthesised by `@agency/synth`, so a drive that hard-codes one
+ * is a drive that stops refusing the day the seed changes — measured: the first
+ * version of this table guessed a name and `createParty.PARTY_NAME_TAKEN` RESOLVED,
+ * proving nothing while looking like coverage. The ids matter for the same reason
+ * twice over: `party-000001` is what this mock's `seq()` assigns and the product
+ * assigns UUIDs, so a golden that hard-codes it cannot be replayed against a live API.
+ */
+type Row = { id: string; name: string };
+
+async function twoParties(c: AxiosInstance): Promise<[Row, Row]> {
+  const page = await c.get('/parties', { params: { limit: '99' } });
+  const rows = (page.data as { data: Row[] }).data;
+  const [first, second] = rows;
+  if (!first || !second) {
+    throw new Error('the seed must carry at least two rows for the refusal drives to chain');
+  }
+  return [first, second];
+}
+
+const someParty = async (c: AxiosInstance): Promise<Row> => (await twoParties(c))[0];
+
+/** The declared pairs, read off the registry OBJECT at runtime. */
+const declaredPairs = (): string[] => {
+  const out: string[] = [];
+  const table = api as unknown as Record<string, { codes: Record<string, number> }>;
+  for (const key of Object.keys(table)) {
+    for (const code of Object.keys(table[key]!.codes)) out.push(`${key}.${code}`);
+  }
+  return out;
+};
+
 describe('the wire golden pins the shape every screen will receive', () => {
   it('covers EVERY declared operation — a new one with no drive is red here', () => {
     // Without this, adding an operation silently adds an uncovered route and the
     // golden goes on passing about the ones it already knew.
-    const byName = (a: string, b: string) => a.localeCompare(b);
-    expect(DRIVES.map((d) => String(d.key)).sort(byName)).toEqual(Object.keys(api).sort(byName));
+    /* byCodepoint, never localeCompare: ICU collation is a property of the machine
+       node was built on, so a golden that sorts with it can differ between a laptop
+       and CI for reasons unrelated to the code. */
+    expect(DRIVES.map((d) => String(d.key)).sort(byCodepoint)).toEqual(
+      Object.keys(api).sort(byCodepoint),
+    );
   });
 
-  it('emits the committed wire shape for every route', async () => {
+  it('drives EVERY declared (operation, code) pair — the loop runs at RUNTIME', () => {
+    /* AT RUNTIME, over Object.keys, and that is the point. A mapped type would name a
+       missing pair earlier, but a cast in the table evades it — and a cast is exactly
+       the residual no type-level scheme here survives. Object.keys reads the registry
+       object that actually ships. */
+    const driven = REFUSALS.map((r) => `${String(r.key)}.${r.code}`);
+    expect([...driven].sort(byCodepoint)).toEqual([...declaredPairs()].sort(byCodepoint));
+  });
+
+  /**
+   * NARROW, deliberately, and its limit is written down: the status half CANNOT fail
+   * while every refusal goes through `fail()`, because `fail()` reads the status off
+   * the same registry entry this reads. What it does catch is a handler that bypasses
+   * `fail()` and throws a hand-typed `DomainError`, and a drive whose operation
+   * answers a DIFFERENT code than the table claims. The committed golden above is what
+   * catches a changed status.
+   */
+  it('refuses through fail(), with the code the table names', async () => {
+    const table = api as unknown as Record<string, { codes: Record<string, number> }>;
+    for (const refusal of REFUSALS) {
+      const pair = `${String(refusal.key)}.${refusal.code}`;
+      const err = (await refusal.run(client())) as
+        | { response?: { status?: number; data?: { code?: string } } }
+        | null;
+      const declared = table[String(refusal.key)]!.codes[refusal.code];
+      /* `null` means the drive RESOLVED — the request the table calls a refusal was
+         answered as a success. Naming the pair matters more than the assertion that
+         follows: a drive that does not refuse is a drive that proves nothing. */
+      expect({ pair, refused: err !== null }).toEqual({ pair, refused: true });
+      expect({ pair, status: err?.response?.status, code: err?.response?.data?.code }).toEqual({
+        pair,
+        status: declared,
+        code: refusal.code,
+      });
+    }
+  });
+
+  it('emits the committed wire shape for every route AND every refusal', async () => {
     const seen: Record<string, string[]> = {};
     for (const drive of DRIVES) {
       seen[drive.key] = shapeOf(await drive.run(client()));
     }
+    /* The ENVELOPE is pinned the way every success response already is. Without this
+       the refusal drives assert a (status, code) pair and nothing at all about the
+       shape around it — and the envelope is what a screen renders when `codeOf`
+       returns undefined. */
+    const refusals: Record<string, string[]> = {};
+    for (const refusal of REFUSALS) {
+      const err = (await refusal.run(client())) as
+        | { response?: { status?: number; data?: unknown } }
+        | null;
+      /* THE STATUS IS IN THE FINGERPRINT, and that is not decoration.
+         MEASURED while writing this: asserting `err.response.status` against
+         `api[key].codes[code]` CANNOT FAIL — fail() derives the wire status from that
+         same registry entry, so both sides move together and the assertion is
+         `dec === dec` one more time. Only a COMMITTED artifact can catch a changed
+         status, because only it does not move when the registry does. */
+      refusals[`${String(refusal.key)}.${refusal.code}`] = [
+        `${err?.response?.status ?? 'RESOLVED'}`,
+        ...shapeOf(err?.response?.data),
+      ];
+    }
 
     if (WRITING) {
-      writeFileSync(GOLDEN_PATH, `${JSON.stringify(seen, null, 2)}\n`);
+      writeFileSync(GOLDEN_PATH, `${JSON.stringify({ ...seen, refusals }, null, 2)}\n`);
       return;
     }
 
-    const golden = JSON.parse(readFileSync(GOLDEN_PATH, 'utf8')) as Record<string, string[]>;
-    expect(seen).toEqual(golden);
+    const golden = JSON.parse(readFileSync(GOLDEN_PATH, 'utf8')) as Record<string, unknown>;
+    expect({ ...seen, refusals }).toEqual(golden);
   });
 
   it('would notice a re-cased wire field, which no type here can', () => {
@@ -146,14 +313,16 @@ function fingerprint(value: unknown): string {
   if (value === '') return 'empty-body';
   if (Array.isArray(value)) {
     if (value.length === 0) return '[]empty';
-    // EVERY element, deduped and ordered — not element [0].
-    const variants = [...new Set(value.map((v) => fingerprint(v)))].sort((a, b) => a.localeCompare(b));
+    /* EVERY element, deduped and ordered — not element [0]. Ordered by CODE POINT:
+       this ordering goes into the COMMITTED golden, so sorting it with ICU collation
+       would make the fixture itself depend on the ICU build node was compiled with. */
+    const variants = [...new Set(value.map((v) => fingerprint(v)))].sort(byCodepoint);
     return `[]${variants.join('|')}`;
   }
   if (typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)
       .map(([k, v]) => `${k}:${fingerprint(v)}`)
-      .sort((a, b) => a.localeCompare(b));
+      .sort(byCodepoint);
     return `{${entries.join(',')}}`;
   }
   if (typeof value === 'string') return tokenOf(value);

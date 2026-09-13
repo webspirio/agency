@@ -10,6 +10,7 @@
  * trusted to have tested what it claims. Every test here mints its own store.
  */
 import { describe, it, expect } from 'vitest';
+import { byCodepoint } from './order';
 import { createStore } from './store';
 import { asDecimal2, type Decimal2 } from './types';
 import { MAX_LIMIT } from './query';
@@ -53,7 +54,7 @@ describe('ids are store-assigned and totally ordered (HARD RULE 4)', () => {
 
 describe('list returns the canonical envelope (HARD RULE 5), with CLAMPED values', () => {
   it('is { data, total, page, limit } — never { items, total }', () => {
-    expect(Object.keys(seeded().list({ page: 1, limit: 2 })).sort((a, b) => a.localeCompare(b)))
+    expect(Object.keys(seeded().list({ page: 1, limit: 2 })).sort(byCodepoint))
       .toEqual(['data', 'limit', 'page', 'total']);
   });
 
@@ -119,7 +120,7 @@ describe('the other four verbs — update and remove now have call sites', () =>
 
 describe('the store holds rows and nothing else', () => {
   it('has exactly five verbs — a sixth is SPEC 17 day-14 kill-trigger territory', () => {
-    expect(Object.keys(seeded()).sort((a, b) => a.localeCompare(b)))
+    expect(Object.keys(seeded()).sort(byCodepoint))
       .toEqual(['create', 'get', 'list', 'remove', 'update']);
   });
 

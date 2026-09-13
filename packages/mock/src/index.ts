@@ -4,6 +4,7 @@ export * from './types';
 export * from './router';
 export * from './adapter';
 export * from './profiles';
+export * from './order';
 export * from './query';
 export * from './store';
 export * from './contract';
