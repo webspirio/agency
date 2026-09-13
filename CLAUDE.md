@@ -256,6 +256,22 @@ it is what the product's `AllExceptionsFilter` sends for every transport failure
 mints no `NOT_FOUND`, the router no `BAD_REQUEST`, and `DomainError.code` is optional. Rendering the
 envelope's own message is not branching, so the rule holds.
 
+A refusal status is a `RefusalStatus` — a 4xx or a 5xx, never `number`. Measured: a 2xx there makes
+the adapter **return the error envelope as a success**, because its throwing branch is gated on
+axios's `validateStatus`, so a screen receives `{ statusCode, error, message, … }` typed as the
+declared response and renders `undefined` in every field with no error branch taken. Three mechanisms
+hold it, because each catches what the others cannot — the type at declaration, a loud throw in
+`fail()` for the cast that evades the type, and `contract:complete` reading the status value off the
+AST for a `mocks/<slug>` the root solution never compiles.
+
+**The wire golden is the instrument, not a record.** Every declared `(operation, code)` pair is driven
+through the real adapter and its status and envelope fingerprint committed, with the exhaustiveness
+loop running **at runtime** over `Object.keys(api[key].codes)` so a cast in the drive table cannot
+evade it. The status is pinned in the *committed file* rather than read from the registry, and that
+distinction was measured: asserting the wire status against `api[key].codes` **cannot fail**, because
+`fail()` derives one from the other. Only an artifact that does not move when the registry moves can
+catch a changed status.
+
 Refusal rules are pure functions over row snapshots in `templates/mock/src/domain/rules.ts`, the
 `reference/contract/intake-lines.ts` shape, so a handler body moves into a Nest service unchanged.
 

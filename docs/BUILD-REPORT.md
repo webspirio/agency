@@ -599,3 +599,69 @@ Phase 3's exhaustive refusal drives.
 - **`checks:bite` covers 5 of 13 rows.** Unchanged from Phase 1; `intent.md` §5 criterion 2 is still
   not met.
 - **The template's tests still run only in `verify:full`** — Phase 3.
+
+---
+
+# The contract layer, second pass — Phase 3, 2026-09-13
+
+Plan: `docs/2026-09-13-contract-layer-plan-phase-3.md`. Design §2.G and §6 steps 12–15, plus one task
+that came from the Phase 2 review rather than the design.
+
+Phase 3 promotes the golden from a record of the success paths into the instrument the design says it
+is, and puts the template — which carries the most guarantees in the repo — into the fast tier.
+
+## What was measured, and what the measurement changed
+
+| Claim | Measured | Consequence |
+|---|---|---|
+| Asserting the wire status against `api[key].codes` proves the status | **It cannot fail.** `fail()` derives the wire status from that same entry, so both sides move together. Changing a declared 409 to 422 was GREEN | The status is pinned in the COMMITTED golden. The same change is now red with `- "409" + "422"` |
+| A drive that posts a seeded name refuses with `PARTY_NAME_TAKEN` | **It RESOLVED.** The seed's names come from `@agency/synth`, so the guessed literal was not in the store, and the drive proved nothing while looking like coverage | Every drive reads its rows from the store. Also the precondition for a live replay: the product assigns UUIDs |
+| The template's tests need `pnpm install` to run | They do not, once the root carries the template's dependencies at the same ranges: a rendered mock resolves by walking up | `template:check`, fast tier, render + tsc + vitest, no install |
+| `templates/mock/src` could be typechecked in place | It cannot: `src/profiles.ts` exists only as `profiles.ts.hbs`, and `src/api/client.ts` imports it | The row renders first, and says why in its own header |
+| The code clause "stays green after every `fail()` for a code is deleted" (design) | **Reproduced for the first time.** Delete the call, leave a comment with the literal, row green | Anchored on `fail()` call sites, with the rule-returned-code fallback disclosed |
+
+## What a check should have caught and didn't
+
+- **`dec === dec`, for the third time in this rework, written by someone who had already found it
+  twice.** The first refusal test compared the wire status to the registry status. Both are the same
+  number by construction. It is worth naming the shape rather than the instance: *an assertion whose
+  two sides are derived from one source cannot fail*, and it looks exactly like coverage.
+- **`localeCompare` inside the golden's fingerprint.** The ordering it produces goes into the
+  COMMITTED fixture, so the fixture itself depended on the ICU build node was compiled with — and
+  node can be built `small-icu`. Regenerating after the change produced a byte-identical file, so the
+  hazard was latent rather than active, which is exactly when it is cheapest to remove.
+- **`pnpm add` resolved a range the template does not declare.** `vite` landed at `^8.2.2` against the
+  template's `^8.2.1`. The range-parity test caught it on its first real use, which is the only reason
+  the install is safe to keep.
+
+## Final state, measured at HEAD
+
+```
+pnpm verify       15 PASSED, exit 0, not narrowed, ~18.6s (was ~12s)
+pnpm verify:full  18 PASSED, exit 0, not narrowed
+checks:bite       19 fixtures over 17 distinct defects, 7 of 15 fast rows
+```
+
+Two `docs/intent.md` criteria close here: **7** (every declared `(operation, code)` pair has a refusal
+drive and the exhaustiveness loop runs at runtime) and **8** (the template's tests and type-level
+tripwires run in the fast tier).
+
+## What is still open
+
+- **Both exactness residuals are unchanged and permanent.** An annotated widening or a cast, and a
+  branch whose union TypeScript subtype-reduces before any check runs.
+- **The golden drives each operation and each refusal ONCE, with ONE actor.** So a handler that
+  branches on the actor is fingerprinted only for the branch that actor takes — which is one of the
+  two residuals the golden is supposed to be the ground truth for. That is the sharpest remaining
+  gap, and it is the one to close first.
+- **A second page, and every transport failure, are unfingerprinted.** A transport failure declares
+  no code, so it forms no `(operation, code)` pair and nothing drives it.
+- **`contract:complete`'s anchor has a disclosed hole.** A rule returns its code as a value, so
+  argument 1 is an identifier; for an operation with any such call the file-wide literal search is
+  still the fallback, and a comment satisfies it there.
+- **`checks:bite` covers 7 of 15 fast rows.** `intent.md` §5 criterion 2 asks for every check; eight
+  still have none — `lint`, `typecheck`, `test`, `test:parity`, `lint:exempt`, `docs:truth`,
+  `memo:drift`, and the two full-tier rows `build` and `wire:frozen`.
+- **The fast tier went from ~12s to ~18.6s.** Under the 30s threshold the plan set, and worth
+  watching: a slow gate is a gate somebody switches off, which SPEC §17 names as the abandon signal.
+- **No coverage, no mutation testing.**
