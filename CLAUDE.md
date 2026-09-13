@@ -188,7 +188,21 @@ type. Nothing is generated — tsc derives them. The generic half lives in
 
 A screen never writes a URL. It calls `call(httpClient, '<operation>', { params, body, qry })`, and
 both the path and the response type come from the registry — so the two sides are one claim instead
-of two that happen to agree.
+of two that happen to agree. Its CACHE KEY comes from there too: `queries.query('<operation>', args)`
+in `templates/mock/src/api/queries.ts` returns TanStack options whose `queryKey` starts with the
+operation name, replacing a hand-written `['parties', page]` for an operation called `listParties`.
+It returns options rather than calling `useQuery`, so `packages/mock` needs no React dependency.
+`api:bound` reads both surfaces, because a row blind to the factory reports every operation reached
+through it as unreached — a false red, and SPEC §17 names a row an operator switches off as the
+signal to abandon the strategy.
+
+A malformed body gets the PRODUCT's answer: 400 with `message: string[]`, one sentence per failed
+field, and no `code`. Measured before `shape()` existed — an empty body answered **500** and a forged
+`id` was accepted with 201 and silently ignored. A shape declaration must not duplicate a domain
+rule: the shape answers "is this the right SHAPE", a rule in `templates/mock/src/domain/rules.ts`
+answers "is this a legal value", and only the second carries a declared code. Measured: declaring
+`balance: s.dec2()` intercepted the malformed balance first and made `PARTY_BALANCE_INVALID` a
+declared code nothing could emit, with every row still green.
 
 **Four things are load-bearing, and each was measured rather than assumed:**
 

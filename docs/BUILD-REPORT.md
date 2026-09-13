@@ -707,3 +707,86 @@ blamed.
 - **The fast tier went from ~12s to ~18.6s.** Under the 30s threshold the plan set, and worth
   watching: a slow gate is a gate somebody switches off, which SPEC §17 names as the abandon signal.
 - **No coverage, no mutation testing.**
+
+---
+
+# The contract layer, second pass — Phase 4, 2026-09-13
+
+Plan: `docs/2026-09-13-contract-layer-plan-phase-4.md`. Design §6 steps 16–18.
+
+## What was measured before the plan was written
+
+Against a freshly scaffolded mock, through the real adapter:
+
+| Request | The mock answered | The product answers |
+|---|---|---|
+| `POST /parties` with `{}` | **500** `Internal server error` | 400, `message: string[]`, one sentence per failed field |
+| `POST /parties` with a forged `id` and `created_at` | **201**, forged values silently IGNORED | 400 — the global `ValidationPipe` runs `forbidNonWhitelisted: true` |
+
+The design says "a forged `id` is accepted with 201". It is accepted; it is not honoured — the store
+assigns both fields. Safer than the design implies, and still a divergence: silently dropping a field
+a client sent is not what the product does.
+
+## What a check should have caught and didn't
+
+- **A shape that duplicates a domain rule silently deletes that rule's code.** The template first
+  declared `balance: s.dec2()`. The shape check runs before the handler, so it intercepted a
+  malformed balance with a codeless 400 — and `PARTY_BALANCE_INVALID` became a declared code nothing
+  could emit, while `contract:complete` stayed **green**, because the `fail()` site still existed. The
+  fix is a layering rule, written into the template: a shape answers "is this the right SHAPE"; a
+  domain rule answers "is this a legal value", and only the second has a code.
+- **`queries` in `contract.ts` is a circular import.** `contract → client → routes → contract`,
+  surfacing at module init as `toRoutes is not a function`. Caught by `template:check` — the fast-tier
+  row added one phase earlier, in seconds rather than in a full-tier install.
+- **`api:bound` was blind to the `makeQueries` surface**, so converting one screen made `overview`
+  read as unreached. A false red on correct code is the fastest route to a row an operator switches
+  off, and SPEC §17 names that as the abandon signal. Found by writing the fixture first.
+
+## Final state, measured at HEAD
+
+```
+pnpm verify       15 PASSED, exit 0, not narrowed
+pnpm verify:full  18 PASSED, exit 0, not narrowed
+checks:bite       21 fixtures over 19 distinct defects, covering 7 of 18 rows
+```
+
+## The nine criteria of `docs/intent.md` §5, assessed
+
+| # | Criterion | Met? | By what |
+|---|---|---|---|
+| 1 | Both tiers green, not narrowed | **Yes** | 15 and 18 PASSED at HEAD |
+| 2 | `checks:bite` exists and **every** check has been observed going red | **NO — 7 of 18** | The row exists and 21 fixtures bite. Eleven rows have none: `lint`, `typecheck`, `test`, `test:parity`, `lint:exempt`, `docs:truth`, `memo:drift`, `checks:bite` itself, `template:render`, `build`, `wire:frozen` |
+| 3 | A contract-less mock makes both AST rows red | **Yes** | Phase 1; `mock-without-contract` and `contract-deleted` |
+| 4 | `httpClient.get(...)` is a compile error anywhere a mock compiles | **Yes** | The opaque `Transport`; three controls, used inside a scaffolded mock |
+| 5 | `codeOf` returns a declared code or `undefined`, and `undefined` is what both sides produce | **Yes** | Adapter and router mint nothing; runtime filter; reads both sides of the seam |
+| 6 | `wire()` does not exist; no handler body is invalid in a Nest service | **Yes** | Deleted in Phase 1; handler bodies are plain returns |
+| 7 | Every declared `(operation, code)` pair has a refusal drive, exhaustiveness at runtime | **Yes** | Phase 3's `REFUSALS`, `Object.keys(api[key].codes)` |
+| 8 | The template's tests and tripwires run in the **fast** tier | **Yes** | `template:check`, ~19s total |
+| 9 | Every sentence in the memo's contract section measured true or deleted | **Partly** | Rewritten three times, and three times a review found a sentence that had gone false. The mechanism that keeps it true is a review, not a check |
+
+**Two of nine are not fully met, and both are stated here rather than rounded up.**
+
+## What is still open, after four phases
+
+- **Criterion 2 is the headline miss.** Eleven of eighteen rows have never been observed failing. The
+  reason is structural and recorded: a fixture spawns one check with `--root`, so a check that does
+  not take one cannot have a fixture. `typecheck`, `lint`, `test` and `test:parity` are all in that
+  class. Closing it means a harness that can derive a whole tree, not a template subtree.
+- **`checks:bite` has no fixture for itself.** The row that exists to prove checks can fail has never
+  been observed failing. Its own contract test covers the harness logic, which is not the same thing.
+- **Both exactness residuals are permanent.** An annotated widening or a cast; and a branch whose
+  union TypeScript subtype-reduces before any check runs. Both are live types in the template.
+- **The golden drives each operation, refusal and malformed body ONCE, with ONE actor.** A handler
+  that branches on the actor is fingerprinted only for the branch that actor takes — which is one of
+  the two residuals the golden is supposed to be ground truth for. **This is the sharpest remaining
+  gap and the one to close first.**
+- **The live replay has never run.** `AGENCY_LIVE_API` is unset in every run this repository can
+  perform, so it reports SKIPPED. Only its equivalence map is tested.
+- **Nothing detects a dependency the template fails to declare**, since the root carries them all.
+- **No coverage, no mutation testing.** A test that cannot fail still counts the same as one that can,
+  and this rework found four such tests by hand — `dec === dec` three times and one tautological
+  control — none of them by a check.
+- **Twice in four phases a commit message asserted work that did not happen** (Phase 2's
+  `codeRefusals`, Phase 3's `DRIVES`). Both were caught by review; neither is catchable by anything
+  here. That is the most important unclosed hole in how this work is executed, as distinct from what
+  it produced.
