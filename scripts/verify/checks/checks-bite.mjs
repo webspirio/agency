@@ -176,6 +176,23 @@ const DEFECTS = {
     if (hoisted === src) throw new Error('codes-via-const: the getParty entry moved');
     writeFileSync(file, hoisted);
   },
+  /**
+   * A refusal declared with a 2xx status. The adapter RESOLVES it — axios's default
+   * validateStatus accepts 200 — so the error envelope reaches the screen typed as
+   * the declared response with every field undefined, and nothing goes red. Measured
+   * in the Phase 2 review; this is the fast-tier half of the guard, for a
+   * mocks/<slug> the root tsc solution never compiles.
+   */
+  'refusal-status-2xx': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts');
+    const src = readFileSync(file, 'utf8');
+    const bad = src.replace(
+      'codes: { PARTY_NOT_FOUND: 404 },\n  }),\n  createParty:',
+      'codes: { PARTY_NOT_FOUND: 200 },\n  }),\n  createParty:',
+    );
+    if (bad === src) throw new Error('refusal-status-2xx: the getParty codes object moved');
+    writeFileSync(file, bad);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -271,6 +288,11 @@ export const FIXTURES = [
     id: 'codes-via-const',
     check: 'scripts/verify/checks/contract-complete.mjs',
     expect: 'not an object literal',
+  },
+  {
+    id: 'refusal-status-2xx',
+    check: 'scripts/verify/checks/contract-complete.mjs',
+    expect: 'not a refusal status',
   },
   { id: 'stale-unreached', check: 'scripts/verify/checks/api-bound.mjs', expect: 'but IS reached' },
   {

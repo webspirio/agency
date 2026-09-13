@@ -312,6 +312,16 @@ describe('fail reads the status off the registry, so two handlers cannot disagre
     expect(codeOf('createParty', err)).toBe('PARTY_NAME_TAKEN');
   });
 
+  it('refuses to throw a refusal whose status is not an error status', () => {
+    /* Reachable only through a cast — `RefusalStatus` refuses it at declaration —
+       and worth a loud throw, because a 2xx makes the ADAPTER return the error
+       envelope as a success: axios's default validateStatus accepts it, so call()
+       hands the envelope to the screen typed as the declared response. */
+    const strayApi = { x: { method: 'GET', path: '/x', status: 200, caps: [], codes: { S: 200 } } };
+    const stray = makeContract(strayApi as never);
+    expect(() => stray.fail('x' as never, 'S' as never, 'no')).toThrow(/not a refusal status/);
+  });
+
   it('throws loudly for a code the entry does not declare, rather than a silent 500', () => {
     // Unreachable through the type, reachable through a cast.
     expect(() => fail('getParty', 'NOT_DECLARED' as never, 'x')).toThrow(

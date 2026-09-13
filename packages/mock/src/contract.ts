@@ -65,6 +65,22 @@ export type Equal<A, B> =
  */
 export type QuerySpec = Record<string, string | string[] | undefined>;
 
+/**
+ * The statuses a REFUSAL may answer with. Not `number`, and the narrowing is not
+ * pedantry: a 2xx here makes the adapter RETURN the error envelope as a success,
+ * because its throwing branch is gated on axios's `validateStatus`. A screen then
+ * receives `{ statusCode, error, message, … }` typed as the declared response and
+ * renders `undefined` in every field, with no error branch taken and no row red.
+ * Measured in the Phase 2 review.
+ *
+ * The list is the set a Nest exception filter can actually produce from an
+ * `HttpException`, not every integer in 400..599 — a refusal is a decision the
+ * domain made, and the domain does not make 418s.
+ */
+export type RefusalStatus =
+  | 400 | 401 | 403 | 404 | 405 | 409 | 410 | 415 | 422 | 423 | 429
+  | 500 | 501 | 502 | 503 | 504;
+
 export type Spec = {
   readonly method: Method;
   /** Express-style, e.g. '/parties/:id'. A LITERAL — `op`'s `<const S>` keeps it one. */
@@ -78,7 +94,7 @@ export type Spec = {
    * and `renameParty` each spelled `404` by hand before this, and nothing compared
    * them.
    */
-  readonly codes: Readonly<Record<string, number>>;
+  readonly codes: Readonly<Record<string, RefusalStatus>>;
   /**
    * Why this operation has no screen yet. Present and unreached is green; present
    * and REACHED is red as stale, exactly as `reportUnusedDisableDirectives` is.
@@ -406,6 +422,16 @@ export function makeContract<A extends ApiSpec>(api: A): Contract<A> {
         throw new Error(
           `fail(${String(key)}): the code '${String(code)}' is not in that operation's ` +
             `registry entry, so there is no status to answer with`,
+        );
+      }
+      // oxlint-disable-next-line agency/no-decimal-comparison -- an HTTP status, not money
+      if (status < 400 || status > 599) {
+        /* Also reachable only through a cast, and louder than what it prevents: a 2xx
+           here is RESOLVED by the adapter, so the error envelope reaches the screen
+           typed as the declared response and nothing anywhere goes red. */
+        throw new Error(
+          `fail(${String(key)}): the code '${String(code)}' declares status ${status}, which is ` +
+            `not a refusal status — the adapter would resolve the error envelope as a success`,
         );
       }
       // String(code): the closed set is a TYPE-level guarantee; DomainError

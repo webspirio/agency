@@ -26,6 +26,7 @@ import type {
   ParamsOf,
   PathsAreLiterals,
   CodeOf,
+  Spec,
   QryOf,
   ReqOf,
   ResOf,
@@ -90,6 +91,33 @@ export type QryDefaultsClosed = Expect<Equal<QryOf<Api, 'getParty'>, Record<stri
 
 export type ResIsNotUnknown = Expect<Equal<Equal<ResOf<Api, 'getParty'>, unknown>, false>>;
 export type ResIsNotNever = Expect<Equal<Equal<ResOf<Api, 'getParty'>, never>, false>>;
+
+/* ── A REFUSAL IS A 4xx OR A 5xx, AND THE TYPE SAYS SO ──────────────────── *
+ *
+ * MEASURED in the Phase 2 review: `codes: { PARTY_NOT_FOUND: 200 }` typechecked,
+ * `fail()` threw `DomainError(200, …)`, and the adapter's throwing branch is gated on
+ * axios's `validateStatus` — which accepts 200. So the ERROR ENVELOPE was RETURNED as
+ * a success and `call()` handed it to the screen typed as the declared response, with
+ * every field `undefined` and no error branch ever taken.
+ */
+
+export const refusalStatusIsNarrow = {
+  method: 'GET',
+  path: '/x',
+  status: 200,
+  caps: [],
+  // @ts-expect-error 200 is not a refusal status.
+  codes: { WHATEVER: 200 },
+} satisfies Spec;
+
+/** …and a 5xx is a legitimate refusal: an upstream that is down is a decision too. */
+export const refusalStatusAllowsA5xx = {
+  method: 'GET',
+  path: '/x',
+  status: 200,
+  caps: [],
+  codes: { UPSTREAM_DOWN: 503 },
+} satisfies Spec;
 
 /* ── WHAT THE REGISTRY GUARANTEES, asserted positively ──────────────────── */
 

@@ -38,6 +38,7 @@ function registryOf(file) {
   const codes = {};
   const unreadable = [];
   const unreadableCodes = [];
+  const badStatus = [];
   const visit = (node) => {
     if (
       ts.isVariableDeclaration(node) &&
@@ -83,11 +84,25 @@ function registryOf(file) {
                elements. A port that kept `isStringLiteral` on the name would find
                ZERO codes and be exactly as silent. */
             for (const c of field.initializer.properties) {
-              if (ts.isPropertyAssignment(c) && (ts.isIdentifier(c.name) || ts.isStringLiteral(c.name))) {
-                codes[key].push(c.name.text);
-              } else {
+              if (!ts.isPropertyAssignment(c) || (!ts.isIdentifier(c.name) && !ts.isStringLiteral(c.name))) {
                 // A spread, a shorthand, a getter — anything this cannot name.
                 unreadableCodes.push(key);
+                continue;
+              }
+              codes[key].push(c.name.text);
+              /* THE STATUS VALUE, not only the name. A 2xx here is RESOLVED by the
+                 adapter — axios's default validateStatus accepts it — so the error
+                 envelope reaches the screen typed as the declared response, with every
+                 field undefined and nothing red. The type refuses it in packages/ and
+                 in templates/; this covers a mocks/<slug> the root solution never
+                 compiles. */
+              if (!ts.isNumericLiteral(c.initializer)) {
+                unreadableCodes.push(key);
+                continue;
+              }
+              const status = Number(c.initializer.text);
+              if (status < 400 || status > 599) {
+                badStatus.push(`'${key}' declares ${c.name.text}: ${status}`);
               }
             }
           }
@@ -97,7 +112,7 @@ function registryOf(file) {
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return { keys, codes, unreadable, unreadableCodes };
+  return { keys, codes, unreadable, unreadableCodes, badStatus };
 }
 
 /**
@@ -204,7 +219,7 @@ function checkMock(label, dir, problems) {
     return { parsed: false, operations: 0 };
   }
 
-  const { keys, codes, unreadable, unreadableCodes } = registryOf(contractFile);
+  const { keys, codes, unreadable, unreadableCodes, badStatus } = registryOf(contractFile);
   if (keys.length === 0) {
     problems.push(`${label}: the api registry did not parse — no operations found`);
     return { parsed: false, operations: 0 };
@@ -213,6 +228,13 @@ function checkMock(label, dir, problems) {
     problems.push(
       `${label}: operation '${key}' has an initializer this check cannot read, so its codes were ` +
         `never examined — an entry is \`op<Req, Res>()({ … })\` or a plain object literal`,
+    );
+  }
+  for (const bad of badStatus) {
+    problems.push(
+      `${label}: ${bad}, which is not a refusal status. A 2xx there makes the adapter RETURN the ` +
+        `error envelope as a SUCCESS — axios's default validateStatus accepts it — so the screen ` +
+        `receives the envelope typed as the operation's declared response.`,
     );
   }
   for (const key of new Set(unreadableCodes)) {
