@@ -9,7 +9,8 @@
 import { newMock } from '../src/new.ts';
 
 const USAGE =
-  'usage: agency new <slug> [--title T] [--locale de|uk] [--profiles a,b] [--root DIR]';
+  'usage: agency new <slug> [--title T] [--locale de|uk] [--profiles a,b] [--root DIR] ' +
+  '[--template DIR]';
 
 const [, , command, ...rest] = process.argv;
 
@@ -37,6 +38,11 @@ try {
     locale: flag('locale', 'de'),
     profiles: flag('profiles')?.split(','),
     root: flag('root'),
+    /* Which template to render, as opposed to where to render it. `newMock` has
+       always accepted this; exposing it is what lets `template:check` render the
+       template of ANOTHER tree — which is how checks:bite plants a defect in a
+       derived copy and still uses this repo's scaffolder and toolchain. */
+    templateDir: flag('template'),
   });
   console.log(`created ${dir}`);
   console.log(`next:  pnpm install && pnpm --filter ${slug} dev`);

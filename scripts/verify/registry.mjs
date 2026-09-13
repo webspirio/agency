@@ -292,8 +292,9 @@ const REAL = [
       'Being in the program is not being CORRECT: a control asserting something trivially true is ' +
       'green here, and textual identity catches only the crudest tautology — Equal<A, B> where A and ' +
       'B are spelled differently but resolve to the same type is invisible. The template half is ' +
-      'structural only: nothing here compiles templates/mock, and that its controls still bite is ' +
-      'established by the `build` row scaffolding and typechecking a real mock.',
+      'structural only: nothing HERE compiles templates/mock — that is the `template:check` row, ' +
+      'which renders it and typechecks the result in the same fast tier, and the `build` row, ' +
+      'which additionally installs and builds it.',
   },
   {
     id: 'seam:settle',
@@ -319,11 +320,36 @@ const REAL = [
       'node_modules rather than about the version range package.json declares.',
   },
   {
+    id: 'template:check',
+    tier: 'fast',
+    skipExit: 2,
+    cmd: 'node scripts/verify/checks/template-check.mjs',
+    proves:
+      'The template RENDERS, the rendered mock TYPECHECKS under the same strict base every package ' +
+      'uses, and its own test suite passes — in the fast tier, with no `pnpm install`, because the ' +
+      'root carries the template\'s dependencies at the same ranges. That is what compiles ' +
+      'drift.controls.ts, so an @ts-expect-error that has stopped suppressing anything is TS2578 ' +
+      'here instead of two minutes away in the `build` row, and it is what makes the ' +
+      'leak-at-the-sink defect fixture-able at last. It renders rather than compiling templates/ in ' +
+      'place because it must: src/profiles.ts exists only as profiles.ts.hbs and src/api/client.ts ' +
+      'imports it, so templates/mock/src does not typecheck until it has been rendered.',
+    blindSpot:
+      'It does not BUILD and it does not bundle: no vite build, no emitted CSS, so the `@source` ' +
+      'line that decides whether every kit surface renders styled is untouched here and remains the ' +
+      '`build` row\'s job. Nothing renders in a browser. It renders exactly one combination — de, ' +
+      'profiles solo,full — so a locale- or profile-specific path is untested, and it reads the ' +
+      'template of --root while always using THIS repo\'s scaffolder, tsc and node_modules, so it ' +
+      'is a verdict about that template under this toolchain rather than under the one a client ' +
+      'would install. Because it needs no install, it also proves nothing about whether the ' +
+      'template\'s declared dependency RANGES resolve — that is the `build` row, and the range ' +
+      'parity between root and template is a separate test.',
+  },
+  {
     id: 'checks:bite',
     tier: 'fast',
     cmd: 'node scripts/verify/checks/checks-bite.mjs',
     proves:
-      'For each fixture in the table — 15 today, over 13 distinct planted defects: a tree derived ' +
+      'For each fixture in the table — 18 today, over 16 distinct planted defects: a tree derived ' +
       'from templates/mock is GREEN with no defect in ' +
       'it, the same tree with exactly ONE defect planted exits 1 — not merely non-zero, so a ' +
       'SKIPPED or UNRUNNABLE check cannot pass as a failed one — and the failing output names the ' +
@@ -333,8 +359,9 @@ const REAL = [
       'asserts something is true when its check passes; this is the only row that establishes the ' +
       'check could ever have failed.',
     blindSpot:
-      'FIVE of the thirteen rows have a fixture — engines, emit:clean, api:bound, ' +
-      'contract:complete and contract:controls. The other eight are entirely ' +
+      'SEVEN of the fifteen fast rows have a fixture — engines, emit:clean, api:bound, ' +
+      'contract:complete, contract:controls, seam:settle and template:check, the last of which ' +
+      'finally makes the leak-at-the-sink defect reachable. The other eight are entirely ' +
       'unexamined, so this row does NOT establish what docs/intent.md asks of it, that every check ' +
       'has been observed going red. Where a fixture exists it proves the check is red on THE ONE ' +
       'defect it plants, never on every defect of that class: emit:clean\'s exercises the ' +

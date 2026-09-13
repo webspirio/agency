@@ -206,6 +206,22 @@ const DEFECTS = {
     if (settling === src) throw new Error('axios-settles-itself: the setup shape moved');
     writeFileSync(file, settling);
   },
+  /**
+   * A store widened to carry a field the contract does not declare, so every handler
+   * returning a row leaks it. The defect `checks:bite` recorded as DELIBERATELY ABSENT
+   * through Phases 1 and 2, because no check took --root and compiled the template —
+   * `template:check` does, so it finally has a fixture.
+   */
+  'handler-leaks-a-field': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'routes.ts');
+    const src = readFileSync(file, 'utf8');
+    const leaky = src.replace(
+      'createStore<Party>',
+      'createStore<Party & { internal_note: string }>',
+    );
+    if (leaky === src) throw new Error('handler-leaks-a-field: the store construction moved');
+    writeFileSync(file, leaky);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -327,6 +343,11 @@ export const FIXTURES = [
     id: 'axios-settles-itself',
     check: 'scripts/verify/checks/seam-settle.mjs',
     expect: 'reference(s) to `settle`',
+  },
+  {
+    id: 'handler-leaks-a-field',
+    check: 'scripts/verify/checks/template-check.mjs',
+    expect: 'these handlers return keys the contract does not declare',
   },
   { id: 'stale-unreached', check: 'scripts/verify/checks/api-bound.mjs', expect: 'but IS reached' },
   {
