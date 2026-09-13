@@ -22,12 +22,14 @@ import type {
   Equal,
   Expect,
   HandlersOf,
+  Leaks,
   ParamsOf,
   PathsAreLiterals,
   AllResJsonSafe,
   IsJsonSafe,
 } from './contract';
-import { makeContract, wire } from './contract';
+import { makeContract } from './contract';
+import type { Route } from './router';
 import type { Paginated } from './types';
 
 /* ── a fixture contract, small enough to read in one screen ─────────────── */
@@ -52,6 +54,7 @@ interface Io {
 const contract = makeContract<Api, Io>(api);
 const call: Contract<Api, Io>['call'] = contract.call;
 const fail: Contract<Api, Io>['fail'] = contract.fail;
+const toRoutes: Contract<Api, Io>['toRoutes'] = contract.toRoutes;
 
 /* ── WHAT THE REGISTRY GUARANTEES, asserted positively ──────────────────── */
 
@@ -119,24 +122,60 @@ export const handlerReturnsTooLittle: HandlersOf<Api, Io>['getParty'] = () => ({
 /** Every declared operation needs a handler. */
 // @ts-expect-error 'removeParty' is missing from the map.
 export const handlerMapIsIncomplete: HandlersOf<Api, Io> = {
-  listParties: () => wire({ data: [], total: 0, page: 1, limit: 20 }),
-  getParty: () => wire({ id: 'p1', name: 'x' }),
-  createParty: () => wire({ id: 'p1', name: 'x' }),
+  listParties: () => ({ data: [], total: 0, page: 1, limit: 20 }),
+  getParty: () => ({ id: 'p1', name: 'x' }),
+  createParty: () => ({ id: 'p1', name: 'x' }),
 };
 
-/* ── EXACTNESS: a wider store row may not reach the client ──────────────── */
+/* ── EXACTNESS: a wider store row may not reach the client ──────────────── *
+ *
+ * The check is at the SINK, not at each return. MEASURED 2026-09-13: `wire()` was
+ * OPT-IN, and `getParty: () => storedWideRow` compiled clean against the real
+ * `HandlersOf` in the exact shape routes.ts uses — excess-property checking never
+ * fires on a contextually typed arrow's return. The two controls this replaces
+ * asserted that `wire()` bites WHEN CALLED, which was the positive direction only
+ * and is precisely the gap.
+ */
 
 type StoredParty = Party & { internalNote: string };
-declare const stored: StoredParty;
-declare const storedRows: StoredParty[];
+declare const wideRow: StoredParty;
 
-export const leaksAPrivateField: HandlersOf<Api, Io>['getParty'] = () =>
-  // @ts-expect-error the store row carries `internalNote`, which the contract does not declare.
-  wire(stored);
+/**
+ * `satisfies`, NOT a return-type annotation. An annotation widens the factory's
+ * return to the declared type, `H` collapses into it, and the sink has nothing
+ * left to compare — which is what `FactoryNotWidened` below pins.
+ */
+const makeOkHandlers = () =>
+  ({
+    listParties: () => ({ data: [], total: 0, page: 1, limit: 20 }),
+    getParty: () => ({ id: 'p1', name: 'x' }),
+    createParty: () => ({ id: 'p1', name: 'x' }),
+    removeParty: () => undefined,
+  }) satisfies HandlersOf<Api, Io>;
 
-export const leaksThroughTheListEnvelope: HandlersOf<Api, Io>['listParties'] = () =>
-  // @ts-expect-error the wide row is NESTED in data[]; a shallow Exact misses this one.
-  wire({ data: storedRows, total: 1, page: 1, limit: 20 });
+const ok = makeOkHandlers();
+
+// @ts-expect-error a top-level wide row is refused at toRoutes, naming the operation.
+export const leakTopLevel: Route[] = toRoutes({ ...ok, getParty: () => wideRow });
+
+// @ts-expect-error a wide row NESTED in data[] is refused — the check is DEEP.
+export const leakNested: Route[] = toRoutes({ ...ok, listParties: () => ({ data: [wideRow], total: 1, page: 1, limit: 20 }) });
+
+// @ts-expect-error a wide row behind `async` is refused — Awaited<R> strips the Promise.
+export const leakAsync: Route[] = toRoutes({ ...ok, getParty: async () => wideRow });
+
+/** A narrow map is accepted, and no handler body mentions the contract at all. */
+export const noLeak: Route[] = toRoutes(ok);
+
+/** The factory's return type is the LITERAL map, not the declared one. */
+export type FactoryNotWidened = Expect<
+  Equal<Equal<ReturnType<typeof makeOkHandlers>, HandlersOf<Api, Io>>, false>
+>;
+
+/** A response the contract declares as `void` is exempt: there is nothing to widen. */
+export type VoidResponseIsNotALeak = Expect<
+  Equal<Leaks<Api, Io, { removeParty: () => undefined }>, never>
+>;
 
 /* ── JsonSafe: the declared response must be the WIRE type ──────────────── */
 

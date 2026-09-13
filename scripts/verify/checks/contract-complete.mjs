@@ -92,12 +92,35 @@ function ioOf(file) {
   return members;
 }
 
-/** The keys of the handler map returned by `makeHandlers()`. */
+/**
+ * The keys of the handler map, ANCHORED on `satisfies HandlersOf<…>`.
+ *
+ * It harvested every `return {…}` in the file until 2026-09-13, so an unrelated
+ * helper returning `{ getParty: 1 }` restored a key whose real handler was gone and
+ * turned a red green.
+ *
+ * Anchoring on the satisfies clause rather than on the `return` also resolves the
+ * `const h = {…} satisfies HandlersOf<…>; return h;` spelling for free, and refuses
+ * the annotated spelling `function makeHandlers(): HandlersOf<Api, Io>` — which is
+ * not pedantry: an annotation widens the map, `H` collapses into the declared type,
+ * and the exactness check at `toRoutes` silently stops comparing anything. No anchor
+ * is therefore a LOUD failure rather than an empty key set.
+ *
+ * @returns {{keys: Set<string>, anchors: number}}
+ */
 function handlersOf(file) {
   const source = parse(file);
   const keys = new Set();
+  let anchors = 0;
   const visit = (node) => {
-    if (ts.isReturnStatement(node) && node.expression && ts.isObjectLiteralExpression(node.expression)) {
+    if (
+      ts.isSatisfiesExpression(node) &&
+      ts.isTypeReferenceNode(node.type) &&
+      ts.isIdentifier(node.type.typeName) &&
+      node.type.typeName.text === 'HandlersOf' &&
+      ts.isObjectLiteralExpression(node.expression)
+    ) {
+      anchors += 1;
       for (const p of node.expression.properties) {
         if ((ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) && p.name) {
           if (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) keys.add(p.name.text);
@@ -107,7 +130,7 @@ function handlersOf(file) {
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return keys;
+  return { keys, anchors };
 }
 
 /** Every string literal anywhere under `dir`, so a code's emitter can be found. */
@@ -160,7 +183,14 @@ function checkMock(label, dir, problems) {
   }
 
   const io = ioOf(contractFile);
-  const handlers = handlersOf(routesFile);
+  const { keys: handlers, anchors } = handlersOf(routesFile);
+  if (anchors === 0) {
+    problems.push(
+      `${label}: src/api/routes.ts contains no handler map — nothing in it ends in ` +
+        `\`satisfies HandlersOf<…>\`. An annotated factory widens the map, so the exactness ` +
+        `check at toRoutes stops comparing anything, silently.`,
+    );
+  }
   const emitted = literalsUnder(path.join(dir, 'src'), contractFile);
 
   for (const key of keys) {

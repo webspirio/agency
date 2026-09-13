@@ -290,7 +290,12 @@ const REAL = [
       'every defect of that class, and a check with no fixture here is entirely unexamined. The ' +
       'fixture derives from templates/mock only, so nothing is established about mocks/<slug>. It ' +
       'matches a substring of the output, so a check that goes red for an unrelated reason while ' +
-      'happening to print that substring is counted as biting.',
+      'happening to print that substring is counted as biting. Every fixture runs ONE check ' +
+      'directly, so only a check that takes --root can have one at all: `typecheck` cannot, both ' +
+      'because it hardcodes the repo root and because templates/mock is outside the root tsc ' +
+      'solution, so the leak-at-the-sink defect (a store widened to carry an undeclared field) has ' +
+      'NO fixture here and is deliberately absent rather than faked — the `build` row compiling a ' +
+      'scaffolded mock is the only thing that would catch it, and no row proves that row bites.',
   },
   {
     id: 'template:render',

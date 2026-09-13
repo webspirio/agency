@@ -13,7 +13,7 @@ import { compile } from './router';
 import { asDecimal2, type Decimal2, type Paginated } from './types';
 import { createStore } from './store';
 import { MAX_LIMIT, pageQuery } from './query';
-import { makeContract, wire, type Contract, type HandlersOf } from './contract';
+import { makeContract, type Contract, type HandlersOf } from './contract';
 
 type Party = { id: string; name: string; balance: Decimal2 };
 
@@ -54,8 +54,12 @@ const fail: Contract<Api, Io>['fail'] = contract.fail;
 const codeOf: Contract<Api, Io>['codeOf'] = contract.codeOf;
 const toRoutes: Contract<Api, Io>['toRoutes'] = contract.toRoutes;
 
-/** A fresh store per call — the whole point. */
-function makeHandlers(): HandlersOf<Api, Io> {
+/**
+ * A fresh store per call — the whole point. NO return-type annotation, and the
+ * literal ends in `satisfies`: an annotation widens the return to the declared
+ * type and the exactness check at `toRoutes` has nothing left to compare.
+ */
+function makeHandlers() {
   const parties = createStore<Party>('party', SEED);
   // A SNAPSHOT, capped at the limit the store will actually honour. The lab wrote
   // `list({ page: 1, limit: 9999 })`, which clamps silently — naming MAX_LIMIT is
@@ -64,27 +68,27 @@ function makeHandlers(): HandlersOf<Api, Io> {
     parties.list({ page: 1, limit: MAX_LIMIT }).data.some((p) => p.name === name);
 
   return {
-    listParties: (c) => wire(parties.list(pageQuery(c.query))),
+    listParties: (c) => parties.list(pageQuery(c.query)),
     getParty: (c) => {
       const row = parties.get(c.params.id);
       if (!row) fail('getParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
-      return wire(row);
+      return row;
     },
     createParty: (c) => {
       if (byName(c.body.name)) fail('createParty', 409, 'PARTY_NAME_TAKEN', 'Taken', { field: 'name' });
-      return wire(parties.create({ name: c.body.name, balance: asDecimal2(c.body.balance) }));
+      return parties.create({ name: c.body.name, balance: asDecimal2(c.body.balance) });
     },
     renameParty: (c) => {
       if (!parties.get(c.params.id)) fail('renameParty', 404, 'PARTY_NOT_FOUND', 'No such party');
       if (byName(c.body.name)) fail('renameParty', 409, 'PARTY_NAME_TAKEN', 'Taken', { field: 'name' });
       const updated = parties.update(c.params.id, { name: c.body.name });
       if (!updated) fail('renameParty', 404, 'PARTY_NOT_FOUND', 'No such party');
-      return wire(updated);
+      return updated;
     },
     removeParty: (c) => {
       if (!parties.remove(c.params.id)) fail('removeParty', 404, 'PARTY_NOT_FOUND', 'No such party');
     },
-  };
+  } satisfies HandlersOf<Api, Io>;
 }
 
 const ACTOR = { id: 'demo-user', role: 'owner' };

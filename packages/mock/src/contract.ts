@@ -21,13 +21,19 @@
  *     "circular constraint" on a type alias AND on a function type parameter, in
  *     tsc 6.0.3. It ships as a conditional tripwire instead: one line per
  *     contract asserts every operation's response at once.
- *  3. `wire()` must strip the Promise. A handler's contextual return type is
- *     `Res | Promise<Res>`, and `keyof (Party | Promise<Party>)` is empty — so
- *     without `Awaited<T>` every property mapped to `never` and the check was
- *     noise rather than a guard.
- *  4. `NoInfer` is load-bearing TWICE: once for the reason example B advertised
- *     (a narrower handler silently redefining the contract) and once here —
- *     without it `A` collapses into `T` and the exactness check evaporates.
+ *  3. EXACTNESS IS CHECKED AT THE SINK, not at each return. `wire()` was opt-in,
+ *     and `getParty: () => storedWideRow` compiled clean against the real
+ *     `HandlersOf` in the exact shape routes.ts uses, because excess-property
+ *     checking never fires on a contextually typed arrow's return. `toRoutes`
+ *     now returns `LeakFree<...>`, so the check happens once, in a line the
+ *     scaffolder writes. `Awaited<R>` is still load-bearing there: a handler's
+ *     contextual return type is `Res | Promise<Res>`, and `keyof (Party |
+ *     Promise<Party>)` is empty.
+ *  4. NOTHING TYPE-LEVEL SURVIVES AN ANNOTATED WIDENING OR A CAST. `const out:
+ *     Party = wideRow; return out;` is green under `wire()`, under a brand and
+ *     under `LeakFree` alike — measured against all three. The wire golden is
+ *     the ground truth for that residual, and it is written down as a live type
+ *     in each mock's `drift.controls.ts`.
  *  5. A never-returning `fail()` NARROWS ONLY when the callee is a function
  *     declaration or a const with an EXPLICIT type annotation. A destructured
  *     `const { fail } = makeContract(...)` does not narrow, and neither does
@@ -151,7 +157,14 @@ export type AllResJsonSafe<A extends ApiSpec, I extends IoFor<A>> =
  * keys, so a wide row inside `data[]` sails straight through it. Measured.
  */
 export type DeepExact<A, T> =
-  [A] extends [readonly (infer AE)[]]
+  /* The PRIMITIVE GUARD, and it is first for a reason. A branded `Decimal2` is
+     `string & { __brand }`, and an intersection is assignable to `object` when any
+     constituent is — so without this branch the object branch below expanded every
+     branded string into its ~50 `String.prototype` members, in every diagnostic.
+     Measured: −38% instantiations at template size. */
+  [A] extends [string | number | boolean | null | undefined]
+    ? A
+  : [A] extends [readonly (infer AE)[]]
     ? ([T] extends [readonly (infer TE)[]] ? DeepExact<AE, TE>[] : never)
     : [A] extends [object]
       ? ([T] extends [object]
@@ -160,20 +173,37 @@ export type DeepExact<A, T> =
       : A;
 
 /**
- * The handler's way of saying "this value IS the declared wire shape".
+ * The operations whose handler returns MORE than the contract declares.
  *
- * Excess-property checking only fires on a fresh object literal, so `return row`
- * where `row` carries an internal field is green everywhere without this. Here
- * the extra key is typed `never` and the error names it.
+ * MEASURED 2026-09-13 on tsc 6.0.3: a wide row at top level, nested in `data[]`,
+ * and behind `async` are each caught here, and the diagnostic names the operation;
+ * a `string` response and a `string[]` response stay green (the branded-return
+ * variant this replaced broke both).
  *
- * `Awaited<T>` because the contextual return type is `Res | Promise<Res>`;
- * `NoInfer` because otherwise `A` collapses into `T` and nothing is checked.
+ * A `void` response is exempt: a 204 handler returns nothing, so there is nothing
+ * to widen, and `DeepExact<undefined, void>` would report it as one.
  */
-export function wire<T, A extends NoInfer<Awaited<T>>>(
-  value: DeepExact<A, NoInfer<Awaited<T>>>,
-): Awaited<T> {
-  return value as unknown as Awaited<T>;
-}
+export type Leaks<A extends ApiSpec, I extends IoFor<A>, H> = {
+  [K in keyof A]: [I[K]['res']] extends [void]
+    ? never
+    : K extends keyof H
+      ? H[K] extends (c: never) => infer R
+        ? [Awaited<R>] extends [DeepExact<Awaited<R>, I[K]['res']>]
+          ? never
+          : K
+        : never
+      : never;
+}[keyof A];
+
+/**
+ * `Ok` while no handler leaks, and otherwise an object type whose single key is a
+ * sentence — so the failure is read at the assignment rather than decoded from a
+ * structural mismatch, and the value of that key names the operation.
+ */
+export type LeakFree<A extends ApiSpec, I extends IoFor<A>, H, Ok> =
+  [Leaks<A, I, H>] extends [never]
+    ? Ok
+    : { 'these handlers return keys the contract does not declare': Leaks<A, I, H> };
 
 /* ── the handler and call-site shapes ──────────────────────────────────── */
 
@@ -212,7 +242,12 @@ export type Contract<A extends ApiSpec, I extends IoFor<A>> = {
     ctx?: Record<string, unknown>,
   ): never;
   codeOf<K extends keyof A>(key: K, error: unknown): CodeOf<A, K> | undefined;
-  toRoutes(handlers: HandlersOf<A, I>): Route[];
+  /**
+   * THE CHECK SITE. Generic on `H` so the handler map's ACTUAL type survives to
+   * `Leaks`; annotate the parameter instead and `H` collapses into the declared
+   * type, leaving nothing to compare.
+   */
+  toRoutes<H extends HandlersOf<A, I>>(handlers: H): LeakFree<A, I, H, Route[]>;
 };
 
 const PARAM = /:([A-Za-z_][A-Za-z0-9_]*)/g;
@@ -275,7 +310,7 @@ export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Con
       // Object.keys is DECLARATION ORDER, which is the route table's contract:
       // the first matching route wins, and `compile()` refuses a table where an
       // earlier route shadows a later one.
-      return (Object.keys(api) as (keyof A)[]).map((key) => {
+      const table = (Object.keys(api) as (keyof A)[]).map((key) => {
         const op = api[key] as OperationSpec;
         return {
           method: op.method,
@@ -288,6 +323,9 @@ export function makeContract<A extends ApiSpec, I extends IoFor<A>>(api: A): Con
           handler: (c: Ctx) => (handlers[key] as (ctx: Ctx) => unknown)(c),
         };
       });
+      // `as never`: the declared return is LeakFree<...>, which is Route[] exactly
+      // when nothing leaks. The runtime value is a Route[] either way.
+      return table as never;
     },
   };
 }

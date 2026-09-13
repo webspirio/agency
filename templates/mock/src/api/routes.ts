@@ -12,7 +12,6 @@
 import {
   createStore,
   pageQuery,
-  wire,
   MAX_LIMIT,
   asDecimal2,
   asInstant,
@@ -26,6 +25,12 @@ import { buildSeed } from '../domain/seed';
 import type { Party } from '../domain/types';
 
 /**
+ * NO RETURN-TYPE ANNOTATION, and the literal below ends in `satisfies`. That is
+ * load-bearing: an annotation widens the factory's return to `HandlersOf<Api, Io>`,
+ * `H` collapses into the declared type, and the exactness check at `toRoutes`
+ * has nothing left to compare. `satisfies` keeps the actual shape AND still
+ * refuses a missing operation or a return that is too narrow.
+ *
  * A FACTORY, not a module-scope store. One store per call means the wire-golden
  * test and any future test can each have their own, so no test can observe
  * another one's writes — the defect that made the contract lab's suite green in
@@ -34,7 +39,7 @@ import type { Party } from '../domain/types';
  * In the app there is exactly one call, below, so a mock still has one store per
  * page load. Nothing is persisted: "reset demo data" is a reload (SPEC 7).
  */
-export function makeHandlers(): HandlersOf<Api, Io> {
+export function makeHandlers() {
   const parties = createStore<Party>('party', buildSeed());
 
   /**
@@ -48,14 +53,15 @@ export function makeHandlers(): HandlersOf<Api, Io> {
     parties.list({ page: 1, limit: MAX_LIMIT }).data.map((p) => ({ id: p.id, name: p.name }));
 
   return {
-    overview: (c) => wire(overview(c.now, parties.list({ page: 1, limit: MAX_LIMIT }).data)),
+    overview: (c) => overview(c.now, parties.list({ page: 1, limit: MAX_LIMIT }).data),
 
-    listParties: (c) => wire(parties.list(pageQuery(c.query))),
+    listParties: (c) => parties.list(pageQuery(c.query)),
 
     getParty: (c) => {
       const row = parties.get(c.params.id);
       if (!row) fail('getParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
-      return wire(row);
+      // A plain return: this body IS the Nest service body it becomes.
+      return row;
     },
 
     createParty: (c) => {
@@ -72,15 +78,13 @@ export function makeHandlers(): HandlersOf<Api, Io> {
       // wire as a plain string and `asDecimal2` ASSERTS rather than coerces.
       // `created_at` is server-derived from the request instant, never accepted
       // from the body — a timestamp a client can name is one it can forge.
-      return wire(
-        parties.create({
-          name: c.body.name,
-          company: c.body.company,
-          address: c.body.address,
-          balance: asDecimal2(c.body.balance),
-          created_at: asInstant(c.now),
-        }),
-      );
+      return parties.create({
+        name: c.body.name,
+        company: c.body.company,
+        address: c.body.address,
+        balance: asDecimal2(c.body.balance),
+        created_at: asInstant(c.now),
+      });
     },
 
     renameParty: (c) => {
@@ -98,7 +102,7 @@ export function makeHandlers(): HandlersOf<Api, Io> {
 
       const updated = parties.update(c.params.id, { name: c.body.name });
       if (!updated) fail('renameParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
-      return wire(updated);
+      return updated;
     },
 
     /** 204, and therefore NOTHING returned. A `null` here would put the literal
@@ -108,8 +112,18 @@ export function makeHandlers(): HandlersOf<Api, Io> {
         fail('removeParty', 404, 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });
       }
     },
-  };
+  } satisfies HandlersOf<Api, Io>;
 }
 
-/** One table, derived from the same literal the call sites are typed against. */
+/**
+ * THE CHECK SITE. One table, derived from the same literal the call sites are typed
+ * against — and the single place exactness is checked. A handler that returns MORE
+ * than its operation declares is a compile error HERE, and the diagnostic names the
+ * operation. Scaffolder-written; never edited.
+ *
+ * What it does NOT catch: an annotated widening or a cast inside a handler
+ * (`const out: Party = wideRow; return out`). Nothing type-level does — see
+ * `annotatedWideningIsGreen` in drift.controls.ts, and the wire golden, which is
+ * the ground truth for that residual.
+ */
 export const routes: Route[] = toRoutes(makeHandlers());

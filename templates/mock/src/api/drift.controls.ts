@@ -19,9 +19,9 @@
  * only thing standing between "the contract exists" and "the contract binds".
  */
 import type { AxiosInstance } from 'axios';
-import { wire } from '@agency/mock';
-import type { Equal, Expect, HandlersOf, ParamsOf } from '@agency/mock';
-import { call, fail, type Api, type Io } from './contract';
+import type { Equal, Expect, HandlersOf, ParamsOf, Route } from '@agency/mock';
+import { call, fail, toRoutes, type Api, type Io } from './contract';
+import { makeHandlers } from './routes';
 import type { Party } from '../domain/types';
 
 /* ── WHAT THE CONTRACT GUARANTEES, asserted positively ──────────────────── */
@@ -98,14 +98,39 @@ export function codeRefusals(): void {
 // @ts-expect-error this one returns only `id`.
 export const handlerReturnsTooLittle: HandlersOf<Api, Io>['getParty'] = () => ({ id: 'party-000001' });
 
-/* ── EXACTNESS: a wider row may not reach the client ────────────────────── */
+/* ── EXACTNESS: a wider row may not reach the client ────────────────────── *
+ *
+ * The check is at the SINK — `toRoutes` — not at each return. MEASURED 2026-09-13:
+ * the `wire()` call this replaces was OPT-IN, and `getParty: () => storedWideRow`
+ * compiled clean against the real `HandlersOf` in the exact shape routes.ts uses,
+ * because excess-property checking never fires on a contextually typed arrow's
+ * return. Asserting that `wire()` bit WHEN CALLED was the positive direction only.
+ */
 
 type StoredParty = Party & { internal_note: string };
-declare const stored: StoredParty;
+declare const wideRow: StoredParty;
 
-export const leaksAPrivateField: HandlersOf<Api, Io>['getParty'] = () =>
-  // @ts-expect-error the row carries `internal_note`, which the contract does not declare.
-  wire(stored);
+export function sinkRefusesALeak(): void {
+  // @ts-expect-error the row carries `internal_note`, which getParty does not declare.
+  const table: Route[] = toRoutes({ ...makeHandlers(), getParty: () => wideRow });
+  void table;
+}
+
+/* ── THE HONEST RESIDUAL. No directive — it compiles, and that is the point. ──
+ *
+ * No type-level scheme survives an annotated widening or a cast. Measured against
+ * `wire()`, against a branded return and against `LeakFree` alike: all three are
+ * green on these two lines. The wire golden is the ground truth for this, which is
+ * why it drives every declared operation and reduces the response to a fingerprint
+ * of key names — a key the contract never declared shows up there as a diff.
+ *
+ * If this line ever goes RED, the design has gained something no measurement here
+ * found, and both the memo and the registry rows have to be rewritten.
+ */
+export const annotatedWideningIsGreen: HandlersOf<Api, Io>['getParty'] = () => {
+  const out: Party = wideRow; // assignability, not exactness
+  return out;
+};
 
 /* ── THE HONEST WEAKNESS, asserted as a live type ───────────────────────── *
  *
