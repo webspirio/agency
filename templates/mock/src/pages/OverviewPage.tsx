@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { EmptyState } from '@agency/kit/empty-state';
 import { Skeleton } from '@agency/kit/skeleton';
 import { DashboardPage } from '@agency/kit/templates/dashboard-page';
-import { httpClient } from '../api/client';
-import { call, codeOf } from '../api/contract';
+import { codeOf } from '../api/contract';
+import { queries } from '../api/queries';
 import { PROFILE } from '../profiles';
 
 /**
@@ -27,10 +27,12 @@ function Shell({ children }: { children: ReactNode }) {
 }
 
 export function OverviewPage() {
-  const { data, isPending, error } = useQuery({
-    queryKey: ['overview'],
-    queryFn: () => call(httpClient, 'overview', { params: {}, body: undefined }),
-  });
+  /* The key and the fetch both come from the registry entry — spread, not called, so
+     `@agency/mock` needs no React dependency. `['overview']` was a hand-written string
+     that happened to match the operation name; nothing made it. */
+  const { data, isPending, error } = useQuery(
+    queries.query('overview', { params: {}, body: undefined }),
+  );
 
   if (isPending) {
     return (

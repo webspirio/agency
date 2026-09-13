@@ -174,3 +174,10 @@ export const call: Contract<Api>['call'] = contract.call;
 export const fail: Contract<Api>['fail'] = contract.fail;
 export const codeOf: Contract<Api>['codeOf'] = contract.codeOf;
 export const toRoutes: Contract<Api>['toRoutes'] = contract.toRoutes;
+
+
+/** The bound `Contract` itself, for `makeQueries` in `src/api/queries.ts`. Exported
+ *  rather than used here: `contract.ts` must not import `./client`, which imports
+ *  `./routes`, which imports this file — measured as `toRoutes is not a function` at
+ *  module init. */
+export { contract };

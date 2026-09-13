@@ -107,7 +107,14 @@ const MODULE_EXT = /\.(?:tsx?|m?js)$/;
 function importsOwnContract(specifier, fromFile, mockRoot) {
   if (!specifier.startsWith('.')) return false;
   const resolved = path.resolve(path.dirname(fromFile), specifier).replace(MODULE_EXT, '');
-  return resolved === path.join(mockRoot, 'src', 'api', 'contract');
+  /* TWO modules, one registry. `queries` cannot live in contract.ts — that file would
+     have to import ./client, which imports ./routes, which imports it back, measured as
+     `toRoutes is not a function` at module init — so the factory sits beside it and is
+     anchored the same way. Both must be THIS mock's. */
+  return (
+    resolved === path.join(mockRoot, 'src', 'api', 'contract') ||
+    resolved === path.join(mockRoot, 'src', 'api', 'queries')
+  );
 }
 
 /**
@@ -121,25 +128,37 @@ function callsIn(file, mockRoot) {
   const named = [];
   const raw = [];
 
+  /** Identifiers bound to a makeQueries factory, local or imported. */
+  const factories = new Set();
+
   const collectImports = (node) => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const from = node.moduleSpecifier.text;
       const bindings = node.importClause?.namedBindings;
+      const wanted = ['call', 'queries'];
       const importsCall =
         bindings && ts.isNamedImports(bindings)
-          ? bindings.elements.filter((el) => (el.propertyName ?? el.name).text === 'call')
+          ? bindings.elements.filter((el) => wanted.includes((el.propertyName ?? el.name).text))
           : [];
       if (importsCall.length === 0) {
         ts.forEachChild(node, collectImports);
         return;
       }
       if (importsOwnContract(from, file, mockRoot)) {
-        for (const el of importsCall) bound.add(el.name.text);
+        for (const el of importsCall) {
+          /* `call` and the `makeQueries` factory are two surfaces onto the SAME
+             registry, so both are anchored the same way — on the imported binding,
+             resolved to this mock's own contract. A renamed import still counts. */
+          if ((el.propertyName ?? el.name).text === 'queries') factories.add(el.name.text);
+          else bound.add(el.name.text);
+        }
       } else {
         const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+        const names = importsCall.map((el) => (el.propertyName ?? el.name).text).join('`, `');
         raw.push(
-          `${path.basename(file)}:${line + 1}: imports \`call\` from '${from}', which does not ` +
-            `resolve to this mock's src/api/contract — the registry is per-mock (CLAUDE.md decision 4)`,
+          `${path.basename(file)}:${line + 1}: imports \`${names}\` from '${from}', which does not ` +
+            `resolve to this mock's src/api/contract or src/api/queries — the registry is per-mock ` +
+            `(CLAUDE.md decision 4)`,
         );
       }
     }
@@ -147,10 +166,44 @@ function callsIn(file, mockRoot) {
   };
   collectImports(source);
 
+  /* A screen may also build its own: `const q = makeQueries(contract, httpClient)`.
+     Either way a row that cannot see that surface reports every operation reached
+     through it as unreached — a false red, which is the fastest route to a row an
+     operator switches off. */
+  const collectFactories = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === 'makeQueries'
+    ) {
+      factories.add(node.name.text);
+    }
+    ts.forEachChild(node, collectFactories);
+  };
+  collectFactories(source);
+
   const visit = (node) => {
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
-      if (ts.isIdentifier(callee) && bound.has(callee.text)) {
+      /* q.query('operation', args) / q.mutation('operation') — the key is argument 0,
+         where call() has it at 1, because the factory is already bound to the http. */
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        factories.has(callee.expression.text) &&
+        (callee.name.text === 'query' || callee.name.text === 'mutation' || callee.name.text === 'keyOf')
+      ) {
+        const key = node.arguments[0];
+        if (key && ts.isStringLiteral(key)) named.push(key.text);
+        else {
+          raw.push(
+            `${path.basename(file)}: ${callee.getText(source)}() with a non-literal operation key — unresolvable`,
+          );
+        }
+      } else if (ts.isIdentifier(callee) && bound.has(callee.text)) {
         // call(http, 'operation', args) — the key is the SECOND argument.
         const key = node.arguments[1];
         if (key && ts.isStringLiteral(key)) named.push(key.text);

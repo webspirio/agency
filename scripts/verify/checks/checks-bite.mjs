@@ -250,6 +250,22 @@ const DEFECTS = {
     if (unhooked === src) throw new Error('bodies-unhooked: the makeContract call moved');
     writeFileSync(file, unhooked);
   },
+  /**
+   * An operation name the registry does not declare, reached through the makeQueries
+   * factory rather than through `call()`. It proves the factory surface is genuinely
+   * PARSED and not merely tolerated: a row that ignored `queries.query(...)` would be
+   * green here, and would also report every factory-reached operation as unreached —
+   * the false red measured on 2026-09-13 before api:bound learned this surface.
+   */
+  'factory-reaches-an-undeclared-operation': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'pages', 'OverviewPage.tsx');
+    const src = readFileSync(file, 'utf8');
+    const swapped = src.replace("queries.query('overview'", "queries.query('archiveParty'");
+    if (swapped === src) {
+      throw new Error('factory-reaches-an-undeclared-operation: the overview query moved');
+    }
+    writeFileSync(file, swapped);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -386,6 +402,11 @@ export const FIXTURES = [
     id: 'bodies-unhooked',
     check: 'scripts/verify/checks/template-check.mjs',
     expect: 'createParty.emptyBody',
+  },
+  {
+    id: 'factory-reaches-an-undeclared-operation',
+    check: 'scripts/verify/checks/api-bound.mjs',
+    expect: "calls 'archiveParty', which the contract does not declare",
   },
   { id: 'stale-unreached', check: 'scripts/verify/checks/api-bound.mjs', expect: 'but IS reached' },
   {

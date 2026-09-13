@@ -232,7 +232,11 @@ const REAL = [
       'mock DIRECTORY with no src/api/contract.ts is red rather than silently skipped, and `checked` ' +
       'counts registries actually parsed. It reads the TypeScript AST and anchors on the IMPORTED ' +
       'BINDING, resolving the specifier against the importing file, so a renamed import still ' +
-      'counts and a `call` from @agency/contracts/api/contract does not.',
+      'counts and a `call` from @agency/contracts/api/contract does not. It reads TWO surfaces ' +
+      'onto that registry — call(http, key, …) and the makeQueries factory\'s ' +
+      'queries.query(key, …) / .mutation(key) / .keyOf(key), whose key is argument 0 — because ' +
+      'a row blind to the factory reports every operation reached through it as unreached, ' +
+      'which is a false red and the fastest route to a row an operator switches off.',
     blindSpot:
       'It matches an operation NAME, never a response type: a correct key with an invented response ' +
       'type is green here, and that is permanently the drift controls\' and the wire golden\'s job. ' +
@@ -354,7 +358,7 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/checks-bite.mjs',
     proves:
-      'For each fixture in the table — 20 today, over 18 distinct planted defects: a tree derived ' +
+      'For each fixture in the table — 21 today, over 19 distinct planted defects: a tree derived ' +
       'from templates/mock is GREEN with no defect in ' +
       'it, the same tree with exactly ONE defect planted exits 1 — not merely non-zero, so a ' +
       'SKIPPED or UNRUNNABLE check cannot pass as a failed one — and the failing output names the ' +

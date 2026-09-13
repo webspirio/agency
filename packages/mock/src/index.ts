@@ -6,6 +6,7 @@ export * from './adapter';
 export * from './profiles';
 export * from './order';
 export * from './query';
+export * from './queries';
 export * from './shape';
 export * from './store';
 export * from './contract';
