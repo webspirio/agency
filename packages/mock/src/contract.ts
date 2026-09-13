@@ -154,8 +154,19 @@ type Names<P extends string> = P extends `${infer A}/${infer B}` ? Seg<A> | Name
  */
 export type ParamsOf<P extends string> = { [K in Names<P>]: string };
 
-/** The closed code set of one operation — the KEYS of its `codes` object. */
-export type CodeOf<A extends ApiSpec, K extends keyof A> = keyof A[K]['codes'] & string;
+/**
+ * The closed code set of an operation — the KEYS of its `codes` object.
+ *
+ * DISTRIBUTES over `K`, and that is load-bearing whenever a caller passes a union of
+ * operations, which a screen's message table does. `keyof` over a union of object
+ * types is the INTERSECTION of their keys, so the undistributed form made
+ * `CodeOf<Api, 'listParties' | 'getParty'>` equal `never` — and an operation
+ * declaring `codes: {}` collapsed any union containing it. A
+ * `satisfies Record<never, string>` is `satisfies {}`: it asserts nothing in either
+ * direction, which is precisely the hole the table was added to close.
+ */
+export type CodeOf<A extends ApiSpec, K extends keyof A> =
+  K extends keyof A ? keyof A[K]['codes'] & string : never;
 
 /* ── JsonSafe: the declared response must be the WIRE type ─────────────── */
 

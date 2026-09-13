@@ -99,6 +99,26 @@ export type ParamsComeFromThePath = Expect<Equal<ParamsOf<Api['getParty']['path'
 /** Error codes are a closed union per operation, never bare `string`. */
 export type CodesAreClosed = Expect<Equal<CodeOf<Api, 'createParty'>, 'PARTY_NAME_TAKEN'>>;
 
+/**
+ * Over a UNION of operations, `CodeOf` is the UNION of their code sets.
+ *
+ * MEASURED 2026-09-13, and it was WRONG before this control existed: `keyof` over a
+ * union of object types is the INTERSECTION of their keys, so
+ * `CodeOf<Api, 'listParties' | 'getParty'>` was `never` — and `listParties` declares
+ * `codes: {}`, so any union containing it collapsed the whole thing. A screen's
+ * `SAYS … satisfies Record<CodeOf<Api, K1 | K2>, string>` was therefore
+ * `satisfies Record<never, string>`, which is `satisfies {}` and asserts nothing in
+ * either direction. `CodeOf` distributes over `K` for exactly this reason.
+ */
+export type CodeOfAUnionIsTheUnion = Expect<
+  Equal<CodeOf<Api, 'getParty' | 'createParty'>, 'PARTY_NOT_FOUND' | 'PARTY_NAME_TAKEN'>
+>;
+
+/** …and an operation with no codes contributes nothing rather than erasing the rest. */
+export type AnEmptyCodeSetDoesNotEraseTheUnion = Expect<
+  Equal<CodeOf<Api, 'listParties' | 'getParty'>, 'PARTY_NOT_FOUND'>
+>;
+
 /** An operation that declares no codes may refuse with NOTHING. */
 export type NoCodesMeansNever = Expect<Equal<CodeOf<Api, 'listParties'>, never>>;
 
@@ -132,8 +152,10 @@ export function callRefusals(http: Parameters<typeof call>[0]): void {
   // @ts-expect-error getParty declares no query at all.
   void call(http, 'getParty', { params: { id: 'p1' }, body: undefined, qry: { page: '1' } });
 
+  /* A name no registry will ever declare, DELIBERATELY: a control must not become
+     an ambush the day someone declares an operation by the name it probes with. */
   // @ts-expect-error there is no such operation in the contract.
-  void call(http, 'deleteEverything', { params: {}, body: undefined });
+  void call(http, '__no_such_operation__', { params: {}, body: undefined });
 }
 
 /* ── THE PAGE-SIDE CLIENT IS OPAQUE ─────────────────────────────────────── *
@@ -158,13 +180,13 @@ export function transportIsOpaque(http: Parameters<typeof call>[0]): void {
 
 export function codeRefusals(): void {
   // @ts-expect-error PARTY_NAME_TAKEN is not in getParty's declared code set.
-  fail('getParty', 409, 'PARTY_NAME_TAKEN', 'no');
+  fail('getParty', 'PARTY_NAME_TAKEN', 'no');
 
-  // @ts-expect-error an undeclared code. THE graft that turns A's inert `codes` into a mechanism.
-  fail('getParty', 404, 'PARTY_MISSPELLED', 'no');
+  // @ts-expect-error an undeclared code. THE graft that turns an inert `codes` into a mechanism.
+  fail('getParty', 'PARTY_MISSPELLED', 'no');
 
   // @ts-expect-error listParties declares NO codes, so every code is refused here.
-  fail('listParties', 500, 'ANYTHING', 'no');
+  fail('listParties', 'ANYTHING', 'no');
 }
 
 /** A handler must return everything the contract declares. */

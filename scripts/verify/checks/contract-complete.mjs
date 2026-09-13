@@ -37,6 +37,7 @@ function registryOf(file) {
   /** @type {Record<string, string[]>} */
   const codes = {};
   const unreadable = [];
+  const unreadableCodes = [];
   const visit = (node) => {
     if (
       ts.isVariableDeclaration(node) &&
@@ -63,19 +64,30 @@ function registryOf(file) {
           }
           for (const field of entry.properties) {
             if (
-              ts.isPropertyAssignment(field) &&
-              ts.isIdentifier(field.name) &&
-              field.name.text === 'codes' &&
-              ts.isObjectLiteralExpression(field.initializer)
+              !ts.isPropertyAssignment(field) ||
+              !ts.isIdentifier(field.name) ||
+              field.name.text !== 'codes'
             ) {
-              /* The code names are property NAMES now, not string-literal array
-                 elements. A port that kept `isStringLiteral` on the name would find
-                 ZERO codes and be exactly as silent as the guard above. */
-              for (const c of field.initializer.properties) {
-                if (!ts.isPropertyAssignment(c)) continue;
-                if (ts.isIdentifier(c.name) || ts.isStringLiteral(c.name)) {
-                  codes[key].push(c.name.text);
-                }
+              continue;
+            }
+            /* EVERY WAY OF NOT READING IT IS REPORTED. Gating on the happy shape and
+               falling through was the same silence the entry guard above was added to
+               remove, one level deeper: a `codes` hoisted into a const read as ZERO
+               codes and the row still printed "a literal site for every declared
+               code". Found by the Phase 2 review. */
+            if (!ts.isObjectLiteralExpression(field.initializer)) {
+              unreadableCodes.push(key);
+              continue;
+            }
+            /* The code names are property NAMES now, not string-literal array
+               elements. A port that kept `isStringLiteral` on the name would find
+               ZERO codes and be exactly as silent. */
+            for (const c of field.initializer.properties) {
+              if (ts.isPropertyAssignment(c) && (ts.isIdentifier(c.name) || ts.isStringLiteral(c.name))) {
+                codes[key].push(c.name.text);
+              } else {
+                // A spread, a shorthand, a getter — anything this cannot name.
+                unreadableCodes.push(key);
               }
             }
           }
@@ -85,7 +97,7 @@ function registryOf(file) {
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return { keys, codes, unreadable };
+  return { keys, codes, unreadable, unreadableCodes };
 }
 
 /**
@@ -192,7 +204,7 @@ function checkMock(label, dir, problems) {
     return { parsed: false, operations: 0 };
   }
 
-  const { keys, codes, unreadable } = registryOf(contractFile);
+  const { keys, codes, unreadable, unreadableCodes } = registryOf(contractFile);
   if (keys.length === 0) {
     problems.push(`${label}: the api registry did not parse — no operations found`);
     return { parsed: false, operations: 0 };
@@ -201,6 +213,13 @@ function checkMock(label, dir, problems) {
     problems.push(
       `${label}: operation '${key}' has an initializer this check cannot read, so its codes were ` +
         `never examined — an entry is \`op<Req, Res>()({ … })\` or a plain object literal`,
+    );
+  }
+  for (const key of new Set(unreadableCodes)) {
+    problems.push(
+      `${label}: operation '${key}' declares \`codes\` in a form this check cannot read — it is ` +
+        `not an object literal of plain \`CODE: status\` entries, so NO code of that operation was ` +
+        `examined. Write the object inline; a hoisted const or a spread reads as zero codes.`,
     );
   }
   const { keys: handlers, anchors, annotated } = handlersOf(routesFile);

@@ -296,7 +296,8 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/checks-bite.mjs',
     proves:
-      'For each of the ten fixtures: a tree derived from templates/mock is GREEN with no defect in ' +
+      'For each fixture in the table — 15 today, over 13 distinct planted defects: a tree derived ' +
+      'from templates/mock is GREEN with no defect in ' +
       'it, the same tree with exactly ONE defect planted exits 1 — not merely non-zero, so a ' +
       'SKIPPED or UNRUNNABLE check cannot pass as a failed one — and the failing output names the ' +
       'planted symbol. The control run is what makes the rest mean anything: without it a fixture ' +

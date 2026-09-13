@@ -532,8 +532,58 @@ wire golden       one section added (exportParties: ["string"]); no existing
                   fingerprint changed by a byte — the fold is type-only, checked
 ```
 
+## What the Phase 2 review found, after the phase was green
+
+Four dimensions, every finding attacked by a second agent told to refute it. 20 findings, 7
+confirmed. The two worst were in work this phase had just shipped and called done.
+
+- **`CodeOf<Api, K>` over a UNION of keys was the INTERSECTION of their code sets, so the screen's
+  message table asserted nothing.** `keyof` over a union of object types intersects their keys, and
+  `listParties` declares `codes: {}` — so `CodeOf<Api, 'listParties' | 'getParty' | …>` was `never`,
+  and `satisfies Record<never, string>` is `satisfies {}`. The headline claim of the commit that
+  added it, and of the sentence added to `CLAUDE.md` in the same phase, was false for one commit.
+  `CodeOf` now distributes over `K`; two controls pin it, and the table is measured closing both
+  directions — TS1360 for a missing sentence, TS2353 for a strange one. The memo said TS2741; under
+  `satisfies` it is TS1360, and that is corrected too.
+- **A commit message disclosed a change that was never made.** `154c33f` states "codeRefusals loses
+  its status argument; each of its three directives stays TS2345 naming the code". It does not: the
+  three controls still passed the pre-fold status, so they bit on the NUMBER in the code slot and
+  stopped testing the closed-set guarantee they are named for. This is worse than an undisclosed
+  change — an undisclosed change leaves no false record, and this left one. Fixed, and recorded here
+  rather than quietly corrected.
+- **The `codes` reader fell through in silence a second time.** The entry-level guard added this
+  phase reports an initializer it cannot read; the `codes` reader one level deeper still gated on the
+  happy shape and fell through, so a `codes` hoisted into a const read as ZERO codes while the row
+  printed "a literal site for every declared code". Same class of vacancy, same phase, one level
+  down. Now reported, with a `codes-via-const` fixture.
+- **"One code answers one status everywhere" was an overclaim.** The status is bound to the code
+  within its operation; two operations may still declare different statuses for the same code name,
+  and nothing compares them. Scoped in the memo.
+- **A control was an ambush.** `drift.controls.ts` probed with `'archiveParty'`, a perfectly
+  plausible endpoint name: declare it and the directive stops suppressing anything, so an author's
+  first act on a new endpoint is an unrelated red in a file they did not touch. Both controls now
+  probe with `'__no_such_operation__'`.
+- **The `checks:bite` row claimed "ten fixtures" while holding fifteen.** True when written, drifted
+  four times since. `memo:drift` cannot catch it — it compares the row to the memo, never either to
+  the fixture table.
+
+Of the thirteen refuted, most were refuted for being **already disclosed** in a registry `blindSpot`
+or in this report — which is the disclosure doing its job — or for naming a real mechanism and the
+wrong consequence. One refutation is worth keeping: a declared refusal status in the 2xx range makes
+the adapter RESOLVE the error envelope as the operation's declared success type, because axios's
+default `validateStatus` accepts it. The reviewer claimed no row notices; the verifier measured that
+the template's own page tests DO catch it for the two codes they drive, and that it is unheld only
+for a code no test exercises. Recorded below rather than fixed, because the cheap guard belongs with
+Phase 3's exhaustive refusal drives.
+
 ## What is still open
 
+- **A refusal status in the 2xx range resolves as a success.** `fail()` reads the status off the
+  registry and does not range-check it, and the adapter's throwing branch is gated on axios's
+  `validateStatus`. `codes: { PARTY_NOT_FOUND: 200 }` therefore delivers the error envelope to the
+  screen typed as the declared response, with every field `undefined` and no error branch taken. The
+  template's page tests catch it for the codes they drive; nothing catches it for a code they do not.
+  Phase 3's refusal drives are where this closes.
 - **Both exactness residuals are unchanged.** An annotated widening or a cast, and a branch whose
   union TypeScript subtype-reduces before any check runs. Phase 2 touched neither, and neither is
   closable at the type level.

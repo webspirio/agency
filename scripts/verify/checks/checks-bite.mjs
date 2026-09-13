@@ -158,6 +158,24 @@ const DEFECTS = {
     if (added === src) throw new Error('unreached-without-a-reason: the removeParty entry moved');
     writeFileSync(file, added);
   },
+  /**
+   * `codes` reached through a hoisted const instead of a fresh object literal. The
+   * reader gates on `isObjectLiteralExpression` and fell through in SILENCE — the
+   * exact class of vacancy the entry-level guard beside it was added to remove, one
+   * level deeper. Found by the Phase 2 review.
+   */
+  'codes-via-const': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts');
+    const src = readFileSync(file, 'utf8');
+    const hoisted = src
+      .replace(
+        'export const api = {',
+        'const GET_PARTY_CODES = { PARTY_NOT_FOUND: 404 };\n\nexport const api = {',
+      )
+      .replace('codes: { PARTY_NOT_FOUND: 404 },\n  }),\n  createParty:', 'codes: GET_PARTY_CODES,\n  }),\n  createParty:');
+    if (hoisted === src) throw new Error('codes-via-const: the getParty entry moved');
+    writeFileSync(file, hoisted);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -248,6 +266,11 @@ export const FIXTURES = [
     id: 'unemittable-code',
     check: 'scripts/verify/checks/contract-complete.mjs',
     expect: 'PARTY_NEVER_EMITTED',
+  },
+  {
+    id: 'codes-via-const',
+    check: 'scripts/verify/checks/contract-complete.mjs',
+    expect: 'not an object literal',
   },
   { id: 'stale-unreached', check: 'scripts/verify/checks/api-bound.mjs', expect: 'but IS reached' },
   {

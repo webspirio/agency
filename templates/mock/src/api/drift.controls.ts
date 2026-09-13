@@ -89,8 +89,13 @@ export function callRefusals(http: Transport): void {
   // @ts-expect-error a query value is a WIRE string, never a number.
   void call(http, 'listParties', { params: {}, body: undefined, qry: { page: 1 } });
 
+  /* A name no registry will ever declare, DELIBERATELY. An earlier draft used
+     'archiveParty', which is a perfectly plausible endpoint — declare it and this
+     directive stops suppressing anything, so the author's first act on a new
+     endpoint is an unrelated red in a file they did not touch. A control should
+     never be an ambush. */
   // @ts-expect-error there is no such operation in the contract.
-  void call(http, 'archiveParty', { params: { id: 'p1' }, body: undefined });
+  void call(http, '__no_such_operation__', { params: { id: 'p1' }, body: undefined });
 }
 
 export function codeRefusals(): void {
