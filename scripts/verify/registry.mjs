@@ -224,24 +224,28 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/api-bound.mjs',
     proves:
-      'For templates/mock and every mocks/<slug>, each HTTP call a screen makes names an operation ' +
-      'the mock\'s own contract declares, and each declared operation is reached by at least one ' +
-      'screen. A mock DIRECTORY with no src/api/contract.ts is red rather than silently skipped, ' +
-      'and `checked` counts registries actually parsed, so a hoisted registry cannot pass as a ' +
-      'present one. It reads the TypeScript AST and anchors on the IMPORTED BINDING, resolving the ' +
-      'specifier against the importing file, so a renamed import still counts and a `call` from ' +
-      '@agency/contracts/api/contract does not.',
+      'For templates/mock and every mocks/<slug>, each HTTP call made from ANY non-test, ' +
+      'non-controls file under src/ names an operation the mock\'s own contract declares, and each ' +
+      'declared operation is either reached from one of those files or carries a non-empty ' +
+      '`unreached` reason on its registry entry. The marker is a RATCHET: absent while unreached is ' +
+      'red, present while reached is red as stale, and empty is red because "" is not a reason. A ' +
+      'mock DIRECTORY with no src/api/contract.ts is red rather than silently skipped, and `checked` ' +
+      'counts registries actually parsed. It reads the TypeScript AST and anchors on the IMPORTED ' +
+      'BINDING, resolving the specifier against the importing file, so a renamed import still ' +
+      'counts and a `call` from @agency/contracts/api/contract does not.',
     blindSpot:
       'It matches an operation NAME, never a response type: a correct key with an invented response ' +
       'type is green here, and that is permanently the drift controls\' and the wire golden\'s job. ' +
       'A call whose operation key is not a string literal is reported as unresolvable rather than ' +
       'followed. It PARSES and never typechecks, so every verdict is syntactic — which is also why ' +
-      'it no longer declares after: [typecheck]: the row consumes no tsc output, and gating it hid ' +
-      'the one fast-tier signal for an undeclared operation whenever anything in packages/* was ' +
-      'red. It sees only files under src/pages, so a call from a hook or a component elsewhere is ' +
-      'invisible; raw transport there is held by the TYPE instead, because httpClient is an opaque ' +
-      'Transport, and this row no longer looks for it at all. It says nothing about whether a ' +
-      'reached operation is reached on a path a user can actually take.',
+      'it declares no after: [typecheck]: the row consumes no tsc output, and gating it hid the one ' +
+      'fast-tier signal for an undeclared operation whenever anything in packages/* was red. ' +
+      '`unreached` is a STRING nobody validates: "x" satisfies it exactly as a real sentence does, ' +
+      'and nothing checks that the reason is still true or that a date in it has passed. A reacher ' +
+      'is any file under src/, so a module nothing imports still counts as reaching — the row says ' +
+      'an operation is CALLED somewhere, never that a user can get to it. Raw transport in a page ' +
+      'is held by the TYPE, because httpClient is an opaque Transport, and this row no longer looks ' +
+      'for it at all.',
   },
   {
     id: 'contract:complete',

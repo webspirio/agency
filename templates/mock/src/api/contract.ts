@@ -58,6 +58,25 @@ export const api = {
   listParties: op<void, Paginated<Party>, { page?: string; limit?: string }>()({
     method: 'GET', path: '/parties', status: 200, caps: [], codes: {},
   }),
+  /**
+   * MODELLED FROM THE TRANSCRIPT BEFORE ITS SCREEN EXISTS, which is what `unreached`
+   * is for: an operation nothing calls is red unless its entry says why, in a
+   * sentence, and the marker itself goes red the day a screen does reach it. Delete
+   * the marker then — do not delete the check.
+   *
+   * DECLARED BEFORE `getParty`, and that is not cosmetic: '/parties/export' is a
+   * LITERAL segment where '/parties/:id' has a param, so declaring it second means
+   * the param route matches first and swallows it. `compile()` refuses that table at
+   * startup — it caught this exact ordering when the operation was first added.
+   *
+   * Its response is a plain `string` deliberately. That is the case the
+   * branded-return exactness variant broke, so the sink is exercised against a
+   * primitive response on every build.
+   */
+  exportParties: op<void, string>()({
+    method: 'GET', path: '/parties/export', status: 200, caps: [], codes: {},
+    unreached: 'CSV export lands with the reports screen',
+  }),
   getParty: op<void, Party>()({
     method: 'GET', path: '/parties/:id', status: 200, caps: [],
     codes: { PARTY_NOT_FOUND: 404 },

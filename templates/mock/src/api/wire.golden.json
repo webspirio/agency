@@ -5,6 +5,9 @@
   "listParties": [
     "{data:[]{address:string,balance:dec2,company:string,created_at:instant,id:seq-id,name:string},limit:number,page:number,total:number}"
   ],
+  "exportParties": [
+    "string"
+  ],
   "getParty": [
     "{address:string,balance:dec2,company:string,created_at:instant,id:seq-id,name:string}"
   ],

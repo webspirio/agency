@@ -51,6 +51,11 @@ function client(): AxiosInstance {
 const DRIVES: { key: keyof typeof api; run: (c: AxiosInstance) => Promise<unknown> }[] = [
   { key: 'overview', run: (c) => c.get('/overview').then((r) => r.data) },
   { key: 'listParties', run: (c) => c.get('/parties', { params: { page: '1', limit: '3' } }).then((r) => r.data) },
+  /* No screen reaches this one — its entry carries an `unreached` reason — and the
+     golden drives it anyway. That is the point: the golden pins what the WIRE
+     carries for every DECLARED operation, and an endpoint modelled ahead of its
+     screen is exactly the case where nothing else would look at it. */
+  { key: 'exportParties', run: (c) => c.get('/parties/export').then((r) => r.data) },
   { key: 'getParty', run: (c) => c.get('/parties/party-000001').then((r) => r.data) },
   {
     key: 'createParty',

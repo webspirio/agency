@@ -57,6 +57,17 @@ export function makeHandlers() {
 
     listParties: (c) => parties.list(pageQuery(c.query)),
 
+    /**
+     * No screen reaches this yet — see `unreached` on its registry entry. The body
+     * is the Nest service body regardless, so the endpoint is ready when the
+     * screen is.
+     */
+    exportParties: () =>
+      parties
+        .list({ page: 1, limit: MAX_LIMIT })
+        .data.map((p) => `${p.id},${p.name},${p.balance}`)
+        .join('\n'),
+
     getParty: (c) => {
       const row = parties.get(c.params.id);
       if (!row) fail('getParty', 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });

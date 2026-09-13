@@ -129,6 +129,35 @@ const DEFECTS = {
     if (extra === src) throw new Error('unemittable-code: the getParty codes object moved');
     writeFileSync(file, extra);
   },
+  /**
+   * A marker on an operation a screen DOES reach. Stale exactly as an unused
+   * `oxlint-disable-next-line` is, and red for the same reason: an excuse that no
+   * longer excuses anything is an excuse nobody notices has expired.
+   */
+  'stale-unreached': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts');
+    const src = readFileSync(file, 'utf8');
+    const stale = src.replace(
+      'codes: { PARTY_NOT_FOUND: 404 },\n  }),\n  createParty:',
+      "codes: { PARTY_NOT_FOUND: 404 }, unreached: 'not really',\n  }),\n  createParty:",
+    );
+    if (stale === src) throw new Error('stale-unreached: the getParty entry moved');
+    writeFileSync(file, stale);
+  },
+  /** An operation no screen reaches and no marker excuses. */
+  'unreached-without-a-reason': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts');
+    const src = readFileSync(file, 'utf8');
+    const added = src.replace(
+      '  removeParty: op<void, void>()({',
+      "  archiveParty: op<void, void>()({\n" +
+        "    method: 'POST', path: '/parties/:id/archive', status: 204, caps: [], codes: {},\n" +
+        '  }),\n' +
+        '  removeParty: op<void, void>()({',
+    );
+    if (added === src) throw new Error('unreached-without-a-reason: the removeParty entry moved');
+    writeFileSync(file, added);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -219,6 +248,12 @@ export const FIXTURES = [
     id: 'unemittable-code',
     check: 'scripts/verify/checks/contract-complete.mjs',
     expect: 'PARTY_NEVER_EMITTED',
+  },
+  { id: 'stale-unreached', check: 'scripts/verify/checks/api-bound.mjs', expect: 'but IS reached' },
+  {
+    id: 'unreached-without-a-reason',
+    check: 'scripts/verify/checks/api-bound.mjs',
+    expect: 'archiveParty',
   },
 ];
 

@@ -40,10 +40,20 @@ function walk(dir, match, out = []) {
 const parse = (file) =>
   ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.ESNext, true);
 
-/** The keys of the `api = {...} as const` object literal, in declaration order. */
+/**
+ * The operations of the `api` object literal, in declaration order, each with the
+ * `unreached` marker off its entry if it carries one.
+ *
+ * MEASURED: the KEY half survived the registry fold untouched, because it reads the
+ * entry's property NAME and never descends into the initializer. The CallExpression
+ * unwrap below exists for exactly one reason — to reach `unreached` inside the spec
+ * object that `op<Req, Res>()(…)` wraps.
+ *
+ * @returns {{key: string, unreached: string | undefined}[]}
+ */
 function operationsOf(contractFile) {
   const source = parse(contractFile);
-  const keys = [];
+  const ops = [];
   const visit = (node) => {
     if (
       ts.isVariableDeclaration(node) &&
@@ -55,16 +65,32 @@ function operationsOf(contractFile) {
       if (ts.isAsExpression(literal)) literal = literal.expression;
       if (ts.isObjectLiteralExpression(literal)) {
         for (const p of literal.properties) {
-          if (ts.isPropertyAssignment(p) && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name))) {
-            keys.push(p.name.text);
+          if (!ts.isPropertyAssignment(p)) continue;
+          if (!ts.isIdentifier(p.name) && !ts.isStringLiteral(p.name)) continue;
+          let entry = p.initializer;
+          while (ts.isCallExpression(entry)) entry = entry.arguments[0] ?? entry.expression;
+          if (ts.isAsExpression(entry)) entry = entry.expression;
+          let unreached;
+          if (ts.isObjectLiteralExpression(entry)) {
+            for (const f of entry.properties) {
+              if (
+                ts.isPropertyAssignment(f) &&
+                ts.isIdentifier(f.name) &&
+                f.name.text === 'unreached' &&
+                ts.isStringLiteral(f.initializer)
+              ) {
+                unreached = f.initializer.text;
+              }
+            }
           }
+          ops.push({ key: p.name.text, unreached });
         }
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return keys;
+  return ops;
 }
 
 const MODULE_EXT = /\.(?:tsx?|m?js)$/;
@@ -171,28 +197,52 @@ function checkMock(label, dir, problems) {
     return { parsed: false, operations: 0 };
   }
 
-  const pagesDir = path.join(dir, 'src', 'pages');
-  const screens = walk(pagesDir, /\.tsx?$/).filter((f) => !/\.test\.tsx?$/.test(f));
-  if (screens.length === 0) {
-    problems.push(`${label}: no screens under src/pages, so no operation can be reached`);
+  /* ANY non-test, non-controls file under src/ is a reacher, not only src/pages.
+     The hook layout reference/bulletproof-react recommends puts the call in
+     src/features/<x>/api/*.ts, and a src/pages-only walk reports every one of those
+     operations as unreached — a false red, which is the fastest route to a row an
+     operator switches off. This is a STRONGER check about a SMALLER claim. */
+  const srcDir = path.join(dir, 'src');
+  const reachers = walk(srcDir, /\.tsx?$/).filter(
+    (f) => !/\.test\.tsx?$/.test(f) && !/\.controls\.ts$/.test(f) && f !== contractFile,
+  );
+  if (reachers.length === 0) {
+    problems.push(`${label}: no source files under src/, so no operation can be reached`);
     return { parsed: true, operations: declared.length };
   }
 
   const reached = new Set();
-  for (const screen of screens) {
-    const { named, raw } = callsIn(screen, dir);
+  for (const file of reachers) {
+    const { named, raw } = callsIn(file, dir);
     for (const key of named) {
-      if (!declared.includes(key)) {
-        problems.push(`${label}: ${path.basename(screen)} calls '${key}', which the contract does not declare`);
+      if (!declared.some((o) => o.key === key)) {
+        problems.push(`${label}: ${path.basename(file)} calls '${key}', which the contract does not declare`);
       }
       reached.add(key);
     }
     for (const r of raw) problems.push(`${label}: ${r}`);
   }
 
-  for (const key of declared) {
-    if (!reached.has(key)) {
-      problems.push(`${label}: operation '${key}' is declared but no screen calls it — a handler written for nothing`);
+  /* A RATCHET, in both directions, exactly as reportUnusedDisableDirectives is: an
+     excuse that no longer excuses anything is an excuse nobody notices has expired. */
+  for (const { key, unreached } of declared) {
+    const isReached = reached.has(key);
+    if (!isReached && unreached === undefined) {
+      problems.push(
+        `${label}: operation '${key}' is declared but nothing under src/ calls it. Either reach ` +
+          `it, or say why not: \`unreached: 'the reports screen lands in March'\` on its entry.`,
+      );
+    }
+    if (!isReached && unreached !== undefined && unreached.trim() === '') {
+      problems.push(
+        `${label}: operation '${key}' carries an empty \`unreached\` — the reason IS the excuse`,
+      );
+    }
+    if (isReached && unreached !== undefined) {
+      problems.push(
+        `${label}: operation '${key}' carries \`unreached: '${unreached}'\` but IS reached under ` +
+          `src/ — stale, exactly as an unused oxlint-disable is. Delete the marker.`,
+      );
     }
   }
   return { parsed: true, operations: declared.length };
@@ -241,8 +291,9 @@ function main() {
   }
 
   process.stdout.write(
-    `api:bound: ${checked} contract(s), ${operations} operation(s) — every screen call names a declared ` +
-      `operation and every operation is reached by a screen\n`,
+    `api:bound: ${checked} contract(s), ${operations} operation(s) — every call under src/ names a ` +
+      `declared operation, and every operation is either reached or carries a live \`unreached\` ` +
+      `reason\n`,
   );
 }
 
