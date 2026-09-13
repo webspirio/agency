@@ -222,6 +222,22 @@ const DEFECTS = {
     if (leaky === src) throw new Error('handler-leaks-a-field: the store construction moved');
     writeFileSync(file, leaky);
   },
+  /**
+   * The code stays declared; its `fail()` site is deleted and a COMMENT mentioning the
+   * literal is left behind. Only a clause anchored on a call site catches it — the
+   * design recorded that the literal-anywhere-under-src form stays green after every
+   * fail() for a code is deleted, and nobody had reproduced it.
+   */
+  'code-declared-but-never-failed': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'routes.ts');
+    const src = readFileSync(file, 'utf8');
+    const gutted = src.replace(
+      "      if (!row) fail('getParty', 'PARTY_NOT_FOUND', 'No such party', { id: c.params.id });",
+      "      // PARTY_NOT_FOUND used to be raised here.\n      if (!row) throw new Error('gone');",
+    );
+    if (gutted === src) throw new Error('code-declared-but-never-failed: the getParty refusal moved');
+    writeFileSync(file, gutted);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -333,6 +349,11 @@ export const FIXTURES = [
     id: 'codes-via-const',
     check: 'scripts/verify/checks/contract-complete.mjs',
     expect: 'not an object literal',
+  },
+  {
+    id: 'code-declared-but-never-failed',
+    check: 'scripts/verify/checks/contract-complete.mjs',
+    expect: 'PARTY_NOT_FOUND',
   },
   {
     id: 'refusal-status-2xx',

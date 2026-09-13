@@ -176,9 +176,32 @@ function handlersOf(file) {
   return { keys, anchors, annotated };
 }
 
-/** Every string literal anywhere under `dir`, so a code's emitter can be found. */
-function literalsUnder(dir, skip) {
-  const found = new Set();
+/**
+ * What each operation can actually REFUSE with, anchored on `fail()` CALL SITES.
+ *
+ * It was "every string literal anywhere under src/" until 2026-09-13, which the design
+ * had recorded as staying green after every `fail()` for a code is deleted — and which
+ * nobody had reproduced until `checks:bite`'s `code-declared-but-never-failed` fixture
+ * did: the literal survives in a COMMENT and the row stays green.
+ *
+ * Anchored means `fail('<operation>', '<CODE>', …)` — the operation is argument 0 and
+ * the code argument 1, so a code is credited to the operation that can actually raise
+ * it rather than to the file it happens to appear in.
+ *
+ * ONE DELIBERATE HOLE, and it is why the fallback exists: a rule returns its code as a
+ * value (`fail('createParty', blank.code, …)`), so argument 1 is an IDENTIFIER, not a
+ * literal. Those calls are recorded as "this operation may raise something this check
+ * cannot name", and for those operations the old file-wide literal search is used. The
+ * types hold that half — `rules.ts` declares each refusal as a singleton literal type —
+ * so the anchor is narrowed exactly as far as the AST can see and no further.
+ *
+ * @returns {{byOperation: Record<string, Set<string>>, opaque: Set<string>, anywhere: Set<string>}}
+ */
+function refusalSitesUnder(dir, skip) {
+  /** @type {Record<string, Set<string>>} */
+  const byOperation = {};
+  const opaque = new Set();
+  const anywhere = new Set();
   const walk = (d) => {
     let entries;
     try { entries = readdirSync(d, { withFileTypes: true }); } catch { return; }
@@ -189,14 +212,26 @@ function literalsUnder(dir, skip) {
       if (!/\.tsx?$/.test(e.name) || full === skip) continue;
       const source = parse(full);
       const visit = (node) => {
-        if (ts.isStringLiteral(node)) found.add(node.text);
+        if (ts.isStringLiteral(node)) anywhere.add(node.text);
+        if (
+          ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === 'fail'
+        ) {
+          const [key, code] = node.arguments;
+          if (key && ts.isStringLiteral(key)) {
+            byOperation[key.text] ??= new Set();
+            if (code && ts.isStringLiteral(code)) byOperation[key.text].add(code.text);
+            else opaque.add(key.text);
+          }
+        }
         ts.forEachChild(node, visit);
       };
       visit(source);
     }
   };
   walk(dir);
-  return found;
+  return { byOperation, opaque, anywhere };
 }
 
 /**
@@ -260,19 +295,23 @@ function checkMock(label, dir, problems) {
         `check at toRoutes stops comparing anything, silently.`,
     );
   }
-  const emitted = literalsUnder(path.join(dir, 'src'), contractFile);
+  const refusals = refusalSitesUnder(path.join(dir, 'src'), contractFile);
 
   for (const key of keys) {
     if (!handlers.has(key)) {
       problems.push(`${label}: operation '${key}' has no handler in src/api/routes.ts`);
     }
     for (const code of codes[key] ?? []) {
-      if (!emitted.has(code)) {
-        problems.push(
-          `${label}: '${key}' declares the code '${code}', but that literal appears nowhere in src/ ` +
-            `outside the contract — nothing can emit it`,
-        );
-      }
+      if (refusals.byOperation[key]?.has(code)) continue;
+      /* The operation raises a code this check cannot NAME — a rule returned it as a
+         value. Fall back to the file-wide literal search for that operation only, and
+         say so in the blindSpot rather than pretending the anchor is total. */
+      if (refusals.opaque.has(key) && refusals.anywhere.has(code)) continue;
+      problems.push(
+        `${label}: '${key}' declares the code '${code}', but no \`fail('${key}', '${code}', …)\` ` +
+          `appears anywhere in src/ — nothing can raise it. A literal in a comment is not an ` +
+          `emitter; only a call site is.`,
+      );
     }
   }
 
@@ -328,7 +367,7 @@ function main() {
   }
   process.stdout.write(
     `contract:complete: ${checked} contract(s), ${operations} operation(s) — each has a handler and ` +
-      `a literal site for every declared code\n`,
+      `a fail() call site for every declared code\n`,
   );
 }
 

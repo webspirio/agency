@@ -254,8 +254,9 @@ const REAL = [
     proves:
       'Every operation in the registry has a handler in routes.ts, and every code an operation ' +
       'declares appears as a string literal somewhere in the mock\'s src/ outside the contract, so ' +
-      'a declared code nothing can ever emit is red, and every declared status is a refusal status. ' +
-      'The handler map is anchored on ' +
+      'a declared code with no `fail()` CALL SITE for that operation is red — a literal in a comment ' +
+      'is not an emitter — and every declared status is a refusal status. The handler map is ' +
+      'anchored on ' +
       '`satisfies HandlersOf<…>`, and a return-type annotation of HandlersOf is red wherever it ' +
       'appears — either spelling widens the map and silently stops the exactness check at toRoutes ' +
       'from comparing anything. An operation whose registry entry this check cannot parse is red ' +
@@ -268,8 +269,11 @@ const REAL = [
       'a type parameter with a default, so op<void, Party>() yields Record<string, never> and an ' +
       'operation CANNOT fail to declare one — that guarantee moved out of this row and into the ' +
       'shape the scaffolder writes at t=0. The code clause is reachability by LITERAL, not by ' +
-      'proof: routes.ts passes rule-returned codes (blank.code), so the literal is matched anywhere ' +
-      'under src/ rather than at a fail() site for that operation. Each declared STATUS is checked ' +
+      'proof for EVERY code: routes.ts passes rule-returned codes as VALUES (blank.code), so ' +
+      'argument 1 is an identifier this cannot name — for an operation with any such call the old ' +
+      'file-wide literal search is used as a fallback, and a comment satisfies it there exactly as ' +
+      'it used to satisfy it everywhere. The types hold that half, because rules.ts declares each ' +
+      'refusal as a singleton literal. Each declared STATUS is checked ' +
       'to BE a refusal status (400..599) — a 2xx there is resolved by the adapter as a success and ' +
       'reaches the screen typed as the declared response — but it is never compared to the status ' +
       'the wire actually carries; that is the wire golden\'s refusal drives, which are a FULL-tier ' +
