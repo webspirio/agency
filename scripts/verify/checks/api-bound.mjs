@@ -69,13 +69,30 @@ function operationsOf(contractFile) {
   return keys;
 }
 
+const MODULE_EXT = /\.(?:tsx?|m?js)$/;
+
+/**
+ * Does this specifier name THIS mock's own `src/api/contract`?
+ *
+ * The suffix test it replaces accepted any specifier ending in '/api/contract', so
+ * '@agency/contracts/api/contract' was counted as the mock's own registry — the other
+ * half of the hole CLAUDE.md decision 4 describes. A bare specifier can resolve
+ * anywhere, so only a RELATIVE one can be resolved against the importing file and
+ * compared to a known path.
+ */
+function importsOwnContract(specifier, fromFile, mockRoot) {
+  if (!specifier.startsWith('.')) return false;
+  const resolved = path.resolve(path.dirname(fromFile), specifier).replace(MODULE_EXT, '');
+  return resolved === path.join(mockRoot, 'src', 'api', 'contract');
+}
+
 /**
  * What a screen calls, and how. Returns the operation names reached through the
- * contract binding, plus any raw transport call found in the same file.
+ * contract binding, plus any binding problem found in the same file.
  */
-function callsIn(file) {
+function callsIn(file, mockRoot) {
   const source = parse(file);
-  /** local name -> true, for identifiers imported from the mock's contract */
+  /** local name -> true, for identifiers imported from the mock's OWN contract */
   const bound = new Set();
   const named = [];
   const raw = [];
@@ -83,14 +100,23 @@ function callsIn(file) {
   const collectImports = (node) => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const from = node.moduleSpecifier.text;
-      if (/(^|\/)api\/contract$/.test(from) || from.endsWith('/api/contract')) {
-        const bindings = node.importClause?.namedBindings;
-        if (bindings && ts.isNamedImports(bindings)) {
-          for (const el of bindings.elements) {
-            const original = (el.propertyName ?? el.name).text;
-            if (original === 'call') bound.add(el.name.text);
-          }
-        }
+      const bindings = node.importClause?.namedBindings;
+      const importsCall =
+        bindings && ts.isNamedImports(bindings)
+          ? bindings.elements.filter((el) => (el.propertyName ?? el.name).text === 'call')
+          : [];
+      if (importsCall.length === 0) {
+        ts.forEachChild(node, collectImports);
+        return;
+      }
+      if (importsOwnContract(from, file, mockRoot)) {
+        for (const el of importsCall) bound.add(el.name.text);
+      } else {
+        const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+        raw.push(
+          `${path.basename(file)}:${line + 1}: imports \`call\` from '${from}', which does not ` +
+            `resolve to this mock's src/api/contract — the registry is per-mock (CLAUDE.md decision 4)`,
+        );
       }
     }
     ts.forEachChild(node, collectImports);
@@ -154,7 +180,7 @@ function checkMock(label, dir, problems) {
 
   const reached = new Set();
   for (const screen of screens) {
-    const { named, raw } = callsIn(screen);
+    const { named, raw } = callsIn(screen, dir);
     for (const key of named) {
       if (!declared.includes(key)) {
         problems.push(`${label}: ${path.basename(screen)} calls '${key}', which the contract does not declare`);

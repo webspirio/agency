@@ -51,6 +51,15 @@ const DEFECTS = {
   'contract-deleted': (root) => {
     rmSync(path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts'));
   },
+  'bare-specifier-contract': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'pages', 'PartiesPage.tsx');
+    const src = readFileSync(file, 'utf8');
+    const swapped = src.replace("from '../api/contract'", "from '@agency/contracts/api/contract'");
+    if (swapped === src) {
+      throw new Error('bare-specifier-contract: the contract import moved; update this defect');
+    }
+    writeFileSync(file, swapped);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -90,6 +99,11 @@ export const FIXTURES = [
     id: 'mock-without-contract',
     check: 'scripts/verify/checks/contract-complete.mjs',
     expect: 'no src/api/contract.ts',
+  },
+  {
+    id: 'bare-specifier-contract',
+    check: 'scripts/verify/checks/api-bound.mjs',
+    expect: 'does not resolve to this mock',
   },
 ];
 
