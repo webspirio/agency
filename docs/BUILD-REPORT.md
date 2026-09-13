@@ -343,3 +343,85 @@ rather than fixed because the fix is a judgement about the check's intent — pr
 absence of a negation — and that belongs with whoever owns the scaffold-owned list. It is the same
 species as the defects in "what a check should have caught and didn't": the check compares a string
 against a file rather than against the claim.
+
+---
+
+# The contract layer, second pass — Phase 1, 2026-09-13
+
+Plan: `docs/2026-09-13-contract-layer-plan-phase-1.md`. Design:
+`docs/2026-09-13-contract-layer-design.md`. Intent and the nine success criteria: `docs/intent.md`.
+
+Phase 1's premise was that **three guarantees the memo stated as enforced were not enforced**, and
+underneath them a pattern: fourteen checks existed and not one had ever been observed going red.
+That is `packages/dec/golden.json` asserting `dec === dec` for 675 cases, one level up.
+
+## What was measured, and what the measurement changed
+
+| Claim as it stood | Measured | Now held by |
+|---|---|---|
+| A wider store row cannot reach the client (`wire()`, "it is DEEP") | `wire()` was OPT-IN. `getParty: () => stored` compiled clean against the real `HandlersOf`, in the exact shape `routes.ts` uses — excess-property checking never fires on a contextually typed arrow's return | `satisfies HandlersOf` + `toRoutes` returning `LeakFree<…>`; three sink controls whose directives were all `TS2578: Unused` before the change |
+| Hoisting the registry into a shared package turns two rows red (decision 4) | Both checks returned early with **no problem pushed** when `src/api/contract.ts` was absent, and counted the directory anyway | Both checks push a problem; a mock is identified by its DIRECTORY; `checks:bite`'s `mock-without-contract` |
+| `api:bound` fails any raw `httpClient` verb in a screen (decision 5) | `/httpClient\|axios/i` against the callee text; 13 of 19 spellings evaded it, the unaliased `httpClient({ url })` above all — an AxiosInstance is callable, so the callee is an Identifier and the branch never ran. Two false reds (`httpClientCache.get`, `axiosLike.get`) | An opaque `Transport` only `call()` unwraps: TS2339 in every file a mock compiles. The regex clause is DELETED |
+| `codeOf(key, e)` returns the operation's closed set | The adapter minted `NOT_FOUND` and `INTERNAL`, the router `BAD_REQUEST`; no operation declares them. `const code: undefined = codeOf('listParties', err)` typechecked and equalled `'NOT_FOUND'` | `DomainError.code` optional, envelope omits it, `codeOf` filters against `api[key].codes` at runtime |
+| `NoInfer` is load-bearing twice | Did not reproduce — stripping both occurrences left every diagnostic byte-identical. The word now appears nowhere in `packages/mock` | Deleted from the memo. `Awaited<R>` IS load-bearing, but not where it looked — see below |
+
+## What a check should have caught and didn't
+
+- **`contract-complete.mjs` harvested every `return {…}` in `routes.ts`.** Measured against the
+  pre-anchor pair (check and template at `eb6259f`): with the `getParty` handler deleted and only
+  `function decoy() { return { getParty: 1, overview: 2 }; }` appended, it exits **0** and prints
+  "6 operation(s) — each has a handler". Now anchored on `satisfies HandlersOf<…>`, which also makes
+  the annotated-factory spelling a LOUD red rather than a silent loss of exactness.
+- **A loop whose entire body was `continue`**, under a comment describing a check. Deleted; the
+  direction it pretended to hold is now `toRoutes` throwing at runtime, which fires for the spread
+  and the cast that tsc's excess-property check does not see.
+- **`api:bound` declared `after: ['typecheck']` while consuming no tsc output.** Measured after the
+  drop: with `typecheck` FAILED, `api:bound` now reports PASSED rather than NOT_RUN.
+- **`contract-deleted` did not reproduce the bug the plan wrote it for.** Removing the only contract
+  in a tree leaves `checked === 0`, so both checks went red down the empty-root guard — a path with
+  nothing to do with the hole. The harness said so in its own words ("went red, but the output never
+  mentions …"), which is the first time this layer has caught a *fixture* being wrong.
+- **`Awaited<R>` is load-bearing in the other direction from the one assumed.** Strip it and an
+  async LEAK is still reported — `keyof Promise<Party>` is `then | catch | finally`, none of which
+  the response declares, so the comparison fails for the wrong reason. What breaks is that every
+  CORRECT async handler reads as a leak. The first four controls written for this were all green
+  with the unwrap removed; `AsyncExactIsNotALeak` is the one that goes red.
+- **The `api:bound` registry row's `proves` string was false for four commits** — it still claimed a
+  raw `httpClient` verb in a screen was red after that clause was deleted. `memo:drift` cannot catch
+  this: it compares the registry to the memo, never either to reality.
+
+## Final state, measured at HEAD
+
+```
+pnpm verify       13 PASSED, exit 0, not narrowed
+pnpm verify:full  16 PASSED, exit 0, not narrowed
+checks:bite        8 fixtures, every one red and naming its planted symbol
+```
+
+## What is still open
+
+- **The cast residual is permanent.** `const out: Party = wideRow; return out;` is green under
+  `wire()`, under a brand and under `LeakFree` alike. `annotatedWideningIsGreen` pins it as a live
+  type and the wire golden is the ground truth — which is why Phase 3 makes the golden exhaustive.
+  If a future reader takes `LeakFree` for a guarantee the way `DeepExact` was taken, the same error
+  recurs one layer over. This is the weakest point in the design.
+- **`checks:bite` covers 3 of 13 rows.** `intent.md` §5 criterion 2 asks that EVERY check be
+  observed going red; Phase 1 delivers the row and eight fixtures across `contract:complete`,
+  `contract:controls` and `api:bound`. Criterion 2 is therefore **not yet met**, and saying so is
+  the point of the row.
+- **A fixture can only exist for a check that takes `--root`.** `typecheck` takes none and does not
+  compile `templates/mock` at all, so the leak-at-the-sink defect has no fixture and is recorded as
+  deliberately absent in the row's `blindSpot` rather than faked.
+- **`contract:complete`'s code clause is still reachability by LITERAL** — Phase 3.
+- **The template's 467 test lines and its type-level tripwires still run only in `verify:full`** —
+  Phase 3 step 14.
+- **No coverage, no mutation testing.** Every `proves` sentence written for `checks:bite` is itself
+  an unverified claim in exactly the sense the row exists to fix.
+- **The `@scaffold-owned` memo blind spot recurred, and nothing stopped it.** The note above records
+  that `docs.contract.test.ts`'s `toMatch(/@scaffold-owned/)` is satisfied by a sentence saying
+  **NOT** `@scaffold-owned`, and that the memo no longer backticked the one path that exploited it.
+  Task 2 of this phase reintroduced a backticked `` `src/api/contract.ts` `` in an ordinary
+  explanatory sentence and the suite stayed green — the property was restored by rewriting the
+  sentence to the full `templates/mock/…` form, but nothing would have caught it. A convention that
+  an ordinary sentence can re-break, silently, is the same species of defect as the rest of this
+  section.

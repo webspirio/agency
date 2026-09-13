@@ -182,7 +182,7 @@ A screen never writes a URL. It calls `call(httpClient, '<operation>', { params,
 both the path and the response type come from the registry — so the two sides are one claim instead
 of two that happen to agree.
 
-**Five things are load-bearing, and each was measured rather than assumed:**
+**Four things are load-bearing, and each was measured rather than assumed:**
 
 - **`ParamsOf` binds params, not paths.** Renaming `'/parties/:id'` to `'/party/:id'` compiles
   clean — every non-param segment is erased. The contract lab's README claimed a path rename goes
@@ -193,19 +193,40 @@ of two that happen to agree.
   type alias *and* on a function type parameter, in tsc 6.0.3. It ships as a conditional tripwire —
   one line per contract asserting every declared response at once. A `Date`, a `Map`, or a required
   key whose value may be `undefined` is refused at declaration.
-- **`wire()` must strip the Promise.** A handler's contextual return type is `Res | Promise<Res>`,
-  and `keyof (Party | Promise<Party>)` is empty, so without `Awaited<T>` every property mapped to
-  `never` and the exactness check was noise. It is DEEP: a shallow exact compares only top-level
-  keys and a wide store row nested in `data[]` sails through it.
-- **`NoInfer` earns its place twice** — once for the reason it is famous for, and once because
-  without it the actual type collapses into the declared one and exactness evaporates entirely.
+- **Exactness is checked ONCE, at the sink, and it does not survive a cast.** Handlers end in
+  `satisfies HandlersOf<Api, Io>` and return plain values; `toRoutes` returns `LeakFree<…>`, so a
+  handler returning more than its operation declares is a compile error at `export const routes` —
+  one line the scaffolder writes and nobody edits — and the diagnostic names the operation. It is
+  DEEP: a wide row nested in `data[]` is caught, and so is one behind `async`. The `wire()` this
+  replaced was **opt-in**, and `getParty: () => storedWideRow` compiled clean in the exact shape
+  `templates/mock/src/api/routes.ts` uses, because excess-property checking never fires on a
+  contextually typed arrow's return. `satisfies` rather than a return-type annotation is
+  load-bearing: an annotation widens the
+  map, `H` collapses into the declared type and the sink has nothing left to compare —
+  `FactoryNotWidened` pins that, and `contract:complete` goes red if the anchor disappears.
+  **What it does not survive:** an annotated widening or a cast (`const out: Party = wide; return
+  out`) is green under `wire()`, under a brand and under `LeakFree` alike. Nothing type-level closes
+  that. `annotatedWideningIsGreen` in `templates/mock/src/api/drift.controls.ts` is that residual
+  written down as a live type, and **the wire golden is the ground truth for it.**
+- **`Awaited<R>` is the load-bearing token in `Leaks`, and `NoInfer` never was.** The claim that
+  `NoInfer` earned its place twice did not reproduce — stripping both occurrences left every
+  diagnostic byte-identical — and the word now appears nowhere in `packages/mock`. `Awaited` does
+  earn its place, but not where it looked: strip it and an async *leak* is still reported, because
+  `keyof Promise<Party>` is `then | catch | finally`, none of which the response declares. What
+  breaks is the other direction — every **correct** async handler reads as a leak, and the check
+  becomes noise. `AsyncExactIsNotALeak` is the one control that goes red on that, measured in both
+  directions on 2026-09-13.
 - **A never-returning `fail()` narrows only when the callee is a function declaration or a const
   with an EXPLICIT type annotation.** A destructured `const { fail } = makeContract(...)` does not
   narrow, and neither does `contract.fail(...)`. That is why each contract exports annotated consts.
 
 `fail(key, status, code, …)` is keyed to the registry, so a code outside an operation's declared set
 is a compile error — the graft that turns an inert `codes` array into a mechanism. `codeOf(key, e)`
-returns that same closed set to the screen, which is what HARD RULE 5 needs to be checkable.
+returns that same closed set **or `undefined`**, filtered against `api[key].codes` at runtime as
+well as in the type, which is what HARD RULE 5 needs to be checkable. `undefined` is not a mystery:
+it is what the product's `AllExceptionsFilter` sends for every transport failure, so the adapter
+mints no `NOT_FOUND`, the router no `BAD_REQUEST`, and `DomainError.code` is optional. Rendering the
+envelope's own message is not branching, so the rule holds.
 
 Refusal rules are pure functions over row snapshots in `templates/mock/src/domain/rules.ts`, the
 `reference/contract/intake-lines.ts` shape, so a handler body moves into a Nest service unchanged.
@@ -224,7 +245,8 @@ Refusal rules are pure functions over row snapshots in `templates/mock/src/domai
 4. **What stops a `packages/contracts`:** `api:bound` and `contract:complete` resolve each mock's
    registry at its own contract file and fail when it is absent — so hoisting the registry
    into a shared package turns two rows red. *(Measured false on 2026-09-13 and made true in the
-   same commit: both checks returned early with no problem pushed when `src/api/contract.ts` was
+   same commit: both checks returned early with no problem pushed when a mock's own
+   `templates/mock/src/api/contract.ts` was
    absent, and counted the directory as checked anyway — a root with one real contract and one
    hoisted one exited 0 from both, reporting "2 contract(s)". `checks:bite`'s `mock-without-contract`
    fixture is what holds it now, and `contract-deleted` holds the whole-tree case.)* The generic
@@ -232,8 +254,13 @@ Refusal rules are pure functions over row snapshots in `templates/mock/src/domai
    contract data.
 5. **`api:bound` does not check the response type, permanently.** It cannot: the premise changed.
    `call()` RETURNS the declared response, so a call site has no type argument to get wrong. The hole
-   the lab measured belonged to `httpClient.get<T>(url)`, and `api:bound` now fails any raw
-   `httpClient` verb in a screen, which is the only way to reintroduce it.
+   the lab measured belonged to `httpClient.get<T>(url)`, and `httpClient` is now an opaque
+   `Transport` that only `call()` unwraps — so a raw verb on it is TS2339 in every file a mock
+   compiles, hooks and components included, which no single-file AST walk reaches. *(The earlier
+   sentence here credited `api:bound`'s `/httpClient|axios/i` clause with holding this. Measured
+   false on 2026-09-13: 13 of 19 spellings evaded it, the unaliased `httpClient({ url })` among them,
+   because an AxiosInstance is callable and the regex branch never ran. That clause is deleted;
+   `axios` and `fetch` reached from a page are held by two `oxlint.base.json` entries.)*
 
 ## Scaffolding a mock
 

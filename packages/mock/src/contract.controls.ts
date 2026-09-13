@@ -192,6 +192,57 @@ export type FactoryNotWidened = Expect<
   Equal<Equal<ReturnType<typeof makeOkHandlers>, HandlersOf<Api, Io>>, false>
 >;
 
+/* ── WHAT IS ACTUALLY LOAD-BEARING IN `Leaks` ───────────────────────────── *
+ *
+ * The memo claimed "NoInfer is load-bearing TWICE". It did not reproduce: stripping
+ * both occurrences from the `wire()` it lived in left every diagnostic byte-identical,
+ * and `wire()` is now deleted, so the word appears nowhere in this package. These four
+ * controls pin what does the work instead — nothing pinned it before.
+ */
+
+/** The comparison target is read from the REGISTRY, not inferred from the handler. */
+export type ExactnessTargetComesFromTheRegistry = Expect<
+  Equal<Leaks<Api, Io, { getParty: () => Party }>, never>
+>;
+
+/** A wide return IS a leak, and `Leaks` names the operation rather than saying `true`. */
+export type LeakNamesTheOperation = Expect<
+  Equal<Leaks<Api, Io, { getParty: () => StoredParty }>, 'getParty'>
+>;
+
+/**
+ * `Awaited<R>` is the load-bearing token. A handler's contextual return type is
+ * `Res | Promise<Res>`, and `keyof (Party | Promise<Party>)` is empty — without the
+ * unwrap every property maps to `never` and an async leak is invisible.
+ */
+export type AsyncLeakIsStillALeak = Expect<
+  Equal<Leaks<Api, Io, { getParty: () => Promise<StoredParty> }>, 'getParty'>
+>;
+
+/**
+ * …and THIS is the one that pins `Awaited`. MEASURED 2026-09-13: stripping the unwrap
+ * left `AsyncLeakIsStillALeak` above green, because `keyof Promise<StoredParty>` is
+ * `then | catch | finally | …`, none of which Party declares, so the comparison fails
+ * for the wrong reason and an async LEAK still reads as a leak. What breaks is the
+ * other direction — every CORRECT async handler reads as a leak too, and the check
+ * becomes noise rather than a guard. Only this control goes red on that.
+ */
+export type AsyncExactIsNotALeak = Expect<
+  Equal<Leaks<Api, Io, { getParty: () => Promise<Party> }>, never>
+>;
+
+/**
+ * `Leaks` is about EXCESS only, and deliberately. A handler returning LESS than
+ * declared is not a leak — it is refused one step earlier, by `toRoutes`'s constraint
+ * `H extends HandlersOf<A, I>`, which is what the next control asserts.
+ */
+export type NarrowReturnIsNotALeak = Expect<
+  Equal<Leaks<Api, Io, { getParty: () => { id: string } }>, never>
+>;
+
+// @ts-expect-error too LITTLE is refused by the constraint at the sink, not by Leaks.
+export const tooLittleIsRefusedAtTheSink: Route[] = toRoutes({ ...ok, getParty: () => ({ id: 'p1' }) });
+
 /** A response the contract declares as `void` is exempt: there is nothing to widen. */
 export type VoidResponseIsNotALeak = Expect<
   Equal<Leaks<Api, Io, { removeParty: () => undefined }>, never>
