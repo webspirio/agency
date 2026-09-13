@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import axios, { type AxiosInstance } from 'axios';
-import { byCodepoint } from '@agency/mock';
+import { byCodepoint, transport, type Transport } from '@agency/mock';
 import { mockAdapter, toRoutesOf } from './wire.golden.helpers';
-import { api } from './contract';
+import { api, call } from './contract';
 
 /**
  * THE WIRE GOLDEN. Every route driven once through the REAL adapter, reduced to
@@ -36,6 +36,9 @@ const ACTOR = { id: 'demo-user', role: 'owner' };
 /** Pinned, so the fingerprint is about the shape and never about the clock. */
 const NOW = () => '2026-09-12T10:00:00.000Z';
 
+/** The opaque page-side view of a fresh client — what `call()` takes. */
+const wired = (): Transport => transport(client());
+
 function client(): AxiosInstance {
   return axios.create({
     baseURL: 'http://mock',
@@ -44,37 +47,71 @@ function client(): AxiosInstance {
   });
 }
 
+type Ids = { seeded: string; removable: string };
+
 /**
- * One drive per operation. Each gets a FRESH client, so a write in one does not
- * move the rows another one fingerprints — the ordering dependence that made the
- * contract lab's suite green only in declaration order.
+ * The ids come from the STORE, never from a literal.
+ *
+ * `party-000001` is what this mock's `seq()` assigns; the product assigns UUIDs, so a
+ * golden that hard-codes the sequence id cannot be replayed against a live API — which
+ * is exactly what an `AGENCY_LIVE_API` replay needs, and why this is worth doing before
+ * one exists.
  */
-const DRIVES: { key: keyof typeof api; run: (c: AxiosInstance) => Promise<unknown> }[] = [
-  { key: 'overview', run: (c) => c.get('/overview').then((r) => r.data) },
-  { key: 'listParties', run: (c) => c.get('/parties', { params: { page: '1', limit: '3' } }).then((r) => r.data) },
+async function idsFrom(t: Transport): Promise<Ids> {
+  const page = await call(t, 'listParties', { params: {}, body: undefined, qry: { limit: '99' } });
+  const [first, second] = page.data;
+  if (!first || !second) {
+    throw new Error('the seed must carry at least two rows for the golden to chain');
+  }
+  return { seeded: first.id, removable: second.id };
+}
+
+/**
+ * One drive per operation, each through `call()` with a typed operation KEY — never a
+ * hand-written URL. A raw verb here would be a second copy of the path, which is the
+ * thing the contract exists to remove, and the golden is the last place one could hide.
+ * Each gets a FRESH client, so a write in one does not move the rows another
+ * fingerprints — the ordering dependence that made the contract lab's suite green in
+ * declaration order only.
+ */
+const DRIVES: { key: keyof typeof api; run: (t: Transport, ids: Ids) => Promise<unknown> }[] = [
+  { key: 'overview', run: (t) => call(t, 'overview', { params: {}, body: undefined }) },
+  {
+    key: 'listParties',
+    run: (t) =>
+      call(t, 'listParties', { params: {}, body: undefined, qry: { page: '1', limit: '3' } }),
+  },
   /* No screen reaches this one — its entry carries an `unreached` reason — and the
-     golden drives it anyway. That is the point: the golden pins what the WIRE
-     carries for every DECLARED operation, and an endpoint modelled ahead of its
-     screen is exactly the case where nothing else would look at it. */
-  { key: 'exportParties', run: (c) => c.get('/parties/export').then((r) => r.data) },
-  { key: 'getParty', run: (c) => c.get('/parties/party-000001').then((r) => r.data) },
+     golden drives it anyway. That is the point: the golden pins what the WIRE carries
+     for every DECLARED operation, and an endpoint modelled ahead of its screen is
+     exactly the case where nothing else would look at it. */
+  { key: 'exportParties', run: (t) => call(t, 'exportParties', { params: {}, body: undefined }) },
+  {
+    key: 'getParty',
+    run: (t, ids) => call(t, 'getParty', { params: { id: ids.seeded }, body: undefined }),
+  },
   {
     key: 'createParty',
-    run: (c) =>
-      c
-        .post('/parties', {
+    run: (t) =>
+      call(t, 'createParty', {
+        params: {},
+        body: {
           name: 'Neu Angelegt',
           company: 'Neu GmbH',
           address: 'Hauptstrasse 1, Fulda',
           balance: '10.00',
-        })
-        .then((r) => r.data),
+        },
+      }),
   },
   {
     key: 'renameParty',
-    run: (c) => c.patch('/parties/party-000001', { name: 'Umbenannt' }).then((r) => r.data),
+    run: (t, ids) =>
+      call(t, 'renameParty', { params: { id: ids.seeded }, body: { name: 'Umbenannt' } }),
   },
-  { key: 'removeParty', run: (c) => c.delete('/parties/party-000002').then((r) => r.data) },
+  {
+    key: 'removeParty',
+    run: (t, ids) => call(t, 'removeParty', { params: { id: ids.removable }, body: undefined }),
+  },
 ];
 
 /**
@@ -194,6 +231,17 @@ describe('the wire golden pins the shape every screen will receive', () => {
     );
   });
 
+  it('drives every operation through call(), never a hand-written URL', () => {
+    /* A raw verb in a drive is a SECOND COPY of the path — the thing the contract
+       exists to remove — and the golden is the last place one could hide, because it
+       is the one file that legitimately talks to the wire. The REFUSALS table keeps
+       its raw verbs deliberately: a refusal has no typed call-site equivalent that
+       also captures the rejection. */
+    const source = readFileSync(`${HERE}/wire.golden.test.ts`, 'utf8');
+    const drives = source.slice(source.indexOf('const DRIVES'), source.indexOf('const REFUSALS'));
+    expect(drives).not.toMatch(/\.(get|post|patch|put|delete)\(/);
+  });
+
   it('drives EVERY declared (operation, code) pair — the loop runs at RUNTIME', () => {
     /* AT RUNTIME, over Object.keys, and that is the point. A mapped type would name a
        missing pair earlier, but a cast in the table evades it — and a cast is exactly
@@ -234,7 +282,8 @@ describe('the wire golden pins the shape every screen will receive', () => {
   it('emits the committed wire shape for every route AND every refusal', async () => {
     const seen: Record<string, string[]> = {};
     for (const drive of DRIVES) {
-      seen[drive.key] = shapeOf(await drive.run(client()));
+      const t = wired();
+      seen[drive.key] = shapeOf(await drive.run(t, await idsFrom(t)));
     }
     /* The ENVELOPE is pinned the way every success response already is. Without this
        the refusal drives assert a (status, code) pair and nothing at all about the

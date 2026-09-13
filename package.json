@@ -9,7 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -b --force",
-    "lint": "oxlint --max-warnings=0 packages templates mocks",
+    "lint": "oxlint --max-warnings=0 --ignore-pattern 'mocks/verify-*/**' packages templates mocks",
     "agency": "node packages/cli/bin/agency.mjs",
     "verify": "node scripts/verify/run.mjs --tier fast",
     "verify:full": "node scripts/verify/run.mjs --tier full",

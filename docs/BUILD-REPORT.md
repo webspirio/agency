@@ -642,12 +642,54 @@ pnpm verify:full  18 PASSED, exit 0, not narrowed
 checks:bite       19 fixtures over 17 distinct defects, 7 of 15 fast rows
 ```
 
+*(The fixture counts above were stale by one in the registry row until the Phase 3 review caught it;
+`memo:drift` compares that row to the memo, never either to the fixture table.)*
+
 Two `docs/intent.md` criteria close here: **7** (every declared `(operation, code)` pair has a refusal
 drive and the exhaustiveness loop runs at runtime) and **8** (the template's tests and type-level
 tripwires run in the fast tier).
 
+## What the Phase 3 review found, after the phase was green
+
+Four dimensions, every finding attacked by a second agent told to refute it. 21 findings, 6
+confirmed. The worst is a repeat of the worst of Phase 2's.
+
+- **A commit and this report both stated a change that was never made — again.** Design step 12 and
+  the plan's Task 3 are "`DRIVES` through `call()`, chained on a store-captured id". The REFUSALS
+  table got that treatment; `DRIVES` did not, and kept its raw verbs and `party-000001`. Commit
+  `f6ec8bf` nevertheless says "The drives read their rows from the STORE, never from a literal" and
+  claims the live-replay precondition, and this record repeated it. Now implemented, with a test that
+  greps the `DRIVES` block for a raw verb and was watched failing first. **Twice in two phases a
+  commit message has asserted work that did not happen. That is a pattern in how this rework is being
+  executed, not two accidents, and it is the thing to watch for in Phase 4.**
+- **`checks:bite`'s own row was stale by one fixture and contradicted itself.** It said "18 today
+  over 16" while the table held 19 over 17, and its blindSpot said the leak-at-the-sink defect "has
+  no fixture and is absent rather than faked" three sentences after listing `template:check` as the
+  row that finally gives it one. `memo:drift` cannot catch either: it compares the row to the memo,
+  never either to the fixture table. That is the third distinct instance of this exact blind spot.
+- **`pnpm lint` did not honour the reserved `verify-*` prefix.** Every other consumer of `mocks/`
+  does. It did not matter while only full-tier rows scaffolded there; `template:check` made a
+  transient `mocks/verify-tmpl-<pid>` appear during every fast run, i.e. every Stop-hook turn, so a
+  concurrent `pnpm lint` could go red for a directory being deleted underneath it. Now ignored.
+- **A registry sentence went stale the moment `template:check` landed.** `contract:complete`'s
+  blindSpot said the golden's refusal drives "are a FULL-tier row"; since `template:check` they also
+  run in the fast tier.
+
+Of the fifteen refuted, most were refuted for being already disclosed, or for naming a real mechanism
+and the wrong consequence. One refutation is worth keeping: a reviewer argued the anchored `fail()`
+clause is green by construction because the golden's REFUSALS table supplies the literal its fallback
+searches for. The verifier measured that and found the cause is `rules.ts`, whose singleton
+`Refusal<'PARTY_NAME_BLANK'>` the type system already forces — deleting the golden's table changed
+nothing. The hole is real, was already disclosed word-for-word, and is not caused by what the finding
+blamed.
+
 ## What is still open
 
+- **Nothing in either tier detects a dependency the template fails to declare.** The root now carries
+  the template's whole dependency set, so a rendered or installed mock resolves an undeclared import
+  by walking up to the root `node_modules`. Before Phase 3 the `build` row would have gone red for
+  the seven packages added; it no longer can. The range-parity test holds the opposite direction —
+  that the root does not drift from the template — but nothing holds this one.
 - **Both exactness residuals are unchanged and permanent.** An annotated widening or a cast, and a
   branch whose union TypeScript subtype-reduces before any check runs.
 - **The golden drives each operation and each refusal ONCE, with ONE actor.** So a handler that

@@ -276,8 +276,9 @@ const REAL = [
       'refusal as a singleton literal. Each declared STATUS is checked ' +
       'to BE a refusal status (400..599) — a 2xx there is resolved by the adapter as a success and ' +
       'reaches the screen typed as the declared response — but it is never compared to the status ' +
-      'the wire actually carries; that is the wire golden\'s refusal drives, which are a FULL-tier ' +
-      'row. The opposite direction — a fail() literal outside the declared set — is held by the ' +
+      'the wire actually carries; that is the wire golden\'s refusal drives, which run in the FAST ' +
+      'tier through template:check and again in the full tier through wire:frozen. ' +
+      'The opposite direction — a fail() literal outside the declared set — is held by the ' +
       'type system, not here.',
   },
   {
@@ -353,7 +354,7 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/checks-bite.mjs',
     proves:
-      'For each fixture in the table — 18 today, over 16 distinct planted defects: a tree derived ' +
+      'For each fixture in the table — 19 today, over 17 distinct planted defects: a tree derived ' +
       'from templates/mock is GREEN with no defect in ' +
       'it, the same tree with exactly ONE defect planted exits 1 — not merely non-zero, so a ' +
       'SKIPPED or UNRUNNABLE check cannot pass as a failed one — and the failing output names the ' +
@@ -376,8 +377,7 @@ const REAL = [
       'introduced, it does not remove it. Every fixture spawns ONE check with --root, so a check ' +
       'that does not take one can have no fixture: typecheck, lint, test, test:parity, lint:exempt, ' +
       'docs:truth, memo:drift, template:render, build and wire:frozen were each measured on ' +
-      '2026-09-13 and each needs a harness or check change first, which is why the leak-at-the-sink ' +
-      'defect has no fixture and is absent rather than faked.',
+      '2026-09-13 and each needs a harness or check change first.',
   },
   {
     id: 'template:render',
