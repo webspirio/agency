@@ -113,6 +113,22 @@ const DEFECTS = {
     if (annotated === src) throw new Error('annotated-factory: the factory signature moved');
     writeFileSync(file, annotated);
   },
+  /**
+   * A declared code nothing can emit. The clause that catches this is the one that
+   * goes VACUOUS if the reader is ported carelessly — the folded initializer is a
+   * CallExpression, so the old `isObjectLiteralExpression` guard is false, the loop
+   * never runs, and the check reports success having read no codes at all.
+   */
+  'unemittable-code': (root) => {
+    const file = path.join(root, 'templates', 'mock', 'src', 'api', 'contract.ts');
+    const src = readFileSync(file, 'utf8');
+    const extra = src.replace(
+      'codes: { PARTY_NOT_FOUND: 404 },\n  }),\n  createParty:',
+      'codes: { PARTY_NOT_FOUND: 404, PARTY_NEVER_EMITTED: 418 },\n  }),\n  createParty:',
+    );
+    if (extra === src) throw new Error('unemittable-code: the getParty codes object moved');
+    writeFileSync(file, extra);
+  },
   'tautological-control': (root) => {
     const file = path.join(root, 'templates', 'mock', 'src', 'api', 'drift.controls.ts');
     writeFileSync(
@@ -198,6 +214,11 @@ export const FIXTURES = [
     id: 'annotated-factory',
     check: 'scripts/verify/checks/contract-complete.mjs',
     expect: 'return-type annotation',
+  },
+  {
+    id: 'unemittable-code',
+    check: 'scripts/verify/checks/contract-complete.mjs',
+    expect: 'PARTY_NEVER_EMITTED',
   },
 ];
 

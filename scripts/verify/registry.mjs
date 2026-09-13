@@ -248,19 +248,25 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/contract-complete.mjs',
     proves:
-      'Every operation in the registry has a handler in routes.ts, an entry in `Io`, and a `qry` slot ' +
-      'on that entry — the slot every operation carries from t=0 because threading one through ' +
-      'CallArgs later is all-or-nothing. Every code an operation declares also appears as a string ' +
-      'literal somewhere in the mock\'s src/ outside the contract, so a declared code nothing can ' +
-      'ever emit is red.',
+      'Every operation in the registry has a handler in routes.ts, and every code an operation ' +
+      'declares appears as a string literal somewhere in the mock\'s src/ outside the contract, so ' +
+      'a declared code nothing can ever emit is red. The handler map is anchored on ' +
+      '`satisfies HandlersOf<…>`, and a return-type annotation of HandlersOf is red wherever it ' +
+      'appears — either spelling widens the map and silently stops the exactness check at toRoutes ' +
+      'from comparing anything. An operation whose registry entry this check cannot parse is red ' +
+      'rather than skipped.',
     blindSpot:
       'It does NOT check that two operations share no method+path, nor that a literal segment is ' +
       'declared before its :param sibling — MEASURED: compile() already throws on both as a ' +
-      'shadowing error before a request is served, so a copy here could only ever agree. The code ' +
-      'clause is reachability by LITERAL, not by proof: routes.ts passes rule-returned codes ' +
-      '(blank.code), so the literal is matched anywhere under src/ rather than at a fail() site for ' +
-      'that operation. The opposite direction — a fail() literal outside the declared set — is held ' +
-      'by the type system, not here.',
+      'shadowing error before a request is served, so a copy here could only ever agree. The `Io` ' +
+      'coverage and `qry` slot clauses are GONE, and the qry one was not replaced: the slot is now ' +
+      'a type parameter with a default, so op<void, Party>() yields Record<string, never> and an ' +
+      'operation CANNOT fail to declare one — that guarantee moved out of this row and into the ' +
+      'shape the scaffolder writes at t=0. The code clause is reachability by LITERAL, not by ' +
+      'proof: routes.ts passes rule-returned codes (blank.code), so the literal is matched anywhere ' +
+      'under src/ rather than at a fail() site for that operation, and the STATUS each code ' +
+      'declares is compared to nothing at all. The opposite direction — a fail() literal outside ' +
+      'the declared set — is held by the type system, not here.',
   },
   {
     id: 'contract:controls',

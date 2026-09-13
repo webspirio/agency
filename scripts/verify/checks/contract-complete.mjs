@@ -21,12 +21,22 @@ const TRANSIENT = /^verify-/;
 const parse = (file) =>
   ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.ESNext, true);
 
-/** @returns {{keys: string[], codes: Record<string, string[]>}} */
+/**
+ * @returns {{keys: string[], codes: Record<string, string[]>, unreadable: string[]}}
+ *
+ * THE INITIALIZER IS A CALL: `op<Req, Res>()({ … })`. The reader this replaced
+ * guarded on `isObjectLiteralExpression`, which is FALSE here, so the codes loop
+ * never ran, `codes[key]` stayed empty and the reachability clause reported success
+ * having read no codes at all — measured green with an unemittable code declared.
+ * An entry this cannot read is now reported, never skipped: silence there is the
+ * whole defect.
+ */
 function registryOf(file) {
   const source = parse(file);
   const keys = [];
   /** @type {Record<string, string[]>} */
   const codes = {};
+  const unreadable = [];
   const visit = (node) => {
     if (
       ts.isVariableDeclaration(node) &&
@@ -43,16 +53,28 @@ function registryOf(file) {
           const key = op.name.text;
           keys.push(key);
           codes[key] = [];
-          if (ts.isObjectLiteralExpression(op.initializer)) {
-            for (const field of op.initializer.properties) {
-              if (
-                ts.isPropertyAssignment(field) &&
-                ts.isIdentifier(field.name) &&
-                field.name.text === 'codes' &&
-                ts.isArrayLiteralExpression(field.initializer)
-              ) {
-                for (const el of field.initializer.elements) {
-                  if (ts.isStringLiteral(el)) codes[key].push(el.text);
+
+          let entry = op.initializer;
+          while (ts.isCallExpression(entry)) entry = entry.arguments[0] ?? entry.expression;
+          if (ts.isAsExpression(entry)) entry = entry.expression;
+          if (!ts.isObjectLiteralExpression(entry)) {
+            unreadable.push(key);
+            continue;
+          }
+          for (const field of entry.properties) {
+            if (
+              ts.isPropertyAssignment(field) &&
+              ts.isIdentifier(field.name) &&
+              field.name.text === 'codes' &&
+              ts.isObjectLiteralExpression(field.initializer)
+            ) {
+              /* The code names are property NAMES now, not string-literal array
+                 elements. A port that kept `isStringLiteral` on the name would find
+                 ZERO codes and be exactly as silent as the guard above. */
+              for (const c of field.initializer.properties) {
+                if (!ts.isPropertyAssignment(c)) continue;
+                if (ts.isIdentifier(c.name) || ts.isStringLiteral(c.name)) {
+                  codes[key].push(c.name.text);
                 }
               }
             }
@@ -63,33 +85,7 @@ function registryOf(file) {
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return { keys, codes };
-}
-
-/** The members of `interface Io`, and whether each declares a `qry`. */
-function ioOf(file) {
-  const source = parse(file);
-  /** @type {Record<string, string[]>} */
-  const members = {};
-  const visit = (node) => {
-    if (ts.isInterfaceDeclaration(node) && node.name.text === 'Io') {
-      for (const m of node.members) {
-        if (!ts.isPropertySignature(m) || !m.name) continue;
-        const key = ts.isIdentifier(m.name) || ts.isStringLiteral(m.name) ? m.name.text : null;
-        if (!key) continue;
-        const slots = [];
-        if (m.type && ts.isTypeLiteralNode(m.type)) {
-          for (const s of m.type.members) {
-            if (ts.isPropertySignature(s) && s.name && ts.isIdentifier(s.name)) slots.push(s.name.text);
-          }
-        }
-        members[key] = slots;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return members;
+  return { keys, codes, unreadable };
 }
 
 /**
@@ -196,13 +192,17 @@ function checkMock(label, dir, problems) {
     return { parsed: false, operations: 0 };
   }
 
-  const { keys, codes } = registryOf(contractFile);
+  const { keys, codes, unreadable } = registryOf(contractFile);
   if (keys.length === 0) {
     problems.push(`${label}: the api registry did not parse — no operations found`);
     return { parsed: false, operations: 0 };
   }
-
-  const io = ioOf(contractFile);
+  for (const key of unreadable) {
+    problems.push(
+      `${label}: operation '${key}' has an initializer this check cannot read, so its codes were ` +
+        `never examined — an entry is \`op<Req, Res>()({ … })\` or a plain object literal`,
+    );
+  }
   const { keys: handlers, anchors, annotated } = handlersOf(routesFile);
   for (const line of annotated) {
     problems.push(
@@ -225,14 +225,6 @@ function checkMock(label, dir, problems) {
     if (!handlers.has(key)) {
       problems.push(`${label}: operation '${key}' has no handler in src/api/routes.ts`);
     }
-    if (!(key in io)) {
-      problems.push(`${label}: operation '${key}' has no entry in \`interface Io\``);
-    } else if (!io[key].includes('qry')) {
-      problems.push(
-        `${label}: operation '${key}' declares no \`qry\` slot. Every entry carries one from t=0 ` +
-          `(\`Record<string, never>\` for "no query") — retrofitting is all-or-nothing.`,
-      );
-    }
     for (const code of codes[key] ?? []) {
       if (!emitted.has(code)) {
         problems.push(
@@ -243,9 +235,6 @@ function checkMock(label, dir, problems) {
     }
   }
 
-  for (const key of Object.keys(io)) {
-    if (!keys.includes(key)) problems.push(`${label}: \`Io\` declares '${key}', which the registry does not`);
-  }
   /* THE REVERSE DIRECTION — a handler for an operation the registry does not declare —
      is NOT checked here, and was not checked by the loop that used to sit at this line
      either: its entire body was `continue`, under a comment describing a check. It is
@@ -297,8 +286,8 @@ function main() {
     process.exit(1);
   }
   process.stdout.write(
-    `contract:complete: ${checked} contract(s), ${operations} operation(s) — each has a handler, a qry ` +
-      `slot and a literal site for every declared code\n`,
+    `contract:complete: ${checked} contract(s), ${operations} operation(s) — each has a handler and ` +
+      `a literal site for every declared code\n`,
   );
 }
 
