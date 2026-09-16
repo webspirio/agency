@@ -1,0 +1,74 @@
+{
+  "me": [
+    "{driver_name:string,has_can:boolean,model:string,odometer_km:number,plate:string,queued:number,today:number,truck_id:seq-id}"
+  ],
+  "overview": [
+    "{events:number,generated_at:instant,headline:string,legs:number,pending:number,total_litres:dec2}"
+  ],
+  "listEvents": [
+    "{data:[]{amount_uah:dec2,confirmed_at:instant,driver_id:seq-id,driver_name:string,flags:[]string,id:seq-id,kind:string,litres:dec2,occurred_at:instant,odometer_km:number,odometer_source:string,photo_kind:string,place:string,plate:string,sync:string,truck_id:seq-id,ttn_number:null,ttn_source:null}|{amount_uah:dec2,confirmed_at:null,driver_id:seq-id,driver_name:string,flags:[]string,id:seq-id,kind:string,litres:dec2,occurred_at:instant,odometer_km:number,odometer_source:string,photo_kind:string,place:string,plate:string,sync:string,truck_id:seq-id,ttn_number:null,ttn_source:null}|{amount_uah:null,confirmed_at:instant,driver_id:seq-id,driver_name:string,flags:[]empty,id:seq-id,kind:string,litres:null,occurred_at:instant,odometer_km:number,odometer_source:string,photo_kind:string,place:string,plate:string,sync:string,truck_id:seq-id,ttn_number:string,ttn_source:string}|{amount_uah:null,confirmed_at:instant,driver_id:seq-id,driver_name:string,flags:[]string,id:seq-id,kind:string,litres:null,occurred_at:instant,odometer_km:number,odometer_source:string,photo_kind:string,place:string,plate:string,sync:string,truck_id:seq-id,ttn_number:null,ttn_source:null}|{amount_uah:null,confirmed_at:null,driver_id:seq-id,driver_name:string,flags:[]string,id:seq-id,kind:string,litres:null,occurred_at:instant,odometer_km:number,odometer_source:string,photo_kind:string,place:string,plate:string,sync:string,truck_id:seq-id,ttn_number:null,ttn_source:null},limit:number,page:number,total:number}"
+  ],
+  "submitEvent": [
+    "{amount_uah:null,confirmed_at:null,driver_id:seq-id,driver_name:string,flags:[]string,id:seq-id,kind:string,litres:null,occurred_at:instant,odometer_km:number,odometer_source:string,photo_kind:string,place:string,plate:string,sync:string,truck_id:seq-id,ttn_number:null,ttn_source:null}"
+  ],
+  "getEvent": [
+    "{amount_uah:dec2,confirmed_at:null,driver_id:seq-id,driver_name:string,flags:[]string,id:seq-id,kind:string,litres:dec2,occurred_at:instant,odometer_km:number,odometer_source:string,photo_kind:string,place:string,plate:string,sync:string,truck_id:seq-id,ttn_number:null,ttn_source:null}"
+  ],
+  "confirmEvent": [
+    "{amount_uah:dec2,confirmed_at:instant,driver_id:seq-id,driver_name:string,flags:[]empty,id:seq-id,kind:string,litres:dec2,occurred_at:instant,odometer_km:number,odometer_source:string,photo_kind:string,place:string,plate:string,sync:string,truck_id:seq-id,ttn_number:string,ttn_source:string}"
+  ],
+  "listLegs": [
+    "{data:[]{driver_name:string,ended_at:instant,from_place:string,id:seq-id,km:number,l_100km:dec2,litres:dec2,norm_l_100km:dec2,odometer_in_km:number,odometer_out_km:number,over_norm:boolean,plate:string,started_at:instant,to_place:string,ttn_number:string}|{driver_name:string,ended_at:instant,from_place:string,id:seq-id,km:number,l_100km:null,litres:dec2,norm_l_100km:dec2,odometer_in_km:number,odometer_out_km:number,over_norm:boolean,plate:string,started_at:instant,to_place:string,ttn_number:string}|{driver_name:string,ended_at:null,from_place:string,id:seq-id,km:null,l_100km:null,litres:dec2,norm_l_100km:dec2,odometer_in_km:null,odometer_out_km:number,over_norm:boolean,plate:string,started_at:instant,to_place:string,ttn_number:null},limit:number,page:number,total:number}"
+  ],
+  "exportWaybill": [
+    "{generated_at:instant,rows:[]{date:date,driver_name:string,id:seq-id,km:null,litres_by_norm:null,litres_by_receipt:dec2,plate:string,spidometr_in_km:null,spidometr_out_km:number,ttn_number:null}|{date:date,driver_name:string,id:seq-id,km:number,litres_by_norm:dec2,litres_by_receipt:dec2,plate:string,spidometr_in_km:number,spidometr_out_km:number,ttn_number:string}|{date:date,driver_name:string,id:seq-id,km:number,litres_by_norm:null,litres_by_receipt:dec2,plate:string,spidometr_in_km:number,spidometr_out_km:number,ttn_number:string},suspect:number,total_km:number,total_litres:dec2}"
+  ],
+  "refusals": {
+    "submitEvent.ODOMETER_INVALID": [
+      "400",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "submitEvent.PHOTO_WRONG_KIND": [
+      "400",
+      "{code:string,error:string,expected:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "submitEvent.TRUCK_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant,truck_id:seq-id}"
+    ],
+    "getEvent.EVENT_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,id:seq-id,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "confirmEvent.EVENT_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,id:seq-id,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "confirmEvent.EVENT_ALREADY_CONFIRMED": [
+      "409",
+      "{code:string,confirmed_at:instant,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "confirmEvent.TTN_BLANK": [
+      "400",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "confirmEvent.TTN_DUPLICATE": [
+      "409",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ]
+  },
+  "malformed": {
+    "submitEvent.emptyBody": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "submitEvent.forgedFields": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "confirmEvent.wrongType": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ]
+  }
+}

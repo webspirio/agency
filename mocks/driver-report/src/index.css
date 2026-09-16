@@ -1,0 +1,227 @@
+/* @scaffold-owned — the theme contract, and the single most expensive line in
+   the scaffold to get wrong.
+
+   TWO things have to be true before `bg-card` exists in the built stylesheet,
+   and NEITHER of them fails loudly:
+
+   1. @source below. Tailwind 4 scans the project for class names, and it does
+      NOT scan a dependency. `@agency/kit` is path-linked, so without this line
+      Tailwind never sees `bg-card`, `text-primary` or `rounded-xl` written in a
+      kit component — the utilities are simply absent from dist/*.css and every
+      kit surface renders as unstyled boxes. No error, no warning, a green build.
+      The path is relative to THIS file at `mocks/<slug>/src/index.css`.
+
+      `{ts,tsx}`, not `tsx`. The scanner is textual and knows nothing about
+      components: `focusRing` in `packages/kit/src/lib/cn.ts` names three
+      utilities from a plain `.ts` file, and a `*.tsx` glob does not see them.
+
+   2. The @theme block. A utility only exists if a token backs it: `bg-card` is
+      generated from `--color-card` and from nothing else. @source with no
+      @theme finds the class name and emits nothing for it — the same silent
+      blank screen from the other direction.
+
+   Re-theming a mock is: change the hex values in `:root` and `.dark`. Nothing
+   below the @theme block, and no component anywhere, reads a literal colour. */
+@import "tailwindcss";
+@import "tw-animate-css";
+@source "../../../packages/kit/src/**/*.{ts,tsx}";
+
+/* The kit's theme store toggles `.dark` on <html> (see @agency/kit/lib/theme).
+   Tailwind's stock `dark:` variant follows prefers-color-scheme instead, which
+   would ignore an explicit choice. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --radius: 0.5rem;
+  /* Scroll cap for Dialog/AlertDialog content. Both reference it; if it is
+     undefined a tall form silently cannot scroll. */
+  --app-content-max-h: calc(100dvh - 2rem);
+
+  /* Palette — light. KTL's OWN corporate blue, read off their live stylesheet
+     at https://ktl.in.ua/css/blue.css rather than guessed: #274484 is the link,
+     button, header-top and .default-bg colour (60 occurrences) and #6877b4 is
+     the hover accent (36). #777777 is their body grey. Cool neutral paper
+     underneath, because a warm one fights a navy this saturated.
+
+     Their heading face — a self-hosted 'PhilosopherBold' — is deliberately NOT
+     adopted: it is a decorative display serif, and this product is read at a
+     loading gate in direct sun by someone the client describes as малоосвічений.
+     The @theme block below keeps the system sans, which also costs no network
+     request in the first 200 ms of a demo. */
+  --background: #f6f7f9;
+  --foreground: #16181d;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #16181d;
+  --popover: #ffffff;
+  --popover-foreground: #16181d;
+  --primary: #274484;
+  --primary-foreground: #ffffff;
+  --secondary: #eef0f5;
+  --secondary-foreground: #1f2433;
+  --muted: #eef0f5;
+  --muted-foreground: #5c6373;
+  --muted2: #777777;
+  --accent: #e7eaf1;
+  --accent-foreground: #16181d;
+  --brand: #274484;
+  --brand-foreground: #ffffff;
+  --destructive: #b3261e;
+  --success: #1c7a45;
+  /* A PAIR, because a filled surface needs a foreground that inverts with it.
+     MEASURED in a 390px viewport: a `bg-success text-white` button was fine
+     here and about 2:1 in dark mode, where --success is a light mint. A
+     component that hard-codes `text-white` is a component that reads a literal
+     colour, which this theme contract forbids for exactly this reason. */
+  --success-foreground: #ffffff;
+  --border: #dde1e9;
+  --line2: #c8cddb;
+  --input: #c8cddb;
+  --ring: #6877b4;
+
+  /* Instrument colours — status and charts read these, never a literal hex.
+     `amber` is the flag colour on an office row: a dropped digit or a jump is
+     WARNED about and never blocked, so it must not be the destructive red that
+     means "this was refused". */
+  --leaf: #1c7a45;
+  --amber: #a15c07;
+  --sky: #0369a1;
+  --chart-1: #274484;
+  --chart-2: #6877b4;
+  --chart-3: #a15c07;
+  --chart-4: #1c7a45;
+  --chart-5: #0369a1;
+}
+
+.dark {
+  /* A cab at 05:40 in November is dark, and the screen is the only light in it.
+     The navy inverts to a legible tint rather than staying #274484, which on a
+     dark surface is very nearly invisible. */
+  --background: #14161b;
+  --foreground: #f2f4f8;
+  --surface: #1d2027;
+  --card: #1d2027;
+  --card-foreground: #f2f4f8;
+  --popover: #1d2027;
+  --popover-foreground: #f2f4f8;
+  --primary: #93a7de;
+  --primary-foreground: #121722;
+  /* Secondary surfaces (table header band, hover fills) must read AGAINST the
+     card, not blend into it — keep the same step the light palette has. */
+  --secondary: #2a2e38;
+  --secondary-foreground: #f2f4f8;
+  --muted: #2a2e38;
+  --muted-foreground: #a7adbd;
+  --muted2: #8b91a1;
+  --accent: #313642;
+  --accent-foreground: #f2f4f8;
+  --brand: #93a7de;
+  --brand-foreground: #121722;
+  --destructive: #fb7185;
+  --success: #6ee7b7;
+  --success-foreground: #0d1f16;
+  /* Dividers sit on both the card and the paper; one step off either and the
+     hairline vanishes. */
+  --border: #3c414e;
+  --line2: #4a5060;
+  --input: #4a5060;
+  --ring: #93a7de;
+
+  --leaf: #6ee7b7;
+  --amber: #fbbf24;
+  --sky: #7dd3fc;
+  --chart-1: #93a7de;
+  --chart-2: #b9c5ea;
+  --chart-3: #fbbf24;
+  --chart-4: #6ee7b7;
+  --chart-5: #7dd3fc;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted2: var(--muted2);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-line2: var(--line2);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-leaf: var(--leaf);
+  --color-amber: var(--amber);
+  --color-sky: var(--sky);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Radius ladder — one multiplier drives every corner in the kit. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+
+  /* Typefaces. System stacks by default: a webfont is a network request in the
+     first 200 ms of a demo, so it is an opt-in per mock, not a default. */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Every figure on these screens is money or mass — always tabular, so
+     columns of numerals line up. */
+  .tnum,
+  table,
+  input {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* PageHeader's title uses this; without it the heading silently falls back to
+   the body face. */
+@utility font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
