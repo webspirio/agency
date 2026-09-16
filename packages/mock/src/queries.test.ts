@@ -39,10 +39,17 @@ describe('makeQueries derives the cache key from the operation, never from a str
     expect(a).not.toEqual(b);
   });
 
-  it('does NOT include the body, so a mutation does not fragment its own cache', () => {
+  it('INCLUDES the body, so two bodied reads cannot serve each other data', () => {
+    // A first version left the body out "so a mutation does not fragment its own
+    // cache". `mutation()` calls keyOf with NO args and never reaches that line, so
+    // the only effect was that two different bodied reads collided on one key.
     const a = q.keyOf('createParty', { params: {}, body: { name: 'A' } });
     const b = q.keyOf('createParty', { params: {}, body: { name: 'B' } });
-    expect(a).toEqual(b);
+    expect(a).not.toEqual(b);
+  });
+
+  it('keys a mutation by its operation alone, because it is passed no args', () => {
+    expect(q.keyOf('createParty')).toEqual(['createParty']);
   });
 
   it('is stable across key ORDER in qry, so two equal queries are one entry', () => {
@@ -67,9 +74,17 @@ describe('query and mutation return OPTIONS, never hook results', () => {
     expect(typeof options.queryFn).toBe('function');
   });
 
-  it('gives useMutation a fn taking the body, and the key to invalidate', () => {
+  it('gives useMutation a fn taking the body, and NOTHING about invalidation', () => {
+    // A first version returned `invalidates: keyOf(key)` — the MUTATION's own name,
+    // which can never prefix-match a READ's key, so a screen following it would
+    // silently stop refreshing after a write. The registry declares no relationship
+    // between a write and the reads it stales, so there is no correct value to derive.
     const options = q.mutation('createParty');
     expect(typeof options.mutationFn).toBe('function');
-    expect(options.invalidates).toEqual(['createParty']);
+    expect(options).not.toHaveProperty('invalidates');
+  });
+
+  it('lets a screen name the reads to invalidate, still registry-derived', () => {
+    expect(q.keyOf('listParties')).toEqual(['listParties']);
   });
 });

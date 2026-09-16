@@ -29,6 +29,7 @@ import {
   s,
   shape,
   type AllResJsonSafe,
+  type BodiesOf,
   type Contract,
   type Expect,
   type Paginated,
@@ -132,9 +133,14 @@ export type RESPONSES_ARE_WIRE_SHAPED = Expect<AllResJsonSafe<Api>>;
  * answers 400 with one sentence per failed field, and refuses the unknown property
  * outright because its global ValidationPipe runs `forbidNonWhitelisted: true`.
  *
- * Only operations with a request BODY appear here; a GET declares nothing. Add an
- * endpoint with a body and add its shape — the check runs before the handler, so the
- * handler body stays the Nest service body it becomes.
+ * Every operation with a request BODY must appear here, and no operation without one
+ * may: `BodiesOf<Api>` keys off `ReqOf`, so a missing shape is TS2741 naming the
+ * operation and a stray one is TS2353. `satisfies` rather than an annotation, for the
+ * same reason the handler map uses it — an annotation would widen the literal and the
+ * exactness would evaporate.
+ *
+ * The check runs BEFORE the handler, so the handler body stays the Nest service body
+ * it becomes.
  */
 const bodies = {
   createParty: shape({
@@ -158,7 +164,7 @@ const bodies = {
     balance: s.str(),
   }),
   renameParty: shape({ name: s.str() }),
-};
+} satisfies BodiesOf<Api>;
 
 const contract = makeContract<Api>(api, bodies);
 

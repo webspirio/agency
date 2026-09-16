@@ -202,7 +202,9 @@ field, and no `code`. Measured before `shape()` existed — an empty body answer
 rule: the shape answers "is this the right SHAPE", a rule in `templates/mock/src/domain/rules.ts`
 answers "is this a legal value", and only the second carries a declared code. Measured: declaring
 `balance: s.dec2()` intercepted the malformed balance first and made `PARTY_BALANCE_INVALID` a
-declared code nothing could emit, with every row still green.
+declared code nothing could emit — **and `contract:complete` stayed green**, because the `fail()`
+site still existed. What caught it was the wire golden's refusal drive for that pair, which is the
+golden being the instrument rather than the record.
 
 **Four things are load-bearing, and each was measured rather than assumed:**
 

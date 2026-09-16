@@ -349,12 +349,20 @@ export type CallArgsOf<A extends ApiSpec, K extends keyof A> = {
 };
 
 /**
- * A body check per operation, all optional: a GET declares none, and an existing mock
- * that declares none keeps behaving exactly as it did. What a declaration buys is the
- * product's bytes for a malformed request — 400 with `message: string[]` — where the
- * mock otherwise answers 500 for an empty body and 201 for a forged field it ignores.
+ * A body check for every operation that HAS a body, and none for the ones that do not.
+ *
+ * REQUIRED, not optional, and that was found by review: with every key optional, an
+ * author adding a bodied endpoint and forgetting its shape got the exact behaviour
+ * Phase 4 exists to remove — an empty body reaching the handler, `blankName(undefined)`
+ * throwing, and the adapter answering 500 — with every row green. The obligation is a
+ * type now rather than a comment in the template.
+ *
+ * The key remapping keys off `ReqOf`, so `op<void, …>()` operations are EXCLUDED: a GET
+ * declaring a shape is as wrong as a POST omitting one.
  */
-export type BodiesOf<A extends ApiSpec> = { readonly [K in keyof A]?: Shape };
+export type BodiesOf<A extends ApiSpec> = {
+  readonly [K in keyof A as [ReqOf<A, K>] extends [void] ? never : K]: Shape;
+};
 
 export type Contract<A extends ApiSpec> = {
   call<K extends keyof A>(
@@ -514,7 +522,7 @@ export function makeContract<A extends ApiSpec>(api: A, bodies?: BodiesOf<A>): C
                ARRAY, and NO code: that is exactly what a ValidationPipe rejection
                becomes in AllExceptionsFilter, and a code here would be a
                discriminator the product never sends. */
-            const declared = bodies?.[key];
+            const declared = (bodies as Record<string, Shape> | undefined)?.[key as string];
             if (declared !== undefined) {
               const problems = check(declared, c.body);
               if (problems.length !== 0) throw new DomainError(400, undefined, problems);

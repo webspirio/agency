@@ -166,24 +166,14 @@ function callsIn(file, mockRoot) {
   };
   collectImports(source);
 
-  /* A screen may also build its own: `const q = makeQueries(contract, httpClient)`.
-     Either way a row that cannot see that surface reports every operation reached
-     through it as unreached — a false red, which is the fastest route to a row an
-     operator switches off. */
-  const collectFactories = (node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      ts.isCallExpression(node.initializer) &&
-      ts.isIdentifier(node.initializer.expression) &&
-      node.initializer.expression.text === 'makeQueries'
-    ) {
-      factories.add(node.name.text);
-    }
-    ts.forEachChild(node, collectFactories);
-  };
-  collectFactories(source);
+  /* A LOCALLY BUILT FACTORY IS NOT RECOGNISED, and that is deliberate.
+     `const q = makeQueries(contract, http)` can only be matched by the callee's TEXT,
+     which says nothing about WHERE its registry came from — so a page building a
+     factory over a hoisted `@agency/contracts` registry would have counted as reaching
+     this mock's operations, which is exactly what CLAUDE.md decision 4 forbids. Found
+     by review. The `queries` export imported from this mock's own src/api/queries is
+     anchored the same way `call` is, by resolving the specifier, and that is the only
+     spelling this row credits. */
 
   const visit = (node) => {
     if (ts.isCallExpression(node)) {
