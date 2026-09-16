@@ -216,7 +216,15 @@ golden being the instrument rather than the record.
 - **`JsonSafe` cannot be a constraint.** `T extends JsonSafe<T>` is TS2313 "circular constraint" on a
   type alias *and* on a function type parameter, in tsc 6.0.3. It ships as a conditional tripwire —
   one line per contract asserting every declared response at once. A `Date`, a `Map`, or a required
-  key whose value may be `undefined` is refused at declaration.
+  key whose value may be `undefined` is refused at declaration. **`null` is not in that list and
+  used to be**: every branch is written `[T] extends [X]` so a union is judged whole rather than
+  taken apart, and `[string | null]` satisfies neither `[null]` nor `[string | number | boolean]` —
+  so it fell through to `never` and *any* nullable field turned `RESPONSES_ARE_WIRE_SHAPED` red.
+  Measured 2026-09-16 on the first mock to declare one. Null is now peeled off before those
+  branches and put back after, recursively, so `{ at: string } | null` passes while `Date | null`
+  and a required `string | null | undefined` still do not. Six controls in
+  `packages/mock/src/contract.controls.ts` pin all four directions; `unknown` is refused *before*
+  the peel, because `[null] extends [unknown]` is true and the peel would otherwise recurse forever.
 - **Exactness is checked ONCE, at the sink, and it does not survive a cast.** Handlers end in
   `satisfies HandlersOf<Api, Io>` and return plain values; `toRoutes` returns `LeakFree<…>`, so a
   handler returning more than its operation declares is a compile error at `export const routes` —

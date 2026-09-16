@@ -196,11 +196,42 @@ type RequiredKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? never : K
  *
  * An honestly-OPTIONAL key (`note?: string`) is fine and stays fine: the type
  * already says the key may be absent. Branded strings (`Decimal2`, `Instant`)
- * pass, because they are strings.
+ * pass, because they are strings. A NULLABLE field is fine too — see the peel
+ * below; `null` is the one wire value `undefined` is constantly confused with
+ * and the only one of the two that survives `JSON.stringify`.
  */
 export type JsonSafe<T> =
   [T] extends [void] ? T
-  : [T] extends [null] ? T
+  /**
+   * `unknown` — which is what `ResOf` yields for an entry written WITHOUT
+   * `op<…>()` — is refused here, and it must be refused BEFORE the null peel
+   * below rather than by falling off the end as it used to. `[null] extends
+   * [unknown]` is true, so the peel would recurse on `unknown` for ever.
+   * `any` never reaches this line: it satisfies the `void` branch above, which
+   * is the behaviour that was already there.
+   */
+  : [unknown] extends [T] ? never
+  /**
+   * NULL IS PEELED OFF, NOT MATCHED, and that is the whole fix.
+   *
+   * Every branch here is written `[T] extends [X]` deliberately — the tuples
+   * stop the conditional distributing, so a union is judged whole rather than
+   * taken apart. The cost, MEASURED 2026-09-16, was that a union WITH null in
+   * it matched nothing: `[string | null]` satisfies neither `[null]` nor
+   * `[string | number | boolean]`, so `JsonSafe<string | null>` fell through to
+   * `never` and `RESPONSES_ARE_WIRE_SHAPED` went red on any contract declaring
+   * a nullable field. A `timestamptz NULL`, an unset foreign key and a number
+   * nobody has supplied are the most ordinary things a real API returns, and
+   * `null` round-trips through JSON exactly.
+   *
+   * So null is removed, the remainder is judged on its own, and null is put
+   * back. Recursive rather than a special case at the primitive branch, which
+   * is what makes `{ at: string } | null` pass and `Date | null` still fail:
+   * the peel hands `Date` to the branch that already refuses it. A required key
+   * typed `string | null | undefined` is still refused, by the `undefined`
+   * clause in the object case, which the peel never reaches.
+   */
+  : [null] extends [T] ? JsonSafe<Exclude<T, null>> | null
   : [T] extends [string | number | boolean] ? T
   : [T] extends [Date] ? never
   : [T] extends [(...a: never[]) => unknown] ? never
@@ -243,8 +274,19 @@ export type DeepExact<A, T> =
      Measured: −38% instantiations at template size. */
   [A] extends [string | number | boolean | null | undefined]
     ? A
+  /* `readonly`, NOT `DeepExact<AE, TE>[]`. MEASURED 2026-09-16 on the first
+     mock to declare a readonly array in a response: the mutable rebuild made
+     `[readonly T[]] extends [T[]]` false, so the comparison failed on
+     MUTABILITY rather than on keys and five of that mock's eight operations
+     were red at the sink with nothing wide about any of them. Mutability is
+     not a wire property — `JSON.stringify` cannot tell the two apart and
+     neither can any client — and widening the result to `readonly` accepts a
+     mutable array too, because `T[]` IS assignable to `readonly T[]`. What it
+     gives up is nothing: the element type is still compared by the recursive
+     `DeepExact<AE, TE>`, which is what `WideElementInAReadonlyArrayIsALeak`
+     in contract.controls.ts exists to keep true. */
   : [A] extends [readonly (infer AE)[]]
-    ? ([T] extends [readonly (infer TE)[]] ? DeepExact<AE, TE>[] : never)
+    ? ([T] extends [readonly (infer TE)[]] ? readonly DeepExact<AE, TE>[] : never)
     : [A] extends [object]
       ? ([T] extends [object]
           ? { [K in keyof A]: K extends keyof T ? DeepExact<A[K], T[K]> : never }

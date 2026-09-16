@@ -331,6 +331,57 @@ export type ExactUnionIsNotALeak = Expect<
   Equal<Leaks<Api, { getParty: () => Party | Party }>, never>
 >;
 
+/* ── READONLY IS NOT A LEAK, and it used to be ──────────────────────────── *
+ *
+ * MEASURED 2026-09-16 on the first mock to declare one: an operation whose
+ * response carried a `readonly` array was reported as leaking, and five of its
+ * eight operations were red at the sink for that reason alone. The cause is one
+ * token in `DeepExact`'s array branch, which rebuilt the element type into a
+ * MUTABLE `DeepExact<AE, TE>[]` — and `readonly T[]` is not assignable to
+ * `T[]`, so the exactness comparison failed on mutability rather than on keys.
+ *
+ * Mutability is not a wire property. `JSON.stringify` cannot tell the two apart
+ * and neither can any client. Excess KEYS are what this check exists to catch,
+ * and the pair below is what says so: the first was red before the fix, and the
+ * second must stay green after it — a wide ELEMENT inside a readonly array is
+ * still a leak, which is what makes the fix a correction rather than a hole.
+ *
+ * Its own fixture, deliberately: adding an operation to `api` above would mean
+ * adding a handler to `ok` and re-reading every control that spreads it.
+ */
+type ListedRow = { id: string };
+type WideListedRow = ListedRow & { internal_note: string };
+type Listing = { id: string; rows: readonly ListedRow[] };
+
+const readonlyApi = {
+  getListing: op<void, Listing>()({
+    method: 'GET', path: '/listings/:id', status: 200, caps: [], codes: {},
+  }),
+};
+type ReadonlyApi = typeof readonlyApi;
+
+/** The declared shape returned verbatim. Red before the array branch preserved
+ *  `readonly`; this is the control the fix exists for. */
+export type ReadonlyArrayIsNotALeak = Expect<
+  Equal<Leaks<ReadonlyApi, { getListing: () => Listing }>, never>
+>;
+
+/** THE ONE THAT KEEPS THE FIX HONEST. A wide row nested inside a `readonly`
+ *  array is still caught, element by element, exactly as it is inside a mutable
+ *  one — so relaxing mutability gave up nothing the check was ever for. */
+export type WideElementInAReadonlyArrayIsALeak = Expect<
+  Equal<
+    Leaks<ReadonlyApi, { getListing: () => { id: string; rows: readonly WideListedRow[] } }>,
+    'getListing'
+  >
+>;
+
+/** A handler may hand back a MUTABLE array where the contract declares a readonly
+ *  one. It is the ordinary case — a store returns `T[]` — and it was never a leak. */
+export type MutableArrayAgainstReadonlyIsNotALeak = Expect<
+  Equal<Leaks<ReadonlyApi, { getListing: () => { id: string; rows: ListedRow[] } }>, never>
+>;
+
 declare const unrelated: { id: string; extra: number };
 declare const narrowParty: Party;
 declare const flag: boolean;
@@ -415,6 +466,49 @@ export type MapIsRefused = Expect<
 export type RequiredUndefinedIsRefused = Expect<
   // @ts-expect-error the key is required but its value can vanish; the type lies about the wire.
   IsJsonSafe<{ id: string; maybe: string | undefined }>
+>;
+
+/* ── NULL IS NOT UNDEFINED, and the difference is the whole point ────────── *
+ *
+ * A nullable column is the most ordinary thing a real API returns — a
+ * `timestamptz NULL`, a foreign key not yet set, a number nobody has supplied —
+ * and `null` round-trips through JSON exactly. `undefined` does not: a required
+ * key holding it vanishes from the payload, which is why the control above
+ * refuses it.
+ *
+ * MEASURED 2026-09-16, before the fix below existed: `JsonSafe<string | null>`
+ * resolved to `never` and `IsJsonSafe<{ a: string | null }>` was `false`, so a
+ * contract could not declare a nullable field at all without
+ * `RESPONSES_ARE_WIRE_SHAPED` going red. The cause was that every branch of
+ * `JsonSafe` is written `[T] extends [X]` — deliberately non-distributive, to
+ * keep a union from being taken apart — and `[string | null]` satisfies neither
+ * `[null]` nor `[string | number | boolean]`, so it fell through to `never`.
+ *
+ * Null is now peeled off BEFORE those branches and put back afterwards, which
+ * is why the object case below passes too: the peel is recursive, so the
+ * refusals keep working through it.
+ */
+export type NullableStringIsWireSafe = Expect<IsJsonSafe<{ id: string; ttn: string | null }>>;
+export type NullableNumberIsWireSafe = Expect<IsJsonSafe<{ id: string; km: number | null }>>;
+export type BareNullIsWireSafe = Expect<IsJsonSafe<{ nothing: null }>>;
+
+/** A nullable OBJECT too — peeling null must recurse, not stop at primitives. */
+export type NullableObjectIsWireSafe = Expect<
+  IsJsonSafe<{ id: string; last: { at: string } | null }>
+>;
+
+/** And the peel must not smuggle a refused type through. A `Date` is still a
+ *  `Date` whether or not it may also be null. */
+export type NullableDateIsStillRefused = Expect<
+  // @ts-expect-error a Date-carrying response is not a wire shape, nullable or otherwise.
+  IsJsonSafe<{ id: string; at: Date | null }>
+>;
+
+/** The undefined refusal must survive the peel as well: `string | null |
+ *  undefined` on a REQUIRED key is still a key that can vanish. */
+export type NullablePlusUndefinedIsStillRefused = Expect<
+  // @ts-expect-error the key is required but its value can still vanish.
+  IsJsonSafe<{ id: string; maybe: string | null | undefined }>
 >;
 
 /* ── THE HONEST WEAKNESS, asserted as a live type ───────────────────────── *
