@@ -77,7 +77,14 @@ const ROLE_LABEL: Record<OfficeRole, string> = { DISPATCHER: 'диспетчер
 /** The rota slot answering drivers at `now`: the overnight slot (its `from` after its `to`, 20:00–06:00) from its start
  *  until midnight — «after 20:00 Дмитро Савчук · до 06:00» (§3.3 D-02, §4.1) — and the day slot every other minute, so
  *  the dispatcher of the day is the one named from the first departures of the morning. Wall times compare by code point:
- *  both are zero-padded «HH:MM». */
+ *  both are zero-padded «HH:MM».
+ *
+ *  `role_label` is the FINISHED words a call button says after the name: «диспетчер» by day, «черговий до 06:00» at
+ *  night (§3.3 D-02 mode D, 04 X11). The hour rides on the label rather than on a slot of its own because the button
+ *  renders «Подзвонити — <name>, <role_label>» and has no third slot (I-15), and because this is the only place that
+ *  holds the role CODE: `OnCallView` carries `until` but not the role, so a component could only tell the two apart by
+ *  matching the word «черговий», which is a string, not a discriminator. The day slot gets no «до 20:00»: the spec
+ *  names one form for the dispatcher and another for the night man, and they are not symmetrical. */
 export function onCallAt(w: World, now: Instant): OnCallView {
   const hm = fmtTime(now);
   const overnight = w.rota.find((r) => byCodepoint(r.to, r.from) === -1 && byCodepoint(hm, r.from) !== -1);
@@ -85,7 +92,8 @@ export function onCallAt(w: World, now: Instant): OnCallView {
   const slot = overnight ?? day ?? w.rota[0] ?? null;
   const user = slot === null ? null : w.officeUsers.find((u) => u.id === slot.user_id) ?? null;
   if (slot === null || user === null) return { name: '', role_label: '', until: '', phone: '' };
-  return { name: user.full_name, role_label: ROLE_LABEL[user.role], until: slot.to, phone: user.phone ?? '' };
+  const role = user.role === 'ON_CALL' ? `${ROLE_LABEL[user.role]} до ${slot.to}` : ROLE_LABEL[user.role];
+  return { name: user.full_name, role_label: role, until: slot.to, phone: user.phone ?? '' };
 }
 
 /* ── the plan ─────────────────────────────────────────────────────────── */

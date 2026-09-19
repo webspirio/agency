@@ -1,6 +1,6 @@
 // mocks/driver-report/src/components/theme-tokens.test.ts
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { compile } from 'tailwindcss';
 
@@ -115,6 +115,18 @@ describe('index.css compiled by Tailwind (§3.1 targets)', () => {
     expect(winning(out, 'size-shutter', 'width')).toBe('var(--spacing-shutter)');
     expect(winning(out, 'size-shutter', 'height')).toBe('var(--spacing-shutter)');
   });
+
+  it('backs the console scrim with a token, so `bg-scrim` is not a class that emits nothing (§4.2 C-05)', async () => {
+    // The header above this file's twin says no component anywhere reads a literal colour. The correction dialog's
+    // overlay is §4.2 C-05's `rgb(16 22 26 / .45)`, which had no token — and a `bg-*` whose token is missing is the
+    // silent failure the @theme block exists to prevent: the class name is scanned, nothing is emitted, and the
+    // overlay renders fully transparent with no error anywhere.
+    expect(css).toContain('--scrim: rgb(16 22 26 / 0.45);');
+    // `@theme inline` substitutes the token's VALUE, so the utility names `--scrim` and not `--color-scrim` — which
+    // is what makes it follow `.dark`. Drop `--color-scrim` from the @theme block and this reads `undefined`.
+    const out = await tailwind(['bg-scrim']);
+    expect(winning(out, 'bg-scrim', 'background-color')).toBe('var(--scrim)');
+  });
 });
 
 describe('index.html (§6.3)', () => {
@@ -131,5 +143,57 @@ describe('index.html (§6.3)', () => {
   it('paints 0 from a per-profile key and never from the OS (D15)', () => {
     expect(html).toContain("'driver-report:theme:' + profile");
     expect(html).not.toContain('prefers-color-scheme');
+  });
+});
+
+/**
+ * §8.5 asks for «a 3 px `--ring` outline, offset 2 px, on every focusable element», and index.css gives it to the
+ * whole tree in one `@layer base` rule. Tailwind's `outline-none` is a UTILITY, and utilities are emitted after base:
+ * measured in this mock's own dist stylesheet, `:focus-visible{outline:3px` lands at byte 7 901 and `.outline-none` at
+ * 39 845, so one `outline-none` on a control silently deletes its focus ring with nothing else to show for it.
+ *
+ * This is the ratified half of W1-01's deviation: the driver kit uses native <button>s rather than the kit's `Button`
+ * precisely because that component's base cva opens with `outline-none`, and W1-01 measured itself writing the class
+ * out of habit 13 times before removing it.
+ *
+ * WHAT IT DOES NOT PROVE. It reads THIS mock's own source and nothing else, so the four office review components that
+ * import `@agency/kit/button` still inherit the kit's `outline-none` and its ring-based indicator instead (a 3 px ring
+ * at 50 % opacity, offset 0, not a 3 px outline at offset 2) — a §8.5 residual for W3-05's browser QA, invisible here.
+ * It is textual: it cannot see a class assembled at runtime, nor `outline: none` written in a style attribute.
+ */
+describe('the §8.5 focus ring survives every client surface', () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = resolve(dir, e.name);
+      if (e.isDirectory()) return walk(p);
+      return /\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) ? [p] : [];
+    });
+
+  /** The offenders in a set of files: anything that writes the class that cancels the outline. Comment lines are
+   *  dropped first — `components/driver/index.ts` NAMES the class in the docblock explaining why the driver kit
+   *  refuses it, and a word in a comment styles nothing. */
+  const cancels = (files: string[]): string[] =>
+    files.filter((f) => readFileSync(f, 'utf8').split('\n')
+      .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l))
+      .some((l) => /(^|[\s"'`])outline-none([\s"'`]|$)/.test(l)));
+
+  const surfaces = ['components', 'pages', 'stage'].flatMap((d) => {
+    const at = resolve(import.meta.dirname, '..', d);
+    return existsSync(at) ? walk(at) : [];
+  });
+
+  it('is written nowhere under components/, pages/ or stage/', () => {
+    expect(surfaces.length).toBeGreaterThan(60);
+    expect(cancels(surfaces).map((f) => f.split('/src/')[1])).toEqual([]);
+  });
+
+  it('would say so if it were — the control that keeps the green above honest', () => {
+    const planted = resolve(import.meta.dirname, '../../.outline-probe.tsx');
+    writeFileSync(planted, 'export const B = () => <button className="h-tap outline-none">Зняти</button>;\n');
+    try {
+      expect(cancels([planted])).toHaveLength(1);
+    } finally {
+      rmSync(planted);
+    }
   });
 });

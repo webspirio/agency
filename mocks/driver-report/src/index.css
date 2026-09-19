@@ -72,6 +72,7 @@
   --ring-tap: inset 0 0 0 1px var(--line-strong);
   --elev-1: 0 1px 2px rgb(16 22 26 / 0.04), 0 8px 24px -16px rgb(16 22 26 / 0.18);
   --elev-2: 0 2px 4px rgb(16 22 26 / 0.05), 0 18px 40px -24px rgb(16 22 26 / 0.22);
+  --scrim: rgb(16 22 26 / 0.45);   /* console dialog overlay (§4.2 C-05) — flat, never blurred */
 
   /* kit contract names → the values above */
   --background: var(--paper);
@@ -178,6 +179,9 @@
   --ring-card: inset 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.06);
   --elev-1: 0 8px 24px -12px rgb(0 0 0 / 0.55);
   --elev-2: 0 24px 60px -34px rgb(6 18 22 / 0.7);
+  /* 45 % of near-black over an already dark console separates nothing, so the night scrim borrows the ONE overlay
+     density this file already carries (--cam-scrim) rather than inventing a third number. */
+  --scrim: rgb(5 8 10 / 0.62);
   --primary-foreground: #0b1013;
   --brand-foreground: #0b1013;
   --success-foreground: #0b1013;
@@ -259,6 +263,7 @@
   --color-sidebar-text: var(--sidebar-text);
   --color-sidebar-muted: var(--sidebar-muted);
   --color-sidebar-active: var(--sidebar-active);
+  --color-scrim: var(--scrim);
 
   --radius-sm: 4px;
   --radius-md: 8px;

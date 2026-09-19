@@ -50,6 +50,16 @@ describe('today (§7.4 DriverToday, §3.2 inputs)', () => {
     expect(t.odometer_ref).toMatchObject({ value: 412355, at: '2026-09-20T14:48:00.000Z', basis: 'LAST_AT_BASE', kind: 'SHIFT_END_AT_BASE' });
     expect([t.shift, t.device.bound, t.on_call.name, t.on_call.until, t.truck?.plate]).toEqual([null, true, 'Ірина Коваленко', '20:00', 'АР 1234 ВС']);
   });
+  it('names the night man with the hour he answers until, and the dispatcher without one (§3.3 D-02 mode D)', () => {
+    // The call button renders «Подзвонити — <name>, <role_label>» and takes no `until` slot (I-15), and OnCallView
+    // carries no role CODE — so the hour can only be composed here, where the rota slot and the role are both known.
+    const day = testServer('05:14');
+    expect(driverHandlers(day).getToday(ctxFor(day, PAVLO_ACTOR)).on_call)
+      .toMatchObject({ name: 'Ірина Коваленко', role_label: 'диспетчер', until: '20:00' });
+    const night = testServer('20:30');
+    expect(driverHandlers(night).getToday(ctxFor(night, PAVLO_ACTOR)).on_call)
+      .toMatchObject({ name: 'Дмитро Савчук', role_label: 'черговий до 06:00', until: '06:00' });
+  });
   it('gives Григорій the mechanic’s reading', () => {
     const s = testServer('05:14');
     const d = s.stores.devices.get('device-000003')!;
