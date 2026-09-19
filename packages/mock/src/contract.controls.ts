@@ -540,3 +540,77 @@ export type ParamRenameIsVisible = Expect<
 export type ArgsArePerOperation = Expect<
   Equal<Equal<CallArgsOf<Api, 'getParty'>, CallArgsOf<Api, 'listParties'>>, false>
 >;
+
+/* ── nested unions of objects: DeepExact was not reflexive ──────────────────
+ *
+ * MEASURED 2026-09-19 on the first mock to declare a discriminated union INSIDE
+ * a response (`RecordView.payload`, 21 constituents). `DeepExact<T, T>` reported
+ * the declared type as a leak of itself, so `toRoutes` refused a correct handler.
+ *
+ * Cause: the object branch compared each constituent of A against `keyof T`
+ * where T was the WHOLE union, and `keyof (T1 | T2)` is the INTERSECTION of
+ * their keys. Every key the constituents do not share mapped to `never`, and a
+ * 21-member union of disjoint shapes has no shared key at all — so the whole
+ * payload became all-`never` and any handler returning it read as wide.
+ *
+ * A second, opposite defect rode along: `[A] extends [object]` is FALSE for
+ * `X | null`, so a nullable nested object fell through to the `: A` escape and
+ * was never deep-checked — a wide row behind `| null` passed the sink silently,
+ * and only the wire golden would ever have seen it.
+ *
+ * The four positive/negative pairs below pin both directions. They are the
+ * reason `ExactObject` distributes over A and then over T.
+ */
+
+type NestedA = { kind: 'A'; x: string };
+type NestedB = { kind: 'B'; y: number };
+type NestedRow = { id: string; payload: NestedA | NestedB };
+
+const nestedApi = {
+  getRow: op<void, NestedRow>()({ method: 'GET', path: '/rows/:id', status: 200, caps: [], codes: {} }),
+};
+type NestedApi = typeof nestedApi;
+
+/** The declared type returned VERBATIM is not a leak. Red before the fix. */
+export type NestedUnionIsNotALeak = Expect<Equal<Leaks<NestedApi, { getRow: () => NestedRow }>, never>>;
+
+/** One constituent widened IS a leak — the check still bites inside the union. */
+export type WideNestedConstituentIsALeak = Expect<
+  Equal<Leaks<NestedApi, { getRow: () => { id: string; payload: (NestedA & { secret: string }) | NestedB } }>, 'getRow'>
+>;
+
+/* The harder shape the mock actually declares: constituents with NO discriminant,
+   overlapping keys, and a `Record<string, never>` member for a payload-less record. */
+type PayloadLike =
+  | { truck_id: string }
+  | { request_id: string }
+  | { request_id: string; reply: 'LATER' }
+  | Record<string, never>;
+
+const payloadApi = {
+  getP: op<void, { p: PayloadLike }>()({ method: 'GET', path: '/p', status: 200, caps: [], codes: {} }),
+};
+
+export type RecordLikeUnionIsNotALeak = Expect<Equal<Leaks<typeof payloadApi, { getP: () => { p: PayloadLike } }>, never>>;
+
+export type WideInRecordLikeUnionIsALeak = Expect<
+  Equal<
+    Leaks<typeof payloadApi, { getP: () => { p: { truck_id: string; secret: string } | { request_id: string } } }>,
+    'getP'
+  >
+>;
+
+/** The nullable-nested hole: `{ x } | null` must still be deep-checked. Red before the fix. */
+type Nullable = { x: string };
+const nullableApi = {
+  getQ: op<void, { q: Nullable | null }>()({ method: 'GET', path: '/q', status: 200, caps: [], codes: {} }),
+};
+
+export type WideNullableNestedIsALeak = Expect<
+  Equal<Leaks<typeof nullableApi, { getQ: () => { q: { x: string; secret: string } | null } }>, 'getQ'>
+>;
+
+/** …and the correct nullable row is still not a leak. */
+export type ExactNullableNestedIsNotALeak = Expect<
+  Equal<Leaks<typeof nullableApi, { getQ: () => { q: Nullable | null } }>, never>
+>;

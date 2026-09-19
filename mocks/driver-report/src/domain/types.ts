@@ -1,278 +1,203 @@
-import type { Decimal2, Instant } from '@agency/mock';
+import type { BusinessDate, Decimal2, Instant } from '@agency/mock';
+export type { BusinessDate, Decimal2, Instant };
 
-/**
- * ЗВІТ ВОДІЯ — the domain, in the client's own vocabulary.
- *
- * WIRE CASING IS snake_case, because that is what the Nest backend emits and a
- * mock that renames fields is a mock whose components have to be edited at
- * conversion. `occurred_at`, `odometer_km` and `ttn_number` are deliberately
- * multi-word: the wire golden fingerprints key NAMES, so a drift to
- * `occurredAt` is red.
- *
- * THE MODEL IS ONE FLAT EVENT TABLE, and that is a decision rather than an
- * omission. There is no `trips` table the driver maintains, because maintaining
- * one means tapping through screens he is not reading. A рейс is a QUERY — see
- * `legsOf` in `calc.ts` — pairing each LOADING with the next UNLOADING on the
- * same truck. The client's «база» already holds the planned рейс and Ruptela
- * already holds where the truck was every 30 seconds; the only three facts
- * nobody else holds are the document, the number printed on it, and the
- * odometer a domestic truck's ECU may not report. The app asks for those.
- */
+export type Dec1 = string;   // one decimal: l/100, per cent, t·km  ('31.8')
+export type Dec3 = string;   // tonnes ('12.000')
+export type Km = number;     // whole kilometres
+export type Scope = 'PILOT' | 'FLEET';
+export type Tone = 'plain' | 'hold' | 'reject' | 'muted';
+export type Deferred = 'AT_PARKING' | 'AFTER_EXIT';
+export type Gps = 'OK' | 'DENIED' | 'UNRELIABLE';
 
-/**
- * The three things that ever happen. Deliberately NOT project44's full enum —
- * no ARRIVED, no DEPARTED, no WORK_STARTED. Five independent vendors
- * (Transporeon, Shippeo, Samsara, Omnitracs, Route4Me) derive arrival and
- * departure from geofences with zero driver interaction, and KTL already has
- * geofences drawn in Ruptela. A tap for them would double the tap count for
- * data the client already owns.
- *
- * REFUEL is standalone rather than a step inside a trip, because the client
- * said so in the call: «маленькими окремими модулями це йдуть заправки».
- */
-export type EventKind = 'LOADING' | 'UNLOADING' | 'REFUEL';
+export const RECORD_TYPES = ['SHIFT_START', 'SHIFT_END', 'DRIVER_ATTESTED', 'ARRIVED', 'SEGMENT', 'LOADED',
+  'UNLOADED', 'DOCS_ADDED', 'STOP_LEFT', 'REFUEL', 'ROAD_STOP', 'ROAD_STOP_END', 'STOP_PROBLEM', 'CALL_ME',
+  'REQUEST_SEEN', 'REQUEST_REPLY', 'PHOTO_REPLACE', 'CORRECTION_ACK', 'VOID'] as const;
+export type RecordType = (typeof RECORD_TYPES)[number];
+export const ARTEFACT_KINDS = ['TTN_FRONT', 'TTN_BACK', 'TTN_SIGNED', 'RECEIPT', 'CLUSTER', 'WEIGH_TICKET', 'ACT'] as const;
+export type ArtefactKind = (typeof ARTEFACT_KINDS)[number];
+export const PAGE_SOURCES = ['DRAWN', 'INPAGE', 'NATIVE', 'OFFICE_UPLOAD'] as const;
+export type PageSource = (typeof PAGE_SOURCES)[number];
+export const SEGMENT_CHIPS = ['QUEUE', 'LOADING_NOW', 'UNLOADING_NOW', 'SCALES', 'LAB', 'WAIT_DOCS', 'DRIVE_IN',
+  'TTN_SHOWN', 'ALERT', 'OTHER', 'WAIT_ORDERS'] as const;
+export type SegmentChip = (typeof SEGMENT_CHIPS)[number];
+export const ROAD_STOP_REASONS = ['ALERT', 'CURFEW', 'HEAT', 'CHECKPOINT', 'BREAKDOWN', 'DETOUR', 'ACCIDENT',
+  'WEIGH_CONTROL'] as const;
+export type RoadStopReason = (typeof ROAD_STOP_REASONS)[number];
+export const STOP_PROBLEM_KINDS = ['NOT_ACCEPTED', 'SEAL', 'NOT_LOADED', 'DISCREPANCY'] as const;
+export type StopProblemKind = (typeof STOP_PROBLEM_KINDS)[number];
+export const NO_DOC_REASONS = ['PRINTING', 'SHIPPER_REFUSED', 'ETTN', 'CALL_ME', 'CONSIGNEE_REFUSES',
+  'LEFT_AT_CONSIGNEE', 'SIGN_LATER', 'NO_TICKET'] as const;
+export type NoDocReason = (typeof NO_DOC_REASONS)[number];
+export const CORRECTION_REASONS = ['OCR_ERROR', 'TYPO', 'BY_DASH_PHOTO', 'BY_CAN', 'ODOMETER_REPLACED', 'BY_TTN',
+  'BY_STATEMENT', 'BY_PLAN', 'OTHER'] as const;
+export type CorrectionReason = (typeof CORRECTION_REASONS)[number];
+export const REQUEST_TYPES = ['RETAKE_PHOTO', 'CALL_ME'] as const;            // P0 only
+export type RequestType = (typeof REQUEST_TYPES)[number];
+export const RETAKE_REASONS = ['BLUR', 'CROPPED', 'GLARE', 'WRONG_SIDE', 'NO_ARRIVAL_TIME'] as const;
+export type RetakeReason = (typeof RETAKE_REASONS)[number];
+export const RESOLVE_REASONS = ['DRIVER_EXPLAINED', 'OCR_ERROR', 'NOT_A_PROBLEM', 'DOC_TODAY'] as const;
+export type ResolveReason = (typeof RESOLVE_REASONS)[number];
+export const FLAG_CODES = ['ODOMETER_BACKWARDS', 'ODOMETER_OFF_PLAN', 'ODOMETER_JUMP', 'ODOMETER_STALE',
+  'ODOMETER_TYPED', 'ODOMETER_UNREAD', 'IMAGE_QUALITY_LOW', 'PLAN_MISMATCH_TRUCK', 'PLAN_MISMATCH_TRAILER',
+  'LATE_RECORD_ON_CONFIRMED_DAY', 'NO_TTN_AT_DEPARTURE', 'SAMPLE'] as const;
+export type FlagCode = (typeof FLAG_CODES)[number];
+export const EXCEPTION_CODES = ['NO_TTN_AT_DEPARTURE', 'ACCIDENT', 'SEAL_PROBLEM', 'BREAKDOWN_CANT_DRIVE',
+  'DISCREPANCY', 'NOT_ACCEPTED', 'NOT_LOADED', 'LOADED_NOT_RECORDED', 'CALL_ME', 'SHIFT_NOT_STARTED',
+  'NO_SIGNED_TTN', 'STOP_REVIEW', 'TTN_NO_MASS', 'ODOMETER_TYPED', 'ODOMETER_BACKWARDS', 'ODOMETER_JUMP',
+  'ODOMETER_STALE', 'ODOMETER_UNREAD', 'ODOMETER_OFF_PLAN', 'SAMPLE_CHECK', 'IMAGE_QUALITY_LOW',
+  'PAYMENT_METHOD_PENDING', 'PLACE_UNKNOWN', 'LATE_RECORD_ON_CONFIRMED_DAY', 'PLAN_MISMATCH_TRUCK',
+  'PLAN_MISMATCH_TRAILER'] as const;
+export type ExceptionCode = (typeof EXCEPTION_CODES)[number];
+/** 'arrival'/'departure'/'gross' are the LOADING row of the reverse side; 'drop_arrival'/'drop_departure' the
+ *  unloading row. reviewStop SET_FIELD 'arrival' on a DROP stop writes 'drop_arrival'. */
+export const TTN_FIELDS = ['no', 'date', 'shipper', 'consignee', 'cargo', 'mass', 'compartments', 'seals',
+  'arrival', 'departure', 'gross', 'drop_arrival', 'drop_departure'] as const;
+export type TtnField = (typeof TTN_FIELDS)[number];
+export const TELEMETRY_KINDS = ['CARD_IN', 'CARD_OUT', 'IN', 'OUT', 'REFUEL', 'DRAIN', 'BREAK', 'MOTION'] as const;
+export type TelemetryKind = (typeof TELEMETRY_KINDS)[number];
 
-/**
- * WHERE THE ODOMETER CAME FROM, and this field is the whole reason a
- * pre-filled value and a typed one can coexist without one pretending to be
- * the other. Copied in spirit from Bringg's `checkin_origin`, which records
- * whether a check-in was human or automatic.
- *
- * The three tiers, in order of how few taps they cost the driver:
- *   CAN_AUTO         Ruptela's CAN/FMS odometer. The screen does not render.
- *   DRIVER_CONFIRMED a pre-filled number and one green ТАК.
- *   DASH_PHOTO       he photographs the cluster. 97% of the fleet is Scania
- *                    Euro 5/6 with a digital LCD dash — the best OCR case there is.
- *   DRIVER_TYPED     the last resort, and the only screen in the product where
- *                    a man who «дуже не любить писати» writes.
- */
-export type OdometerSource = 'CAN_AUTO' | 'DRIVER_CONFIRMED' | 'DASH_PHOTO' | 'DRIVER_TYPED';
+export type Telematics = 'RUPTELA' | 'REGIS' | 'NONE';
+export type OfficeRole = 'DISPATCHER' | 'OPERATOR' | 'ACCOUNTANT' | 'MECHANIC' | 'ON_CALL';
+export type PlaceKind = 'BASE' | 'LOADING' | 'DROP' | 'REFUEL' | 'BORDER' | 'OTHER';
 
-/**
- * The artefact photographed. The two ТТН kinds are NOT the same document:
- * п.11.3–11.5 Правил №363 issues the ТТН in THREE copies, and примірник 3 —
- * the one certified by the consignee's signature and stamp — is what proves
- * delivery and unlocks payment. That is why the driver photographs twice, and
- * why the two screens say different sentences.
- */
-export type PhotoKind = 'TTN' | 'TTN_SIGNED' | 'FUEL_RECEIPT' | 'DASH';
+export type Truck = { id: string; plate: string; model: string; year: number | null; telematics: Telematics;
+  has_can: boolean; has_tacho: boolean; has_fuel_sensor: boolean; norm_l_100: Dec1; norm_order: string | null;
+  trailer_id: string; dispatcher_id: string; pilot: boolean; example: boolean; status: 'ACTIVE' | 'REPAIR';
+  card_mask: string | null; paper: boolean;
+  mechanic_reading: { value: Km; at: Instant; by_short: string } | null };
+export type Trailer = { id: string; plate: string; body: 'PNEUMO' | 'TIPPER_TANK' | 'AUGER' | 'GRAIN_TIPPER' | 'TENT';
+  body_label: string; compartments: number; capacity_t: Dec3 };
+export type Driver = { id: string; full_name: string; short_name: string; first_name: string; initials: string;
+  tab_no: string; phone: string | null; mode: 'APP' | 'PAPER'; pilot: boolean; example: boolean;
+  hired_at: BusinessDate; truck_id: string };
+export type OfficeUser = { id: string; login: string; full_name: string; short_name: string; initials: string;
+  role: OfficeRole; phone: string | null };
+export type RotaSlot = { id: string; user_id: string; from: string; to: string };
+export type Device = { id: string; driver_id: string | null; label: string; os_label: string;
+  bound_at: Instant | null; bound_by: string | null; revoked_at: Instant | null; last_contact_at: Instant | null;
+  unsent_at_contact: number; next_seq: number; seen_examples: ArtefactKind[]; office_sees_read: boolean };
+export type BindCode = { id: string; code: string; driver_id: string; created_by: string; created_at: Instant;
+  expires_at: Instant; opened_at: Instant | null; used_at: Instant | null; device_id: string | null };
+export type Place = { id: string; code: string; name: string; short: string; label: string; label_gen: string;
+  town: string; town_gen: string;
+  kind: PlaceKind; edrpou: string | null; no_photos: boolean; weigh_ticket: boolean;
+  curfew: { from: string; to: string } | null; radius_m: number; near_code: string | null; near_km: Km | null };
+export type Distance = { id: string; from_code: string; to_code: string; km: Km };
+export type Trip = { id: string; no: string; truck_id: string; trailer_id: string; driver_id: string;
+  date: BusinessDate; source: 'BAS_FILE' | 'OFFICE'; imported_at: Instant; example: boolean;
+  planned_start: Instant | null };
+export type PlannedStop = { id: string; plan_key: string; trip_id: string; seq: number; place_id: string;
+  kind: 'LOADING' | 'DROP' | 'BASE' | 'UNPLANNED'; ttn_expected: number; ttn_nos: string[];
+  drop_index: number | null; drop_count: number | null; compartments: string | null; cargo: string | null;
+  mass_t: Dec3 | null; unplanned_kind: 'LOADING' | 'DROP' | 'REFUEL' | 'OTHER' | null;
+  accepted_at: Instant | null; accepted_by: string | null };
+export type Shift = { id: string; driver_id: string; device_id: string; truck_id: string; trailer_id: string;
+  truck_day_id: string; started_at: Instant; ended_at: Instant | null; attested_at: Instant | null;
+  closed_by: 'DRIVER' | 'OFFICE' | 'CARD' | null; start_key: string | null };
+export type ExampleDayFigures = { km: Km; km_loaded: Km; from: Instant; to: Instant; docs: string;
+  fuel_l: Decimal2 | null; legs: number; refuels: number; driver_short: string;
+  /** UC-O15's one seeded «зі слів водія» entry (АР 0633 КХ, «дзвінок 09:12 · О. Кравець»); null elsewhere. */
+  call_entry: { at: Instant; by_short: string } | null };
+export type TruckDay = { id: string; truck_id: string; driver_id: string | null; date: BusinessDate;
+  version: number; status: 'OPEN' | 'READY' | 'CONFIRMED'; waybill_no: string | null;
+  confirmed_by: string | null; confirmed_at: Instant | null; confirm_reason: string | null;
+  printed_at: Instant | null; signed_at: Instant | null;
+  exported: { export_id: string; at: Instant; version: number } | null;
+  example: boolean; figures: ExampleDayFigures | null };
 
-/**
- * Where the ТТН number came from. Modelled as a reference WITH a source from
- * day one, never as "a photo with a caption": е-ТТН is live and voluntary
- * today (ПКМУ №720 від 04.06.2026) with 15 authorised platform operators, and
- * a photo-only schema forces a rewrite the moment a counterparty switches.
- */
-export type TtnSource = 'OCR' | 'OFFICE' | 'ETTN';
+export type OdometerSource = 'CAN' | 'DASH_PHOTO' | 'PLAN_CONFIRMED' | 'DRIVER_TYPED' | 'UNREAD' | 'OFFICE_EDIT'
+  | 'OFFICE_CALC' | 'OFFICE_FROM_CALL';
+export type OdometerBasis = 'LAST_AT_BASE' | 'MECHANIC' | 'PLANNED_KM' | 'CAN_DELTA' | 'NONE';
+export type OdometerChoice = 'CONFIRMED' | 'DIGIT_EXPECTED' | 'DIGIT_READ' | 'TYPED' | 'KEPT_AS_IS' | 'UNREAD' | 'AUTO';
+export type Odometer = { value: Km | null; source: OdometerSource; basis: OdometerBasis; expected: Km | null;
+  read: Km | null; choice: OdometerChoice; page_key: string | null };
 
-/** QUEUED until the server acknowledges. The driver sees «збережено» at the
- *  moment the row exists locally, never after a network round trip. */
-export type SyncState = 'QUEUED' | 'SENT';
+export type Page = { id: string; key: string; record_key: string; artefact: ArtefactKind; doc_index: number;
+  page_no: number; captured_at: Instant; source: PageSource; bytes: number; quality: 'OK' | 'LOW';
+  quality_reasons: string[]; deferred: Deferred | null;
+  drawn: { variant: string; value: string | null; sim_read: string | null } | null;
+  image: string | null; received_at: Instant | null; superseded_by: string | null };
 
-/**
- * Computed in the office, shown to the driver NEVER, and blocking NOTHING.
- * The industry answer to a wrong-place or wrong-order report is
- * warn-record-never-block — Detrack pops a geofence warning the driver may
- * ignore, Samsara logs an out-of-sequence arrival to an audit trail. Blocking
- * strands a man at a silo gate at 21:00 and produces a telephone call, which
- * is the behaviour that kills these apps.
- */
-export type EventFlag = 'ODOMETER_BACKWARDS' | 'ODOMETER_JUMP' | 'NO_TTN_NUMBER';
-
-export type Driver = {
-  id: string;
-  /** ПІБ, as HR holds it. Shown once on the bind screen at 32px so a wrong
-   *  name is unmissable, then never asked again. */
-  name: string;
-  phone: string;
-  truck_id: string;
+export type Payloads = {
+  SHIFT_START: { truck_id: string; trailer_id: string; plan_match: boolean; odometer: Odometer | null;
+    inline: 'NOW' | 'M30' | 'H1' | 'EARLIER' | 'CARD' | null };
+  SHIFT_END: { odometer: Odometer | null; place_id: string | null };
+  DRIVER_ATTESTED: { shift_id: string | null; km: Km | null; documents: number };
+  ARRIVED: { order: 'PLANNED' | 'OUT_OF_ORDER' | 'UNPLANNED'; claimed_at: string | null; chip: SegmentChip | null;
+    odometer: Odometer | null; unplanned_kind: 'LOADING' | 'DROP' | 'REFUEL' | 'OTHER' | null; new_place: boolean };
+  SEGMENT: { chip: SegmentChip };
+  LOADED: { ttn_count: number; pages: string[]; no_doc_reason: NoDocReason | null; deferred: Deferred | null };
+  UNLOADED: { drop_index: number | null; pages: string[]; deferred: Deferred | null; no_doc_reason: NoDocReason | null };
+  DOCS_ADDED: { pages: string[]; odometer: Odometer | null; deferred: Deferred };
+  STOP_LEFT: Record<string, never>;
+  REFUEL: { station: string; receipt_no: string | null; rro_no: string | null; sum_uah: Decimal2 | null;
+    card_mask: string | null; full_tank: boolean; odometer: Odometer | null; deferred: boolean };
+  ROAD_STOP: { reason: RoadStopReason; can_drive: boolean | null };
+  ROAD_STOP_END: { road_stop_key: string; at: string; closed_by: 'DRIVER' | 'CAN_MOTION' | 'NEXT_TAP_CHIP' };
+  STOP_PROBLEM: { kind: StopProblemKind; reason: string | null };
+  CALL_ME: Record<string, never>;
+  REQUEST_SEEN: { request_id: string };
+  REQUEST_REPLY: { request_id: string; reply: 'LATER' | 'NO_DOCUMENT' | 'CALL_ME' };
+  PHOTO_REPLACE: { request_id: string | null; page_key: string; supersedes: string };
+  CORRECTION_ACK: { correction_id: string; agree: boolean };
+  VOID: { target_key: string };
 };
+export type RecordPayload = Payloads[RecordType];
 
-export type Truck = {
-  id: string;
-  /** Rendered AS A PLATE, never as text in a sentence — the one element on the
-   *  confirm screen a driver actually looks at. */
-  plate: string;
-  model: string;
-  /**
-   * Does Ruptela read this truck's CAN bus? On a `true` truck the odometer
-   * screen does not render at all and the event costs three taps.
-   *
-   * UNVERIFIED IN REAL LIFE, and the mock must not pretend otherwise: Ruptela's
-   * documented surface is a REST poll at api.fm-track.com and no public webhook
-   * for geozone or CAN events could be found. «Регіс», which covers the ~70%
-   * domestic fleet, could not be identified as a company at all.
-   */
-  has_can: boolean;
-  /** The last reading the office holds, in whole kilometres. Never a decimal:
-   *  an odometer is a count, not money. */
-  odometer_km: number;
-  /** Litres per 100 km, from the CLIENT'S OWN approved наказ. There is no state
-   *  norm any more — наказ Мінтрансу №43 was repealed by наказ №1011 від
-   *  02.11.2023, leaving only ДержавтотрансНДІпроект's advisory Базові норми. */
-  norm_l_100km: Decimal2;
-};
+export type DriverRecordBase = { id: string; key: string; seq: number; device_id: string; driver_id: string;
+  truck_id: string; shift_id: string | null; truck_day_id: string | null; occurred_at: Instant;
+  committed_at: Instant; app_clock_at: Instant; received_at: Instant; stop_id: string | null;
+  place_id: string | null; gps: Gps; flags: FlagCode[]; voided_by: string | null; late: boolean };
+export type DriverRecord = { [T in RecordType]: DriverRecordBase & { type: T; payload: Payloads[T] } }[RecordType];
+export type RecordOf<T extends RecordType> = Extract<DriverRecord, { type: T }>;
 
-/**
- * ONE EVENT. Immutable from the phone's side: the driver cannot edit or delete,
- * only the office can confirm or void. Every field the driver did not supply is
- * named as nullable rather than faked.
- */
-export type DriverEvent = {
-  id: string;
-  kind: EventKind;
-  driver_id: string;
-  driver_name: string;
-  truck_id: string;
-  plate: string;
-  /** The device clock at capture. Server-derived here; a timestamp a client can
-   *  name is one a client can forge. */
-  occurred_at: Instant;
-  /** Ruptela's geofence name where the office has one, else the coarse place
-   *  the driver's one-shot GPS fix resolved to. The driver never picks it from
-   *  a list — a list is reading, and reading is what does not happen. */
-  place: string;
-  odometer_km: number;
-  odometer_source: OdometerSource;
-  photo_kind: PhotoKind;
-  /** NULL until OCR reads it or the dispatcher types it. The driver is never
-   *  asked: it is 8–12 keystrokes from a man holding the document. */
-  ttn_number: string | null;
-  ttn_source: TtnSource | null;
-  /** Litres and hryvnia come from the receipt, by OCR or by the office —
-   *  never from the driver. A third input on the refuel tile kills the module,
-   *  which is the one feature every adoption source names as ignored. */
-  litres: Decimal2 | null;
-  amount_uah: Decimal2 | null;
-  confirmed_at: Instant | null;
-  flags: readonly EventFlag[];
-  sync: SyncState;
-};
+export type TtnFieldValue = { value: string; source: 'OCR' | 'OFFICE_TYPED' | 'PLAN'; by: string; at: Instant };
+export type TtnDoc = { id: string; no: string; label: string; date: BusinessDate; trip_no: string; driver_id: string;
+  loading_stop_id: string | null; drop_stop_id: string | null; doc_index: number; ttn_count: number;
+  fields: Record<TtnField, TtnFieldValue | null>; ocr: Record<TtnField, string | null>; blank_reverse: boolean;
+  original: { received_at: Instant; received_by: string } | null; driver_said_handed: BusinessDate | null;
+  ettn: { no: string; platform: string; status: string } | null; note: string | null; example: boolean };
+export type Request = { id: string; type: RequestType; record_key: string; page_key: string | null;
+  stop_id: string | null; device_id: string; reasons: RetakeReason[]; created_by: string; created_at: Instant;
+  delivered_at: Instant | null; seen_at: Instant | null; done_at: Instant | null; cancelled_at: Instant | null;
+  reply: string | null };
+export type Correction = { id: string; record_key: string; field: 'odometer' | 'occurred_at'; old: string;
+  new: string; reason: CorrectionReason; note: string | null; by: string; role: OfficeRole; at: Instant;
+  needs_ack: boolean; ack: { agree: boolean; at: Instant } | null };
+export type Resolution = { id: string; item_id: string; code: ExceptionCode;
+  action: 'TAKE' | 'RESOLVE' | 'ACCEPT_AS_IS'; reason: string | null; by: string; at: Instant };
+export type Telemetry = { id: string; truck_id: string; at: Instant; kind: TelemetryKind; place_id: string | null;
+  can_km: Km | null; litres: Decimal2 | null; minutes: number | null; until: Instant | null };
+export type ExportRow = { id: string; date: BusinessDate; scope: Scope;
+  sheet: 'WAYBILLS' | 'LEGS' | 'REFUELS' | 'WORKTIME' | 'ALL'; format: 'CSV' | 'JSON'; created_at: Instant;
+  by: string; day_ids: string[]; file_name: string;
+  import: { at: Instant; created: number; updated: number; unchanged: number; corrections: string[] } | null };
+export type Audit = { id: string; at: Instant; actor_id: string; role: string; action: string; target: string;
+  detail: string; truck_day_id: string | null };
+export type StatementLine = { id: string; truck_id: string; at: Instant; station: string; litres: Decimal2;
+  sum_uah: Decimal2; matched_record_key: string | null };
+export type TruckMonth = { id: string; truck_id: string; month: string; days: number; km: Km; km_loaded: Km;
+  fuel_rate: Dec1 | null; fuel_method: 'CAN' | 'FULL_TO_FULL'; deviation: Dec1 | null; fuel_uah: Decimal2 | null;
+  site_hours: number; docs_on_time: string; days_confirmed: string; tkm: Dec1 | null; loaded_share: string | null;
+  trend: string[]; example: boolean };
+export type DriverMonth = { id: string; driver_id: string; month: string; shifts: number; on_shift_min: number;
+  on_site_min: number; night_min: number; docs_accepted: number; docs_total: number; originals_accepted: number;
+  originals_total: number; tacho_label: string; diff_label: string; curfew_heat_label: string;
+  weekend_label: string; simulated: boolean; example: boolean;
+  days: { date: BusinessDate; on_shift_min: number; docs_in_office: number; docs_total: number }[] };
+export type ExampleItem = { id: string; truck_id: string; code: ExceptionCode; lane: 'NOW' | 'REVIEW';
+  group: 'MONEY' | 'ODOMETER' | 'OTHER' | null; tone: Tone; title: string; meta: string; opened_at: Instant;
+  evidence: string | null; target_record_key: string | null; phone: string | null };
+export type ExampleBoardRow = { id: string; truck_id: string; driver_label: string; state: string;
+  state_line: string; rank: 1 | 2 | 3 | 4 | 5 | 6; odometer: { value: Km; source: OdometerSource } | null;
+  contact_at: Instant | null; unsent_at_contact: number; at_stop_min: number | null; on_shift: boolean;
+  not_started: 'MOVING_RUPTELA' | 'REGIS_NO_DATA' | 'ABSENT' | null; simulated: boolean };
 
-/**
- * WHAT THE PHONE SENDS. No `id`, no `occurred_at`, no `flags`, no `sync`: ids
- * are store-assigned (HARD RULE 4), the timestamp is server-derived, and the
- * flags are the office's verdict rather than the driver's claim.
- *
- * `odometer_km` is a STRING on the wire because that is what an input carries;
- * `invalidOdometer` in `rules.ts` is what refuses a non-number, with a code the
- * contract declares. A shape check answers "is this the right SHAPE"; a domain
- * rule answers "is this a legal value", and only the second has a code.
- */
-export type SubmitEvent = {
-  kind: EventKind;
-  truck_id: string;
-  odometer_km: string;
-  odometer_source: OdometerSource;
-  photo_kind: PhotoKind;
-  place: string;
-};
-
-/** What the DISPATCHER supplies, sitting down, in light, with two clean hands
- *  and the photograph in front of her. This is the deliberate relocation of
- *  typing — not its removal. */
-export type ConfirmEvent = {
-  ttn_number: string;
-};
-
-/** The driver's home screen. One request, everything on it. */
-export type Me = {
-  driver_name: string;
-  plate: string;
-  truck_id: string;
-  model: string;
-  has_can: boolean;
-  /** The pre-fill the odometer screen offers, and the reason it is one tap. */
-  odometer_km: number;
-  today: number;
-  queued: number;
-};
-
-/**
- * A рейс, RECONSTRUCTED. Not a row a driver maintained — a pairing of each
- * LOADING with the next UNLOADING on the same truck, with every REFUEL that
- * falls between them attached. This is the query the office runs instead of the
- * object the phone would have had to carry.
- */
-export type Leg = {
-  id: string;
-  plate: string;
-  driver_name: string;
-  from_place: string;
-  to_place: string;
-  started_at: Instant;
-  /** NULL on a leg whose unloading has not been reported — the red chip. */
-  ended_at: Instant | null;
-  odometer_out_km: number;
-  odometer_in_km: number | null;
-  km: number | null;
-  litres: Decimal2;
-  /** Against the truck's OWN norm, because there is no state norm. NULL while
-   *  the leg is open or carries no refuel. */
-  l_100km: Decimal2 | null;
-  norm_l_100km: Decimal2;
-  /** Over the client's own approved norm — the number that costs money, since
-   *  over-norm fuel triggers a compensating VAT liability under пп.«г»
-   *  п.198.5 ПКУ. */
-  over_norm: boolean;
-  ttn_number: string | null;
-};
-
-/**
- * ONE ROW OF BAS's OWN «Подорожній лист».
- *
- * The field names are not invented: BAS's standard document already carries
- * водій, автомобіль, «показники спідометра на момент виїзду та повернення», and
- * computes fuel from норми × пробіг. This is a near one-to-one match with what
- * the driver's four taps produce, which is why the export target is that
- * document rather than a CSV somebody has to map by hand.
- *
- * Note СПІДОМЕТР, not ОДОМЕТР. Drivers say спідометр and so does BAS — the
- * driver's word and the accounting system's word are the same word, and it is
- * not the technically correct one.
- */
-export type WaybillRow = {
-  id: string;
-  /** ISO business date, not an instant: BAS's document is per day. */
-  date: string;
-  driver_name: string;
-  plate: string;
-  spidometr_out_km: number;
-  spidometr_in_km: number | null;
-  km: number | null;
-  litres_by_receipt: Decimal2;
-  litres_by_norm: Decimal2 | null;
-  ttn_number: string | null;
-};
-
-export type WaybillExport = {
-  generated_at: Instant;
-  rows: readonly WaybillRow[];
-  /** Usable legs only. A leg whose спідометр went BACKWARDS contributes nothing
-   *  here, because summing an impossible distance produces an impossible total
-   *  and this figure is about to be pushed into an accounting base. */
-  total_km: number;
-  total_litres: Decimal2;
-  /**
-   * How many rows carry a distance nobody should act on — today, a negative
-   * пробіг, which is what a dropped digit looks like after the subtraction.
-   *
-   * Counted rather than filtered out, and that distinction is the whole point:
-   * the row stays in `rows` so a dispatcher can see it and fix it, and this
-   * number is how the screen knows to say the export is not safe to send yet.
-   * Dropping the row silently would be the export quietly disagreeing with the
-   * рейс register about how many trips happened.
-   */
-  suspect: number;
-};
-
-/** The dispatcher's summary strip. */
-export type Overview = {
-  headline: string;
-  generated_at: Instant;
-  /** Events waiting for a dispatcher to read one number off a photograph. */
-  pending: number;
-  events: number;
-  legs: number;
-  total_litres: Decimal2;
-};
+/** A read-only snapshot of every store: what every domain function takes. Built by snapshot() (I-6). */
+export type World = { trailers: Trailer[]; trucks: Truck[]; officeUsers: OfficeUser[]; rota: RotaSlot[];
+  drivers: Driver[]; devices: Device[]; bindCodes: BindCode[]; places: Place[]; distances: Distance[];
+  trips: Trip[]; plannedStops: PlannedStop[]; shifts: Shift[]; truckDays: TruckDay[]; records: DriverRecord[];
+  pages: Page[]; ttnDocs: TtnDoc[]; requests: Request[]; corrections: Correction[]; resolutions: Resolution[];
+  telemetry: Telemetry[]; exports: ExportRow[]; audit: Audit[]; statements: StatementLine[];
+  truckMonths: TruckMonth[]; driverMonths: DriverMonth[]; exampleItems: ExampleItem[];
+  exampleBoard: ExampleBoardRow[] };

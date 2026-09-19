@@ -26,115 +26,162 @@
 @import "tw-animate-css";
 @source "../../../packages/kit/src/**/*.{ts,tsx}";
 
-/* The kit's theme store toggles `.dark` on <html> (see @agency/kit/lib/theme).
-   Tailwind's stock `dark:` variant follows prefers-color-scheme instead, which
-   would ignore an explicit choice. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Self-hosted variable fonts (OFL): src/assets/fonts/, fetched once from fonts.gstatic.com.
+   A webfont request during the call is a network dependency the stage must not have [04 EC-135]. */
+@font-face { font-family: "Onest"; src: url("./assets/fonts/onest-cyrillic.woff2") format("woff2");
+  font-weight: 400 600; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; src: url("./assets/fonts/onest-latin.woff2") format("woff2");
+  font-weight: 400 600; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+  U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "JetBrains Mono"; src: url("./assets/fonts/jetbrains-mono-cyrillic.woff2") format("woff2");
+  font-weight: 500 600; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "JetBrains Mono"; src: url("./assets/fonts/jetbrains-mono-latin.woff2") format("woff2");
+  font-weight: 500 600; font-display: swap; unicode-range: U+0000-00FF, U+2000-206F, U+2212, U+FEFF, U+FFFD; }
+
+/* ───────── DAY · сонце: Магістраль, text and decisions darkened to ≥ 7:1 on paper [R01 §14.5] ───────── */
 :root {
-  --radius: 0.5rem;
-  /* Scroll cap for Dialog/AlertDialog content. Both reference it; if it is
-     undefined a tall form silently cannot scroll. */
+  color-scheme: light;
+  --radius: 12px;
   --app-content-max-h: calc(100dvh - 2rem);
 
-  /* Palette — light. KTL's OWN corporate blue, read off their live stylesheet
-     at https://ktl.in.ua/css/blue.css rather than guessed: #274484 is the link,
-     button, header-top and .default-bg colour (60 occurrences) and #6877b4 is
-     the hover accent (36). #777777 is their body grey. Cool neutral paper
-     underneath, because a warm one fights a navy this saturated.
+  --paper: #eef0f1;          /* Бетон — the page */
+  --label: #ffffff;          /* Накладна — every card */
+  --bench: #e3e6e8;          /* insets, zebra, pressed secondary, skeletons */
+  --line: #d6dadd;           /* decorative divider only — 1.41:1 */
+  --line-2: #aab2b7;         /* object outline: photo tile, plate on dark */
+  --line-strong: #7d878d;    /* EVERY interactive boundary — 3.67 card / 3.21 paper */
 
-     Their heading face — a self-hosted 'PhilosopherBold' — is deliberately NOT
-     adopted: it is a decorative display serif, and this product is read at a
-     loading gate in direct sun by someone the client describes as малоосвічений.
-     The @theme block below keeps the system sans, which also costs no network
-     request in the first 200 ms of a demo. */
-  --background: #f6f7f9;
-  --foreground: #16181d;
-  --surface: #ffffff;
-  --card: #ffffff;
-  --card-foreground: #16181d;
-  --popover: #ffffff;
-  --popover-foreground: #16181d;
-  --primary: #274484;
+  --ink: #10161a;            /* Асфальт — 18.2 card / 16.0 paper */
+  --ink-2: #1b242a;
+  --text-2: #3f474c;         /* 9.47 card / 8.29 paper / 7.56 bench */
+  --text-3: #4e575c;         /* metadata on cards only — 7.39 */
+
+  --accent-ink: #0f4a70;     /* road blue (D17) — 9.40 card / 8.22 paper; #fff on it 9.40 */
+  --accent-wash: #e7eff5;    /* selected / pressed background; accent text on it 8.09 (D17) */
+  --accent-lift: #74bae3;    /* the accent on ink surfaces */
+  --road: #12557f;           /* Магістраль blue: computed readings' icons on the console only */
+
+  --hold: #654909;           /* Охра — 8.37 card / 7.32 paper */
+  --hold-wash: #f7f0df;      /* hold text on it 7.36 */
+  --reject: #8f2514;         /* Цегла — office only; 8.60 card / 7.52 paper */
+  --reject-wash: #fbeeeb;
+
+  --ring-card: inset 0 0 0 1px rgb(16 22 26 / 0.1);
+  --ring-tap: inset 0 0 0 1px var(--line-strong);
+  --elev-1: 0 1px 2px rgb(16 22 26 / 0.04), 0 8px 24px -16px rgb(16 22 26 / 0.18);
+  --elev-2: 0 2px 4px rgb(16 22 26 / 0.05), 0 18px 40px -24px rgb(16 22 26 / 0.22);
+
+  /* kit contract names → the values above */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --surface: var(--label);
+  --card: var(--label);
+  --card-foreground: var(--ink);
+  --popover: var(--label);
+  --popover-foreground: var(--ink);
+  --primary: var(--accent-ink);
   --primary-foreground: #ffffff;
-  --secondary: #eef0f5;
-  --secondary-foreground: #1f2433;
-  --muted: #eef0f5;
-  --muted-foreground: #5c6373;
-  --muted2: #777777;
-  --accent: #e7eaf1;
-  --accent-foreground: #16181d;
-  --brand: #274484;
+  --brand: var(--accent-ink);
   --brand-foreground: #ffffff;
-  --destructive: #b3261e;
-  --success: #1c7a45;
-  /* A PAIR, because a filled surface needs a foreground that inverts with it.
-     MEASURED in a 390px viewport: a `bg-success text-white` button was fine
-     here and about 2:1 in dark mode, where --success is a light mint. A
-     component that hard-codes `text-white` is a component that reads a literal
-     colour, which this theme contract forbids for exactly this reason. */
-  --success-foreground: #ffffff;
-  --border: #dde1e9;
-  --line2: #c8cddb;
-  --input: #c8cddb;
-  --ring: #6877b4;
+  --secondary: var(--bench);
+  --secondary-foreground: var(--ink);
+  --muted: var(--bench);
+  --muted-foreground: var(--text-2);
+  --muted2: var(--text-3);
+  --accent: var(--accent-wash);
+  --accent-foreground: var(--accent-ink);
+  --destructive: var(--reject);
+  --success: var(--ink);              /* «прийнято» has no colour: a stray success badge renders as ink */
+  --success-foreground: var(--label);
+  --border: var(--line);
+  --line2: var(--line-2);
+  --input: var(--line-strong);
+  --ring: var(--accent-ink);
+  --leaf: var(--text-2);              /* no green in this product */
+  --amber: var(--hold);
+  --sky: var(--road);
+  --chart-1: #0f4a70;
+  --chart-2: #6877b4;                 /* KTL hover — 4.30:1, marks only, never text */
+  --chart-3: var(--hold);
+  --chart-4: var(--text-3);
+  --chart-5: var(--road);
 
-  /* Instrument colours — status and charts read these, never a literal hex.
-     `amber` is the flag colour on an office row: a dropped digit or a jump is
-     WARNED about and never blocked, so it must not be the destructive red that
-     means "this was refused". */
-  --leaf: #1c7a45;
-  --amber: #a15c07;
-  --sky: #0369a1;
-  --chart-1: #274484;
-  --chart-2: #6877b4;
-  --chart-3: #a15c07;
-  --chart-4: #1c7a45;
-  --chart-5: #0369a1;
+  /* theme-independent surfaces: the camera and photo review, the motion lock, the stage */
+  --cam-bg: #05080a;
+  --cam-surface: #141c21;
+  --cam-ink: #e6eef0;                 /* 17.1 on cam-bg */
+  --cam-text-2: #a9bcc1;              /* 10.2 on cam-bg */
+  --cam-line-strong: #6b7c85;         /* 4.64 on cam-bg — boundaries */
+  --cam-ring: rgb(255 255 255 / 0.10);
+  --cam-scrim: rgb(5 8 10 / 0.62);
+  --cam-accent: #74bae3;              /* the dark-surface primary fill */
+  --cam-accent-ink: #0b1013;          /* 9.27 on cam-accent */
+  --cam-hold: #e8b54d;
+  --cam-hold-bg: #2a2314;
+  --lock-bg: #05080a;
+  --lock-ink: #c9d6da;                /* 13.5 on lock-bg: dimmed, still high contrast */
+  --lock-text-2: #9fb0b6;             /* 8.95 on lock-bg */
+  --stage-bg: #10161a;
+  --stage-bar: #0b1013;
+  --stage-text: #c9d6da;
+  --stage-text-2: #a9bcc1;
+  --stage-accent: #74bae3;
+  --stage-hold: #e8b54d;
+  --stage-hold-bg: #2a2314;
+  --phone-bezel: #05080a;
+  --sidebar-bg: #10161a;
+  --sidebar-ink: #eaf4f6;
+  --sidebar-text: #a9bcc1;            /* 9.25 on ink */
+  --sidebar-muted: #8fa1a8;           /* 6.8 on ink — group labels */
+  --sidebar-active: #1b242a;
+
+  /* domain objects: they keep their real colours in both themes */
+  --plate-bg: #ffffff;
+  --plate-ink: #10161a;
+  --plate-band: #1f4fa3;
+  --plate-flag-blue: #0057b7;
+  --plate-flag-yellow: #ffd700;
+  --doc-paper: #fbfaf5;
+  --doc-thermal: #f6f5ef;
+  --doc-print: #1d2126;
+  --doc-rule: #c9cdd2;
+  --doc-ballpoint: #1f3f8f;
+  --cluster-bg: #0e1215;
+  --cluster-lcd: #e9ece6;
+  --cluster-amber: #e0a100;
+  --seat: #23282c;
 }
 
+/* ───────── NIGHT · кабіна: from Магістраль's .road-plate and ink sidebar (manual toggle only, D15) ───────── */
 .dark {
-  /* A cab at 05:40 in November is dark, and the screen is the only light in it.
-     The navy inverts to a legible tint rather than staying #274484, which on a
-     dark surface is very nearly invisible. */
-  --background: #14161b;
-  --foreground: #f2f4f8;
-  --surface: #1d2027;
-  --card: #1d2027;
-  --card-foreground: #f2f4f8;
-  --popover: #1d2027;
-  --popover-foreground: #f2f4f8;
-  --primary: #93a7de;
-  --primary-foreground: #121722;
-  /* Secondary surfaces (table header band, hover fills) must read AGAINST the
-     card, not blend into it — keep the same step the light palette has. */
-  --secondary: #2a2e38;
-  --secondary-foreground: #f2f4f8;
-  --muted: #2a2e38;
-  --muted-foreground: #a7adbd;
-  --muted2: #8b91a1;
-  --accent: #313642;
-  --accent-foreground: #f2f4f8;
-  --brand: #93a7de;
-  --brand-foreground: #121722;
-  --destructive: #fb7185;
-  --success: #6ee7b7;
-  --success-foreground: #0d1f16;
-  /* Dividers sit on both the card and the paper; one step off either and the
-     hairline vanishes. */
-  --border: #3c414e;
-  --line2: #4a5060;
-  --input: #4a5060;
-  --ring: #93a7de;
-
-  --leaf: #6ee7b7;
-  --amber: #fbbf24;
-  --sky: #7dd3fc;
-  --chart-1: #93a7de;
-  --chart-2: #b9c5ea;
-  --chart-3: #fbbf24;
-  --chart-4: #6ee7b7;
-  --chart-5: #7dd3fc;
+  color-scheme: dark;
+  --paper: #0b1013;
+  --label: #141c21;
+  --bench: #1d272d;
+  --line: #26333a;
+  --line-2: #3a4a53;
+  --line-strong: #6b7c85;    /* 3.98 card / 4.42 paper */
+  --ink: #e6eef0;            /* 14.66 card — not pure white */
+  --ink-2: #c9d6da;
+  --text-2: #a9bcc1;         /* 8.75 card / 7.72 bench */
+  --text-3: #9fb0b6;         /* 7.69 card */
+  --accent-ink: #74bae3;     /* road blue lifted (D17) — 8.11 card; #0b1013 on it 9.00 */
+  --accent-wash: #1b2436;
+  --accent-lift: #74bae3;
+  --road: #4aa3d8;           /* lines and icons only at night */
+  --hold: #e8b54d;           /* 9.15 card */
+  --hold-wash: #2a2314;
+  --reject: #ff9a85;         /* 8.39 card */
+  --reject-wash: #2a1a17;
+  --ring-card: inset 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --elev-1: 0 8px 24px -12px rgb(0 0 0 / 0.55);
+  --elev-2: 0 24px 60px -34px rgb(6 18 22 / 0.7);
+  --primary-foreground: #0b1013;
+  --brand-foreground: #0b1013;
+  --success-foreground: #0b1013;
+  --chart-1: #74bae3;
 }
 
 @theme inline {
@@ -163,7 +210,6 @@
   --color-line2: var(--line2);
   --color-input: var(--input);
   --color-ring: var(--ring);
-
   --color-leaf: var(--leaf);
   --color-amber: var(--amber);
   --color-sky: var(--sky);
@@ -173,55 +219,127 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  /* Radius ladder — one multiplier drives every corner in the kit. */
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
+  --color-paper: var(--paper);
+  --color-label: var(--label);
+  --color-bench: var(--bench);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-wash: var(--accent-wash);
+  --color-accent-lift: var(--accent-lift);
+  --color-road: var(--road);
+  --color-hold: var(--hold);
+  --color-hold-wash: var(--hold-wash);
+  --color-reject: var(--reject);
+  --color-reject-wash: var(--reject-wash);
+  --color-cam-bg: var(--cam-bg);
+  --color-cam-surface: var(--cam-surface);
+  --color-cam-ink: var(--cam-ink);
+  --color-cam-text-2: var(--cam-text-2);
+  --color-cam-accent: var(--cam-accent);
+  --color-cam-accent-ink: var(--cam-accent-ink);
+  --color-cam-hold: var(--cam-hold);
+  --color-cam-hold-bg: var(--cam-hold-bg);
+  --color-lock-bg: var(--lock-bg);
+  --color-lock-ink: var(--lock-ink);
+  --color-lock-text-2: var(--lock-text-2);
+  --color-stage-bg: var(--stage-bg);
+  --color-stage-bar: var(--stage-bar);
+  --color-stage-text: var(--stage-text);
+  --color-stage-text-2: var(--stage-text-2);
+  --color-stage-accent: var(--stage-accent);
+  --color-stage-hold: var(--stage-hold);
+  --color-stage-hold-bg: var(--stage-hold-bg);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-ink: var(--sidebar-ink);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
 
-  /* Typefaces. System stacks by default: a webfont is a network request in the
-     first 200 ms of a demo, so it is an opt-in per mock, not a default. */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 28px;
+
+  --font-sans: "Onest", ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-sans);
-  --font-mono: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Driver scale and targets, in rem so the OS text size is honoured [01-research C20] */
+@theme {
+  --text-d-hero: 2.5rem;      --text-d-hero--line-height: 2.75rem;  --text-d-hero--font-weight: 600;  --text-d-hero--letter-spacing: -0.01em;
+  --text-d-title: 1.625rem;   --text-d-title--line-height: 2rem;    --text-d-title--font-weight: 600; --text-d-title--letter-spacing: -0.015em;
+  --text-d-button: 1.25rem;   --text-d-button--line-height: 1.5rem; --text-d-button--font-weight: 600;
+  --text-d-body: 1.125rem;    --text-d-body--line-height: 1.75rem;
+  --text-d-label: 1rem;       --text-d-label--line-height: 1.375rem; --text-d-label--font-weight: 600;
+  --text-d-meta: 0.875rem;    --text-d-meta--line-height: 1.25rem;  --text-d-meta--font-weight: 500;
+
+  --text-o-h1: 26px;   --text-o-h1--line-height: 1.25;  --text-o-h1--font-weight: 600; --text-o-h1--letter-spacing: -0.02em;
+  --text-o-lede: 15px; --text-o-lede--line-height: 1.6;
+  --text-o-title: 15px; --text-o-title--line-height: 1.35; --text-o-title--font-weight: 600;
+  --text-o-body: 14px; --text-o-body--line-height: 1.45;
+  --text-o-meta: 13px; --text-o-meta--line-height: 1.4;
+  --text-o-tag: 12px;  --text-o-tag--line-height: 1.3;   --text-o-tag--font-weight: 500;
+
+  --spacing-tap: 3.5rem;      /* every secondary target ≈ 8.9 mm */
+  --spacing-tap-lg: 4rem;     /* primary, every row ≈ 10.2 mm */
+  --spacing-tap-xl: 4.5rem;   /* two-line primary */
+  --spacing-shutter: 4.75rem;
+  --spacing-gutter: 1rem;
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  html {
-    @apply font-sans;
-    -webkit-tap-highlight-color: transparent;
-  }
-  body {
-    @apply bg-background text-foreground font-sans;
-    -webkit-font-smoothing: antialiased;
-  }
-  /* Every figure on these screens is money or mass — always tabular, so
-     columns of numerals line up. */
-  .tnum,
-  table,
-  input {
-    font-variant-numeric: tabular-nums;
-  }
+  * { @apply border-border outline-ring/50; }
+  html { @apply font-sans; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  .tnum, table, input, .font-mono { font-variant-numeric: tabular-nums slashed-zero; }
+  ::selection { background: var(--accent-wash); color: var(--accent-ink); }
+  [data-surface="dark"] { background: var(--cam-bg); color: var(--cam-ink); color-scheme: dark; }
+  :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 }
 
-/* PageHeader's title uses this; without it the heading silently falls back to
-   the body face. */
-@utility font-display {
-  font-family: var(--font-display);
-  letter-spacing: -0.03em;
-}
+@utility font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+@utility eyebrow { font-size: 12px; line-height: 1.3; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--text-2); }        /* console fact grids only */
+@utility code { font-family: var(--font-mono); background: color-mix(in oklab, var(--ink) 3.5%, transparent);
+  border-radius: 4px; padding: 1px 5px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 6%, transparent);
+  font-variant-numeric: tabular-nums slashed-zero; }
+@utility card-ring { background: var(--label); box-shadow: var(--ring-card), var(--elev-1); border-radius: var(--radius-xl); }
+@utility tap-ring { box-shadow: var(--ring-tap), var(--elev-1); }
+@utility empty-slot { background: var(--label); border: 1.5px dashed var(--line-strong); border-radius: var(--radius-xl); }
+@utility hatch { background-image: repeating-linear-gradient(135deg, var(--hold-wash) 0 4px, transparent 4px 8px); }
+
+/* Motion: print is LINEAR, interface is EASED [R01 §7] */
+@keyframes cl-label { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes cl-stem { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes link-dash { to { stroke-dashoffset: -24; } }
+@keyframes flash { from { opacity: 0.6; } to { opacity: 0; } }
+.cl-label { animation: cl-label 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.cl-stem  { height: 2px; background: var(--accent-ink); transform-origin: left; animation: cl-stem 180ms linear both; }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; }
+}
+
+/* Tailwind spacing helpers used by every driver target (§3.1) */
+@utility min-h-tap { min-height: var(--spacing-tap); }
+@utility h-tap-lg { height: var(--spacing-tap-lg); }
+/* `height: auto !important` is load-bearing (measured, Tailwind 4.3.3): an @utility named like a built-in is MERGED
+   with it, the built-in `h-*` resolves --spacing-tap-xl to a FIXED height, and that rule sorts after this one. Without
+   the override the two-line primary cannot grow when its place line wraps under «Текст 130 %». theme-tokens.test.ts
+   compiles this file and holds it. */
+@utility h-tap-xl { min-height: var(--spacing-tap-xl); height: auto !important; }
+@utility size-shutter { width: var(--spacing-shutter); height: var(--spacing-shutter); }
+@media print {
+  body { background: #ffffff; }
+  [data-print-hide] { display: none !important; }
+  [data-print-sheet] { box-shadow: none !important; outline: none !important; transform: none !important; }
 }

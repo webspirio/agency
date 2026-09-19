@@ -15,6 +15,7 @@ export const PROFILES = createProfiles(
   [
     { id: 'driver', label: 'driver', caps: ['driver'] },
     { id: 'dispatcher', label: 'dispatcher', caps: ['dispatcher'] },
+    { id: 'demo', label: 'demo', caps: ['stage'] },
   ] as const,
   'driver',
 );
@@ -28,7 +29,12 @@ export const PROFILE = PROFILES.resolve(
  *  name a capability without importing the profile union. */
 export const CAPS: Set<string> = PROFILES.capsOf(PROFILE);
 
+const search = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
 /** The actor every handler sees. From the session, NEVER from a request body —
  *  a handler that reads an actor off the wire is a mock that cannot become a
- *  product. */
-export const ACTOR: Actor = { id: 'demo-user', role: 'owner' };
+ *  product. Derived from the URL ONCE (D16, §7.8) and never persisted. */
+export const ACTOR: Actor =
+  PROFILE.id === 'driver' ? { id: search.get('device') ?? 'device-000001', role: 'driver' }
+  : PROFILE.id === 'dispatcher'
+    ? search.get('user') === 'iryna' ? { id: 'user-iryna', role: 'dispatcher' } : { id: 'user-natalia', role: 'operator' }
+    : { id: 'presenter', role: 'presenter' };

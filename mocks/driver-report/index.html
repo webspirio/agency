@@ -1,24 +1,28 @@
 <!doctype html>
-<html lang="uk" data-theme-key="driver-report:theme">
+<html lang="uk" translate="no" data-theme-key="driver-report:theme">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="text-scale" content="scale" />
+    <meta name="google" content="notranslate" />
     <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#eef0f1" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/src/assets/fonts/onest-cyrillic.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/src/assets/fonts/jetbrains-mono-cyrillic.woff2" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2310161a'/%3E%3Cg transform='translate(4 4)' fill='none' stroke='%2374bae3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='6.5' width='12' height='8' rx='1'/%3E%3Cpath d='M14 9.5h4.2l2.3 3v2H14z'/%3E%3C/g%3E%3Cg transform='translate(4 4)' fill='%23eef0f1'%3E%3Ccircle cx='5.5' cy='16.5' r='1.7'/%3E%3Ccircle cx='11' cy='16.5' r='1.7'/%3E%3Ccircle cx='18' cy='16.5' r='1.7'/%3E%3C/g%3E%3Cpath d='M7 24.5h3M14 24.5h3M21 24.5h3' stroke='%230f4a70' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E" />
     <title>Звіт водія</title>
     <script>
-      // Paint 0. Without this the first frame is light and then snaps to dark,
-      // in front of the client. The key is read from <html data-theme-key>,
-      // which is the same attribute @agency/kit's themeStorageKey() reads: one
-      // definition, so the two halves cannot drift apart. It is per-slug so two
-      // mocks served from one origin do not share a theme.
+      // Paint 0 (§6.3, D15): the theme key is per profile, and dark is applied ONLY when the stored value is
+      // 'dark'. The OS preference is never consulted.
       try {
-        var key = document.documentElement.dataset.themeKey;
-        var pref = key ? localStorage.getItem(key) : null;
-        var dark =
-          pref === 'dark' ||
-          ((pref === null || pref === 'system') &&
-            window.matchMedia('(prefers-color-scheme: dark)').matches);
-        if (dark) document.documentElement.classList.add('dark');
+        var profile = new URLSearchParams(location.search).get('profile') || 'driver';
+        var key = 'driver-report:theme:' + profile;
+        document.documentElement.dataset.themeKey = key;
+        if (localStorage.getItem(key) === 'dark') {
+          document.documentElement.classList.add('dark');
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', '#0b1013');
+        }
       } catch (e) {
         /* storage disabled — start light */
       }

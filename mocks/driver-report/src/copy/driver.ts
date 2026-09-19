@@ -1,0 +1,41 @@
+/** The words the driver route shows in more than one place (§0.3, §6.6, I-14). Every string is copied byte for byte
+ *  from the spec. The words test scans this file, comments included, so nothing here may name what the driver must
+ *  never read (§8.6 #1, #4, #12, #18). */
+import { plural } from '../app/format';
+
+export const DC = {
+  appName: 'Звіт водія',
+  status: { savedOffline: 'Збережено в телефоні', sending: 'Передаю в офіс', inOffice: 'В офісі ✓',
+    photosLeft: (n: number, m: number) => `фото ${n} з ${m} ще в телефоні`, retry: 'Не пройшло — спробуємо ще',
+    accepted: 'Прийнято диспетчером', original: 'Оригінал прийнято в офісі', asks: 'Диспетчер просить перезняти ТТН',
+    afterExit: 'Фото — після виїзду', atParking: 'Фото — на стоянці', undone: 'Скасовано · Повернути',
+    late: 'надійшло після підтвердження дня — офіс перевірить', willSend: 'надішлеться сам' },
+  sync: { allIn: (hm: string) => `Все в офісі · останній зв'язок ${hm}`,
+    sendingPhotos: (n: number, m: number) => `Передаю в офіс · фото ${n} з ${m}`,
+    waiting: (n: number, hm: string) => `${n} ${plural(n, ['запис чекає', 'записи чекають', 'записів чекають'])} інтернету · останній зв'язок ${hm}`,
+    retry: (hm: string) => `Не пройшло — спробуємо ще · ${hm}` },
+  tiles: { refuel: 'Заправка', refuelSub: 'чек і щиток', refuelSubRc: 'чек', stand: 'Стою', standSub: 'тривога · поломка · проблема' },
+  links: { myDay: 'Мій день', more: 'Ще' },
+  primary: { start: 'Почати зміну', here: 'Я на місці', choose: 'Оберу місце', loaded: 'Завантажено — фото ТТН',
+    unloaded: 'Вивантажено — фото ТТН з підписом', leave: 'Поїхав далі', end: 'Закінчити зміну', over: 'Закінчилось',
+    elsewhere: 'Я в іншому місці', newShift: 'Почати нову зміну', busy: 'Записую…' },
+  undo: 'Скасувати',
+  back: 'Назад',
+  timeChips: { now: 'Щойно', m15: '−15 хв', m30: '−30 хв', h1: '−1 год', earlier: 'Раніше…' },
+  basis: { lastAtBase: (hm: string, v: string) => `вчора о ${hm} на базі: ${v} — порівняйте з фото`,
+    mechanic: (dm: string, v: string) => `${dm} механік: ${v} — порівняйте з фото`, none: 'Число з фото прочитає офіс' },
+  simChip: 'імітація', exampleChip: 'приклад',
+  correctionWording: { OCR_ERROR: 'фото прочитано неправильно', TYPO: 'число виправлено за фото щитка',
+    BY_DASH_PHOTO: 'число виправлено за фото щитка', BY_CAN: 'за даними машини', ODOMETER_REPLACED: 'міняли одометр',
+    BY_TTN: 'час — за ТТН', BY_STATEMENT: 'літри — за випискою картки', BY_PLAN: 'оцінка за маршрутом — фото не було',
+    OTHER: 'виправлено офісом' },
+  plurals: { record: ['запис', 'записи', 'записів'], page: ['сторінка', 'сторінки', 'сторінок'] },
+  lock: { title: 'Ви в дорозі', hint: 'Зупиніться, щоб заповнити' },
+  segments: { QUEUE: 'Черга', LOADING_NOW: 'Одразу вантажать', UNLOADING_NOW: 'Одразу вивантажують', SCALES: 'Ваги',
+    LAB: 'Лабораторія', WAIT_DOCS: 'Чекаю документи', DRIVE_IN: 'Заїхав — вантажать', TTN_SHOWN: 'ТТН показав — чекаю розвантаження',
+    ALERT: 'Тривога / укриття', OTHER: 'Інше', WAIT_ORDERS: 'Чекаю вказівки' },
+  roadStops: { ALERT: 'Тривога / укриття', CURFEW: 'Комендантська', HEAT: 'Спека — стою', CHECKPOINT: 'Блокпост',
+    BREAKDOWN: 'Поломка', DETOUR: "Об'їзд", ACCIDENT: 'ДТП', WEIGH_CONTROL: 'Ваговий контроль' },
+  roadStopShort: { ALERT: 'Тривога', CURFEW: 'Комендантська', HEAT: 'Спека', CHECKPOINT: 'Блокпост', BREAKDOWN: 'Поломка',
+    DETOUR: "Об'їзд", ACCIDENT: 'ДТП', WEIGH_CONTROL: 'Ваговий контроль' },
+} as const;

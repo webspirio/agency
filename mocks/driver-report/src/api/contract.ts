@@ -1,203 +1,90 @@
-/**
- * THE CONTRACT. One object keyed by operation name, and everything else in this
- * mock is derived from it by type: the handler map in `routes.ts`, every call
- * site in `src/pages/`, every refusal, every cache key, and the error branch a
- * screen reads. Nothing is generated — tsc derives them from this one literal.
- *
- * NOT @scaffold-owned, and that is a decision rather than an omission: this is
- * the one file a mock author MUST edit, and it fails LOUDLY rather than
- * silently — drop an operation and the handler map is red, forget the
- * `op<…>()` wrapper and `KEEP_LITERAL` is red.
- *
- * WHAT A BACKEND DEVELOPER RECEIVES. This object is the whole hand-off for
- * «Звіт водія»: every operation with its method, path, success status,
- * capability, request type, response type, and closed set of error codes WITH
- * the status each answers.
- */
-import {
-  makeContract,
-  op,
-  s,
-  shape,
-  type AllResJsonSafe,
-  type BodiesOf,
-  type Contract,
-  type Expect,
-  type Paginated,
-  type PathsAreLiterals,
-} from '@agency/mock';
-import type {
-  ConfirmEvent,
-  DriverEvent,
-  Leg,
-  Me,
-  Overview,
-  SubmitEvent,
-  WaybillExport,
-} from '../domain/types';
+// mocks/driver-report/src/api/contract.ts
+/** THE CONTRACT of «Звіт водія»: 32 P0 operations (§7.4). Declaration order is route order. NOT @scaffold-owned. */
+import { makeContract, op, s, shape, type AllResJsonSafe, type BodiesOf, type Contract, type Expect, type Paginated,
+  type PathsAreLiterals } from '@agency/mock';
+import type { Ack, BindCodeView, BindPreview, Binding, ConfirmTruckDayIn, CorrectionView, CreateCorrectionIn,
+  CreateExportIn, CreateRequestIn, DriverRow, DriverToday, ExceptionItem, ExportFile, ExportPreview, FleetRow,
+  HeartbeatAck, HeartbeatIn, ImportResult, KeyPointRow, MyDay, MyMonth, OfficeSummary, OriginalsRow, PageIn,
+  PhotoAck, PlaceOption, RecordIn, RequestView, ReviewStopIn, StopReview, TruckDayRow, TruckDayView, TruckFuel,
+  TruckMonthRow, UpdateExceptionIn, WorktimeRow } from '../domain/dto';
+import { ARTEFACT_KINDS, CORRECTION_REASONS, RECORD_TYPES, REQUEST_TYPES, TTN_FIELDS, type Scope } from '../domain/types';
+import { int, obj, oneOf, strs } from './shapes';
 
-/**
- * CAPABILITIES ARE LOAD-BEARING HERE, unlike in the stock scaffold where every
- * operation carries `caps: []`.
- *
- * `agency new --profiles driver,dispatcher` gives this build two products from
- * one deployment: `?profile=driver` is the thing in a driver's hand and
- * `?profile=dispatcher` is the office. The gate is on the ROUTE, not the menu —
- * a dispatcher's browser cannot reach `POST /events` and a driver's cannot reach
- * `PATCH /events/:id`, because the adapter 404s before a handler runs. That is
- * worth showing on the call: the separation is structural rather than a hidden
- * button.
- *
- * `listEvents` is shared deliberately. The driver reads his own queue from it
- * and the dispatcher reads the whole fleet's; one operation, one response shape,
- * and the filtering is the server's job rather than two near-identical
- * endpoints that drift.
- *
- * DECLARATION ORDER IS THE ROUTE TABLE'S ORDER. `toRoutes` reads these keys in
- * order, the first matching route wins, and `compile()` refuses a table where an
- * earlier route shadows a later one — so a literal segment must be declared
- * before its `:param` sibling.
- *
- * `codes` maps each code to the STATUS it answers, so `fail()` takes no status
- * and two handlers cannot disagree about one code. `{}` means the operation
- * never refuses, and `CodeOf` for it is `never`.
- */
+type Empty = Record<string, never>;
+type Paging = { page?: string; limit?: string };
+const D = ['driver'] as const;
+const O = ['dispatcher'] as const;
+
 export const api = {
-  /** The driver's whole home screen in one request: who he is, which truck, the
-   *  odometer pre-fill that makes that screen one tap, and the two counters on
-   *  the status strip. */
-  me: op<void, Me>()({
-    method: 'GET', path: '/me', status: 200, caps: ['driver'], codes: {},
-  }),
-
-  overview: op<void, Overview>()({
-    method: 'GET', path: '/overview', status: 200, caps: ['dispatcher'], codes: {},
-  }),
-
-  /**
-   * `pending=1` narrows to events no dispatcher has confirmed — the work queue.
-   * A query parameter rather than a second operation: the response shape is
-   * identical and two endpoints that return the same rows are two endpoints
-   * that drift.
-   */
-  listEvents: op<void, Paginated<DriverEvent>, { page?: string; limit?: string; pending?: string }>()({
-    method: 'GET', path: '/events', status: 200, caps: [], codes: {},
-  }),
-
-  /**
-   * THE ONE WRITE THE DRIVER PERFORMS, and the only operation `caps: ['driver']`
-   * protects. Three refusals, and NOT ONE of them is an odometer that looks
-   * wrong: a reading below the last one, or 4 000 km above it, is FLAGGED and
-   * stored. Blocking a man at a loading gate is how the client's two previous
-   * attempts died.
-   */
-  submitEvent: op<SubmitEvent, DriverEvent>()({
-    method: 'POST', path: '/events', status: 201, caps: ['driver'],
-    codes: { ODOMETER_INVALID: 400, PHOTO_WRONG_KIND: 400, TRUCK_NOT_FOUND: 404 },
-  }),
-
-  getEvent: op<void, DriverEvent>()({
-    method: 'GET', path: '/events/:id', status: 200, caps: ['dispatcher'],
-    codes: { EVENT_NOT_FOUND: 404 },
-  }),
-
-  /**
-   * THE DISPATCHER'S ONE WRITE — and the honest centre of this design. The
-   * driver is never asked for the ТТН number, so somebody still types it: a
-   * person sitting down, in light, with two clean hands and the photograph on
-   * screen, at roughly four seconds a document instead of re-keying a whole
-   * waybill from a scan that arrived a week later.
-   */
-  confirmEvent: op<ConfirmEvent, DriverEvent>()({
-    method: 'PATCH', path: '/events/:id', status: 200, caps: ['dispatcher'],
-    codes: {
-      EVENT_NOT_FOUND: 404,
-      EVENT_ALREADY_CONFIRMED: 409,
-      TTN_BLANK: 400,
-      TTN_DUPLICATE: 409,
-    },
-  }),
-
-  /** A рейс is a QUERY over the event table, never a row the driver maintained.
-   *  See `legsOf` in `src/domain/calc.ts`. */
-  listLegs: op<void, Paginated<Leg>, { page?: string; limit?: string }>()({
-    method: 'GET', path: '/legs', status: 200, caps: ['dispatcher'], codes: {},
-  }),
-
-  /** BAS's own «Подорожній лист» columns — водій, авто, показники спідометра на
-   *  виїзд і повернення, паливо за нормою — which is a near one-to-one match
-   *  with what four taps produce. */
-  exportWaybill: op<void, WaybillExport>()({
-    method: 'GET', path: '/waybill', status: 200, caps: ['dispatcher'], codes: {},
-  }),
+  getBindPreview: op<void, BindPreview>()({ method: 'GET', path: '/bind/:code', status: 200, caps: D, codes: {} }),
+  confirmBinding: op<Empty, Binding>()({ method: 'POST', path: '/bind/:code', status: 201, caps: D, codes: { BIND_CODE_EXPIRED: 410 } }),
+  getToday: op<void, DriverToday>()({ method: 'GET', path: '/driver/today', status: 200, caps: D, codes: {} }),
+  listNearbyPlaces: op<void, Paginated<PlaceOption>, { stop_id?: string } & Paging>()({ method: 'GET', path: '/driver/places', status: 200, caps: D, codes: {} }),
+  submitRecord: op<RecordIn, Ack>()({ method: 'POST', path: '/driver/records', status: 201, caps: D, codes: { DEVICE_REVOKED: 403 } }),
+  uploadPhoto: op<PageIn, PhotoAck>()({ method: 'POST', path: '/driver/photos', status: 201, caps: D, codes: { DEVICE_REVOKED: 403 } }),
+  sendHeartbeat: op<HeartbeatIn, HeartbeatAck>()({ method: 'POST', path: '/driver/heartbeat', status: 200, caps: D, codes: {} }),
+  getMyDay: op<void, MyDay>()({ method: 'GET', path: '/driver/days/:date', status: 200, caps: D, codes: {} }),
+  getMyMonth: op<void, MyMonth>()({ method: 'GET', path: '/driver/months/:month', status: 200, caps: D, codes: {} }),
+  getOfficeSummary: op<void, OfficeSummary, { scope: Scope }>()({ method: 'GET', path: '/office/summary', status: 200, caps: O, codes: {} }),
+  listFleet: op<void, Paginated<FleetRow>, { scope: Scope; filter?: 'ALL' | 'NEEDS_ACTION' } & Paging>()({ method: 'GET', path: '/office/fleet', status: 200, caps: O, codes: {} }),
+  listExceptions: op<void, Paginated<ExceptionItem>, { lane: 'NOW' | 'REVIEW'; scope: Scope } & Paging>()({ method: 'GET', path: '/office/exceptions', status: 200, caps: O, codes: {} }),
+  updateException: op<UpdateExceptionIn, ExceptionItem>()({ method: 'PATCH', path: '/office/exceptions/:id', status: 200, caps: O, codes: { EXCEPTION_NOT_FOUND: 404 } }),
+  getStopReview: op<void, StopReview>()({ method: 'GET', path: '/office/stops/:id', status: 200, caps: O, codes: { STOP_NOT_FOUND: 404 } }),
+  reviewStop: op<ReviewStopIn, StopReview>()({ method: 'PATCH', path: '/office/stops/:id', status: 200, caps: O, codes: { STOP_NOT_FOUND: 404, DAY_CONFIRMED: 409, VALUE_INVALID: 400 } }),
+  createRequest: op<CreateRequestIn, RequestView>()({ method: 'POST', path: '/office/requests', status: 201, caps: O, codes: { REQUEST_ALREADY_OPEN: 409, TARGET_NOT_FOUND: 404 } }),
+  createCorrection: op<CreateCorrectionIn, CorrectionView>()({ method: 'POST', path: '/office/corrections', status: 201, caps: O, codes: { TARGET_NOT_FOUND: 404, DAY_CONFIRMED: 409, VALUE_INVALID: 400 } }),
+  listTruckDays: op<void, Paginated<TruckDayRow>, { state: 'to-confirm' | 'confirmed' | 'exported'; date?: string; scope: Scope } & Paging>()({ method: 'GET', path: '/office/truck-days', status: 200, caps: O, codes: {} }),
+  getTruckDay: op<void, TruckDayView>()({ method: 'GET', path: '/office/truck-days/:id', status: 200, caps: O, codes: { TRUCK_DAY_NOT_FOUND: 404 } }),
+  confirmTruckDay: op<ConfirmTruckDayIn, TruckDayView>()({ method: 'POST', path: '/office/truck-days/:id/confirm', status: 200, caps: O, codes: { TRUCK_DAY_NOT_FOUND: 404, DAY_CHANGED: 409 } }),
+  printTruckDay: op<Empty, TruckDayView>()({ method: 'POST', path: '/office/truck-days/:id/print', status: 200, caps: O, codes: { TRUCK_DAY_NOT_FOUND: 404 } }),
+  getKeyPoints: op<void, Paginated<KeyPointRow>, { date: string; scope: Scope; truck_id?: string } & Paging>()({ method: 'GET', path: '/office/key-points', status: 200, caps: O, codes: {} }),
+  getExportPreview: op<void, ExportPreview, { date: string; scope: Scope }>()({ method: 'GET', path: '/office/exports/preview', status: 200, caps: O, codes: {} }),
+  createExport: op<CreateExportIn, ExportFile>()({ method: 'POST', path: '/office/exports', status: 201, caps: O, codes: {} }),
+  importExport: op<Empty, ImportResult>()({ method: 'POST', path: '/office/exports/:id/import', status: 200, caps: O, codes: { EXPORT_NOT_FOUND: 404 } }),
+  listTrucks: op<void, Paginated<TruckMonthRow>, { scope: Scope; month: string; sort?: 'fuel_dev' | 'plate' | 'km' } & Paging>()({ method: 'GET', path: '/office/trucks', status: 200, caps: O, codes: {} }),
+  getTruckFuel: op<void, TruckFuel, { month: string }>()({ method: 'GET', path: '/office/trucks/:id/fuel', status: 200, caps: O, codes: { TRUCK_NOT_FOUND: 404 } }),
+  listOriginals: op<void, Paginated<OriginalsRow>, { scope: Scope } & Paging>()({ method: 'GET', path: '/office/originals', status: 200, caps: O, codes: {} }),
+  receiveOriginal: op<Empty, OriginalsRow>()({ method: 'POST', path: '/office/originals/:docId/receive', status: 200, caps: O, codes: { DOCUMENT_NOT_FOUND: 404 } }),
+  listWorktime: op<void, Paginated<WorktimeRow>, { month: string; scope: Scope } & Paging>()({ method: 'GET', path: '/office/worktime', status: 200, caps: O, codes: {} }),
+  listDrivers: op<void, Paginated<DriverRow>, { scope: Scope } & Paging>()({ method: 'GET', path: '/office/drivers', status: 200, caps: O, codes: {} }),
+  createBindCode: op<Empty, BindCodeView>()({ method: 'POST', path: '/office/drivers/:id/bind-codes', status: 201, caps: O, codes: { DRIVER_NOT_FOUND: 404 } }),
 };
-
-/** No `as const`. `op`'s `<const S extends Spec>` preserves every literal. */
 export type Api = typeof api;
+export type OpKey = keyof Api;
 
-/* ── the two tripwires, each a compile error rather than a convention ────── */
-
-/**
- * Every path is still a LITERAL — the only check INSIDE this file that an entry
- * was written with `op<…>()` at all. Forget the wrapper and the path widens to
- * `string`, `ParamsOf` evaporates, and every other symptom surfaces elsewhere.
- */
+/** Every path is still a literal — the only check inside this file that each entry went through op<…>(). */
 export const KEEP_LITERAL: PathsAreLiterals<Api> = true;
-
-/**
- * Every declared response is a shape JSON can actually carry. A `Date`, a `Map`,
- * or a REQUIRED key whose value may be `undefined` is refused here — all three
- * survive the round trip as something other than what the type promised.
- */
+/** Every declared response survives JSON. */
 export type RESPONSES_ARE_WIRE_SHAPED = Expect<AllResJsonSafe<Api>>;
 
-/* ── the bound helpers ──────────────────────────────────────────────────── */
-
-/**
- * WHAT A MALFORMED REQUEST GETS: the product's answer, which is 400 with one
- * sentence per failed field and no `code` — because a `ValidationPipe` rejection
- * declares none.
- *
- * EVERY FIELD IS `s.str()`, INCLUDING `odometer_km`, and that is the load-bearing
- * distinction. A shape check answers "is this the right SHAPE"; a DOMAIN RULE
- * answers "is this a legal value", and only the second carries a code. Writing
- * `odometer_km` as anything stricter here would intercept the malformed reading
- * BEFORE the handler and turn `ODOMETER_INVALID` into a declared code nothing
- * could ever emit — measured on this scaffold's `balance` field, where
- * `contract:complete` stayed green throughout because the `fail()` site still
- * existed. The wire golden's refusal drive is what caught it.
- *
- * `kind`, `photo_kind` and `odometer_source` are strings on the wire and unions
- * in the type. The shape cannot check a union — that is the type's job at the
- * call site and `HandlersOf`'s job at the handler — so what arrives here is a
- * string and the compiler is what keeps a screen from sending a nonsense one.
- */
 const bodies = {
-  submitEvent: shape({
-    kind: s.str(),
-    truck_id: s.str(),
-    odometer_km: s.str(),
-    odometer_source: s.str(),
-    photo_kind: s.str(),
-    place: s.str(),
-  }),
-  confirmEvent: shape({ ttn_number: s.str() }),
+  confirmBinding: shape({}),
+  submitRecord: shape({ key: s.str(), seq: int(), type: oneOf(RECORD_TYPES), occurred_at: s.str(), committed_at: s.str(),
+    app_clock_at: s.str(), stop_id: s.opt(s.str()), place_id: s.opt(s.str()), gps: oneOf(['OK', 'DENIED', 'UNRELIABLE']), payload: obj() }),
+  uploadPhoto: shape({ key: s.str(), record_key: s.str(), artefact: oneOf(ARTEFACT_KINDS), doc_index: int(), page_no: int(),
+    captured_at: s.str(), source: oneOf(['DRAWN', 'INPAGE', 'NATIVE']), bytes: int(), quality: oneOf(['OK', 'LOW']),
+    quality_reasons: strs(), deferred: s.opt(oneOf(['AT_PARKING', 'AFTER_EXIT'])), drawn_variant: s.opt(s.str()),
+    drawn_value: s.opt(s.str()), drawn_sim_read: s.opt(s.str()), image: s.opt(s.str()) }),
+  sendHeartbeat: shape({ unsent: int(), last_capture_at: s.opt(s.str()) }),
+  updateException: shape({ action: oneOf(['TAKE', 'RESOLVE', 'ACCEPT_AS_IS']), reason: s.opt(s.str()) }),
+  reviewStop: shape({ action: oneOf(['ACCEPT_PRINTED', 'SET_FIELD', 'MARK_BLANK_REVERSE', 'ACCEPT_STOP']),
+    doc_index: s.opt(int()), field: s.opt(oneOf(TTN_FIELDS)), value: s.opt(s.str()) }),
+  createRequest: shape({ type: oneOf(REQUEST_TYPES), record_key: s.str(), page_key: s.opt(s.str()), reasons: strs() }),
+  createCorrection: shape({ record_key: s.str(), field: oneOf(['odometer', 'occurred_at']), value: s.str(),
+    reason: oneOf(CORRECTION_REASONS), note: s.opt(s.str()) }),
+  confirmTruckDay: shape({ version: int(), reason: s.opt(s.str()) }),
+  printTruckDay: shape({}),
+  createExport: shape({ date: s.str(), scope: oneOf(['PILOT', 'FLEET']), sheet: oneOf(['WAYBILLS', 'LEGS', 'REFUELS', 'WORKTIME', 'ALL']),
+    format: oneOf(['CSV', 'JSON']) }),
+  importExport: shape({}),
+  receiveOriginal: shape({}),
+  createBindCode: shape({}),
 } satisfies BodiesOf<Api>;
 
 const contract = makeContract<Api>(api, bodies);
-
-/**
- * ANNOTATED CONSTS, not a destructure, and the annotation is load-bearing on
- * `fail`. A never-returning function narrows only when the callee is a function
- * declaration or a const with an EXPLICIT type — a destructured
- * `const { fail } = ...` does not narrow, and neither does `contract.fail(...)`.
- */
+/** Annotated consts, not a destructure: a never-returning `fail` narrows only through an explicit annotation. */
 export const call: Contract<Api>['call'] = contract.call;
 export const fail: Contract<Api>['fail'] = contract.fail;
 export const codeOf: Contract<Api>['codeOf'] = contract.codeOf;
 export const toRoutes: Contract<Api>['toRoutes'] = contract.toRoutes;
-
-/** The bound `Contract` itself, for `makeQueries` in `src/api/queries.ts`.
- *  Exported rather than used here: `contract.ts` must not import `./client`,
- *  which imports `./routes`, which imports this file. */
 export { contract };

@@ -7,7 +7,7 @@
 import axios from 'axios';
 import { mockAdapter, transport } from '@agency/mock';
 import { ACTOR, CAPS } from '../profiles';
-import { routes } from './routes';
+import { routes, serverNow } from './routes';
 
 /* THE SEAM IS INSIDE THIS FILE. `httpClient` is an opaque `Transport`: only
    `call()` unwraps it, so a raw `httpClient.get(...)` anywhere in this mock —
@@ -25,7 +25,7 @@ const instance = axios.create({
   // that only shows up after conversion.
   paramsSerializer: { indexes: null },
   // The one line. Build with VITE_MOCK='' and the same client talks to Nest.
-  adapter: import.meta.env.VITE_MOCK ? mockAdapter(routes, { caps: CAPS, actor: ACTOR }) : undefined,
+  adapter: import.meta.env.VITE_MOCK ? mockAdapter(routes, { caps: CAPS, actor: ACTOR, now: serverNow }) : undefined,
 });
 
 export const httpClient = transport(instance);

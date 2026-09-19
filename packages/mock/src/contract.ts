@@ -273,7 +273,7 @@ export type DeepExact<A, T> =
      branded string into its ~50 `String.prototype` members, in every diagnostic.
      Measured: −38% instantiations at template size. */
   [A] extends [string | number | boolean | null | undefined]
-    ? A
+    ? ([A] extends [T] ? A : never)
   /* `readonly`, NOT `DeepExact<AE, TE>[]`. MEASURED 2026-09-16 on the first
      mock to declare a readonly array in a response: the mutable rebuild made
      `[readonly T[]] extends [T[]]` false, so the comparison failed on
@@ -287,11 +287,41 @@ export type DeepExact<A, T> =
      in contract.controls.ts exists to keep true. */
   : [A] extends [readonly (infer AE)[]]
     ? ([T] extends [readonly (infer TE)[]] ? readonly DeepExact<AE, TE>[] : never)
-    : [A] extends [object]
-      ? ([T] extends [object]
-          ? { [K in keyof A]: K extends keyof T ? DeepExact<A[K], T[K]> : never }
-          : never)
+  /* `object | null | undefined`, NOT `object`. MEASURED 2026-09-19: `[X | null]
+     extends [object]` is FALSE, so a NULLABLE nested object fell through to the
+     `: A` escape below and was never deep-checked at all — a wide row behind
+     `| null` reached the client with the sink green, and only the wire golden
+     would ever have seen it. `WideNullableNestedIsALeak` is what keeps this
+     branch honest, and `ExactNullableNestedIsNotALeak` the other direction. */
+    : [A] extends [object | null | undefined]
+      ? ([T] extends [object | null | undefined] ? ExactObject<A, T> : never)
       : A;
+
+/**
+ * The object comparison, DISTRIBUTED over A and then over T — and both halves
+ * were measured on the first mock to nest a union inside a response.
+ *
+ * `keyof (T1 | T2)` is the INTERSECTION of their keys. Comparing a constituent
+ * of A against `keyof T` where T is the whole union therefore erased every key
+ * the constituents do not share, mapped it to `never`, and reported the
+ * DECLARED TYPE AS A LEAK OF ITSELF: `DeepExact<T, T>` was not reflexive. With
+ * 21 disjoint payload shapes sharing no key at all, the whole nested union
+ * became all-`never` and `toRoutes` refused a correct handler.
+ *
+ * Distributing fixes it because a union A is exact when EACH constituent is
+ * exact against SOME constituent of T — which is what two naked type parameters
+ * in a conditional express. `A extends null | undefined` is peeled off first:
+ * `null` distributes to nothing useful and must be compared whole.
+ */
+type ExactObject<A, T> = A extends null | undefined
+  ? ([A] extends [T] ? A : never)
+  : A extends unknown
+    ? T extends null | undefined
+      ? never
+      : T extends unknown
+        ? { [K in keyof A]: K extends keyof T ? DeepExact<A[K], T[K]> : never }
+        : never
+    : never;
 
 /**
  * The operations whose handler returns MORE than the contract declares.
