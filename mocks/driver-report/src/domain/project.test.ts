@@ -69,6 +69,24 @@ describe('home decides the one next action (§3.2)', () => {
     const b2 = project(today({ shift: shiftOpen, plan: null }), [], demo('06:00'));
     expect([b2.mode, b2.primary?.verb, b2.primary?.place, b2.quiet?.verb]).toEqual(['B2', 'Я на місці', 'Оберу місце', 'Закінчити зміну']);
   });
+  /** THE RETURN TO BASE IS NOT A STOP THE DRIVER REPORTS. He never taps «Я на місці» there and no LOADED / UNLOADED /
+   *  STOP_LEFT is ever filed against it — S-44 is a `SHIFT_END` carrying `place_code: 'BASE'` and nothing else — so a
+   *  BASE row's `completion` stays null all day. Counting it as «a planned stop remains» (§3.2 row 6) made mode B′
+   *  unreachable on every plan that has one, which is every pilot plan: at «Такт 9» home offered «Я на місці / База»
+   *  and «Закінчити зміну» could not be reached from home at all. Measured through the DOM in `taps.test.tsx`
+   *  against §3.4 and §3.3 D-14, which both budget the RG shift end at FOUR taps counted from home.
+   *
+   *  The test above could not see it: it walks the driver through an arrival at base AND a STOP_LEFT there, and
+   *  that is a sequence the product never produces. */
+  it('B′ the way the day really ends: the base is not a stop he arrives at (§3.2 row 7, §3.3 D-14)', () => {
+    const done = ['s1', 's2', 's3'].flatMap((id, i) => [
+      rv('ARRIVED', '10:00', id, { order: 'PLANNED', claimed_at: null, chip: null, odometer: null, unplanned_kind: null, new_place: false }, 500 + i),
+      rv('STOP_LEFT', '10:30', id, {}, 510 + i)]);
+    const p = project(today({ shift: shiftOpen, records: done }), [], demo('16:02'));
+    expect([p.mode, p.primary?.verb, p.primary?.target.kind, p.nextStop]).toEqual(['B1', 'Закінчити зміну', 'shift-end', null]);
+    // The row itself stays on the TripRail — it is «Повернення на базу», and the rail is the day, not the primary.
+    expect(p.trip.stops.map((s) => s.place)).toContain('База');
+  });
   it('mode E after the shift: no accent, «Почати нову зміну»', () => {
     const ended = { ...shiftOpen, ended_at: demo('16:02') };
     const p = project(today({ shift: ended }), [], demo('16:05'));

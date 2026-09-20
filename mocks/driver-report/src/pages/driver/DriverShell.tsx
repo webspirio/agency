@@ -21,7 +21,7 @@ import { createContext, use, useEffect, useMemo, useState, type JSX } from 'reac
 import { Outlet } from 'react-router';
 import { useToday } from '../../api/hooks';
 import { BootGate } from '../../app/boot';
-import { DEVICE_ID, STANDALONE_TOUCH } from '../../app/device';
+import { DEVICE_ID, IS_STAGE, STANDALONE_TOUCH } from '../../app/device';
 import { openDrafts } from '../../app/flow';
 import { useLiveSync, useServerNow, useServerValue } from '../../app/live';
 import { pendingRecords, startOutbox } from '../../app/outbox';
@@ -29,6 +29,7 @@ import { useMotionLock } from '../../app/speed';
 import { ensureLightDefault } from '../../app/theme';
 import { MotionLock } from '../../components/driver';
 import { project } from '../../domain/project';
+import { forwardStageKeys } from '../../stage/keys';
 import { StandaloneBanner } from './home/StandaloneBanner';
 
 /** What `useMotionLock` hands out: a wrapper that runs `fn` only while the truck is standing (I-10). */
@@ -64,6 +65,10 @@ function DriverRuntime(): JSX.Element {
 
   useEffect(() => { ensureLightDefault(); }, []);
   useEffect(() => startOutbox(DEVICE_ID), []);
+  /** §5.10. The presenter's last click was almost always inside this iframe, and a `keydown` here never reaches the
+   *  stage document — so «P», «F», «1»–«3», «T», «R» and Esc are re-emitted on the shared server instead. Only on
+   *  the stage: a phone in a driver's hand has no bar to hide. */
+  useEffect(() => (IS_STAGE ? forwardStageKeys() : undefined), []);
   useEffect(() => {
     if (!bigText) return undefined;
     const root = document.documentElement;

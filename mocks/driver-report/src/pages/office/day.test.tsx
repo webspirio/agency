@@ -16,7 +16,7 @@
  *     fifteen rows, and fifteen of them carrying a source word. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.hoisted(() => { vi.stubEnv('VITE_MOCK', '1'); window.history.replaceState(null, '', '/?profile=dispatcher&user=natalia&stage=1'); });
-import { cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, screen, within } from '@testing-library/react';
 import { call } from '../../api/contract';
 import { server } from '../../api/server';
 import { demo } from '../../domain/clock';
@@ -104,7 +104,11 @@ describe('the truck-day (§4.2 C-07 … C-09, §8.3 C-07/C-08, C-09)', () => {
  *  is a page whose check cannot fail. The list is asserted where it decides something: the count in the segment label,
  *  the columns of the one real row, and the row opening its own day. */
 describe('«Дні на підтвердження» (§4.2 C-07)', () => {
+  // 1 440 px, not jsdom's default 1 024: §8.3 C-07 states the column set at 1 440 and W3-06 folded «Км» and
+  // «Документи» into their neighbours below `wide` so that eight columns fit the 690 px pane of a 946 px console
+  // (§8.6 #22). A test that does not say which width it is asserting is asserting whichever one jsdom guessed.
   it('beat 10: the waiting count, the pilot row’s columns, and the row opening its waybill', async () => {
+    act(() => { window.innerWidth = 1440; window.dispatchEvent(new Event('resize')); });
     await atBeat(10);
     const { user, router } = renderAt('/days');
     expect(await screen.findByRole('heading', { name: 'Дні на підтвердження' })).toBeInTheDocument();

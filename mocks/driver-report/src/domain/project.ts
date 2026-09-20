@@ -295,7 +295,13 @@ export function project(today: DriverToday, pending: RecordIn[], now: Instant): 
   const openStop = openState === null ? null : openStopOf(openState, recs, roads);
   const road = roads.filter(standing).at(-1) ?? null;
   const openRoadStop = road === null ? null : { key: road.rec.key, reason: road.rec.payload.reason, since: road.rec.at };
-  const nextStop = states.find((s) => s.planned && s.completion === null && s !== openState)?.stop ?? null;
+  // The BASE row is deliberately NOT a candidate here. The return to base is not a stop the driver reports — the
+  // shift end IS the arrival there (§3.3 D-14; S-44 is a `SHIFT_END` carrying `place_code: 'BASE'` and nothing
+  // else) — so no LOADED / UNLOADED / STOP_LEFT is ever filed against it and its `completion` stays null all day.
+  // While it counted here, «a planned stop remains» was true at every moment of every pilot plan, mode B′ below was
+  // unreachable, and home offered «Я на місці / База» at «Такт 9», where §3.4 and §3.3 D-14 both budget four taps
+  // from home to «Підтверджую». It stays a TripRail row: the rail is the day, the primary is the next action.
+  const nextStop = states.find((s) => s.planned && s.stop.kind !== 'BASE' && s.completion === null && s !== openState)?.stop ?? null;
   const plan = today.plan;
 
   let mode: HomeMode;

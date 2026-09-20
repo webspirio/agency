@@ -9,7 +9,14 @@
  *  The tile therefore refused to shrink and the ellipsis this docblock promises never happened: «Заправка» and
  *  «Стою» laid out 139 px + 257 px in a 328 px row, the second overflowed by 76 px, and the phone's scrollWidth was
  *  420 against a clientWidth of 360 — §8.2 D-02 #2 red on the first screen of the demo. With the floor removed the
- *  two tiles are 160 px + 160 px. `chrome.test.tsx` holds it. */
+ *  two tiles are 160 px + 160 px. `chrome.test.tsx` holds it.
+ *
+ *  `grow basis-[9rem]` RATHER THAN `flex-1`, which is the SECOND half of that criterion and the one W3-05 measured
+ *  still failing: at the gate size, 360 × 640 with 130 % text, the geometry was clean but the WORD was not — the
+ *  word cell was 81 px, «Заправка» needs 108, and the tile read «Запр…». §8.2 D-02 #2 asks for the words to be
+ *  fully visible, and `flex: 1 1 0%` can never wrap. A basis in REM grows with the text, so at 130 % two tiles no
+ *  longer fit the 328 px row and the parent's `flex-wrap` gives each one a full-width line; at 100 % 2 × 144 px
+ *  + 8 px still fits and the layout is unchanged. The sub-line keeps ellipsing whenever they do share a line. */
 import type { JSX } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -23,7 +30,7 @@ export function Tile({ icon: Icon, word, sub, onPress }: {
     <button
       type="button"
       onClick={onPress}
-      className="tap-ring flex min-h-tap w-full min-w-0 flex-1 items-center gap-2 rounded-[12px] px-3 text-left"
+      className="tap-ring flex min-h-tap w-full min-w-0 grow basis-[9rem] items-center gap-2 rounded-[12px] px-3 text-left"
     >
       <Icon aria-hidden="true" className="size-[1.5rem] shrink-0" />
       <span className="flex min-w-0 flex-col">

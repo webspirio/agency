@@ -10,7 +10,12 @@
  *  на стоянці» at 430 px against a clientWidth of 360 on both the loading and the unloading capture screens. A flex
  *  item's `min-width` defaults to `auto`, which floors it at its min-content width, and the `truncate` on the label
  *  below sets `white-space: nowrap` — so that floor is the whole untruncated label and the ellipsis never fires.
- *  Same defect, same fix, as `Tile`; `chrome.test.tsx` holds both. */
+ *  Same defect, same fix, as `Tile`; `chrome.test.tsx` holds both.
+ *
+ *  And the same second half: `grow basis-[9rem]` rather than `flex-1`. `flex: 1 1 0%` can never wrap, so at 130 %
+ *  text on a 360 px phone «Мій день» had 86 px for a 101 px label and read «Мій де…» (W3-05, §8.2 D-02 #2 and
+ *  §8.5). A basis in rem grows with the text, so the pair drops onto two full-width rows exactly when it stops
+ *  fitting one, and at 100 % nothing moves. The parent row carries `flex-wrap`. */
 import type { JSX } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -28,7 +33,7 @@ export function QuietButton({ icon: Icon, label, onPress, tone = 'plain', dark =
       type="button"
       onClick={onPress}
       className={`flex min-h-tap items-center justify-center gap-2 rounded-[12px] px-3 ${
-        half ? 'w-full min-w-0 flex-1' : 'w-full'
+        half ? 'w-full min-w-0 grow basis-[9rem]' : 'w-full'
       } ${dark ? '' : 'tap-ring'}`}
       style={{
         color: ink,

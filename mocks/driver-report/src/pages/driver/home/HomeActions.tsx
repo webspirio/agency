@@ -83,7 +83,9 @@ export function HomeActions({ view, entries, offline, now, rc, busy, onRefuel, o
         />
       )}
 
-      <div className="flex gap-2">
+      {/* `flex-wrap`: the two tiles carry a `basis-[9rem]`, so at 130 % text they no longer fit one 328 px row
+          and each takes a full-width line rather than ellipsing its word (§8.2 D-02 #2, measured at 360 × 640). */}
+      <div className="flex flex-wrap gap-2">
         <Tile
           icon={Fuel}
           word={DC.tiles.refuel}

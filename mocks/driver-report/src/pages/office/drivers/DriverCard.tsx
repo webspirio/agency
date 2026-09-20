@@ -30,6 +30,7 @@ import { useServerNow } from '../../../app/live';
 import { Plate, QrPattern } from '../../../components/shared';
 import type { DriverRow } from '../../../domain/dto';
 import { Countdown } from './Countdown';
+import { useWriteOnce } from '../../../app/once';
 
 /** The short form of the link the QR draws and the sentence names — one word, said in two places (§4.2 C-16). */
 const BIND_HOST = 'ktl.in.ua/z';
@@ -85,6 +86,7 @@ export function DriverCard({ driver, onClose }: { driver: DriverRow; onClose(): 
   const now = useServerNow();
   const bind = useCreateBindCode();
   const [shown, setShown] = useState(false);
+  const once = useWriteOnce();
 
   const { binding } = driver;
   const live = binding.state === 'CODE_SHOWN' || binding.state === 'OPENED';
@@ -132,7 +134,13 @@ export function DriverCard({ driver, onClose }: { driver: DriverRow; onClose(): 
                 <Button
                   type="button"
                   disabled={bind.isPending}
-                  onClick={() => { bind.mutate({ driverId: driver.id }); }}
+                  onClick={() => {
+                    // `bind.isPending` is state and is still false for a second click inside the same React batch,
+                    // so this minted TWO codes and the second invalidated the QR the driver was already looking at
+                    // — measured in `never.office.test.tsx` (§8.6 #13, `src/app/once.ts`).
+                    if (!once.claim(driver.id)) return;
+                    bind.mutate({ driverId: driver.id }, { onSettled: () => { once.release(); } });
+                  }}
                   className="h-[40px] w-fit px-[18px] text-[14px]"
                 >
                   {expired ? AGAIN : CONNECT}

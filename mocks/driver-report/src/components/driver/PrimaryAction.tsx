@@ -39,9 +39,13 @@ export function PrimaryAction({ icon: Icon, verb, place, busy = false, dark = fa
       }}
     >
       <Icon aria-hidden="true" className="size-[1.75rem] shrink-0" />
+      {/* `break-words`: §8.5 asks the driver route to work at 200 % root size without a horizontal scroll, and a
+          verb is one Ukrainian word — «Підтверджую» measures 264 px of unbreakable min-content inside a 152 px
+          box at 200 %, which pushed `#/shift/end` to a 408 px document against 360 (measured in Chrome, W3-06).
+          The word breaks rather than the page. Nothing changes at 100 %: it fits. */}
       <span className="flex min-w-0 flex-col">
-        <span className="text-[1.25rem] leading-[1.5rem] font-semibold">{busy ? DC.primary.busy : verb}</span>
-        {twoLine ? <span className="text-[1rem] leading-[1.375rem] font-medium">{place}</span> : null}
+        <span className="text-[1.25rem] leading-[1.5rem] font-semibold break-words">{busy ? DC.primary.busy : verb}</span>
+        {twoLine ? <span className="text-[1rem] leading-[1.375rem] font-medium break-words">{place}</span> : null}
       </span>
     </button>
   );

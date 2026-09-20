@@ -187,7 +187,13 @@ export function BasPage(): JSX.Element {
           <p className="text-[14px] leading-[1.45] text-ink">{data.count_line}</p>
 
           <Tabs value={sheet} onValueChange={(v) => { setSheet(v as SheetKey); }}>
-            <TabsList variant="line">
+            {/* `max-w-full flex-wrap`: the kit's TabsList is `inline-flex w-fit`, so four sheet names plus their
+                counts measured 509 px and pushed `main` sideways at 390 px — the one console route that still
+                scrolled there after the tables folded into cards (§8.3 Shell #4, measured by W3-05 and again in
+                W3-06). Wrapping costs a second line on a phone and nothing at all above it — and it needs the
+                height back, because the kit pins a horizontal list at `h-9` and a second row then paints over the
+                panel under it (measured at 390 px: «Заправки · 40» sat on top of the first sheet row). */}
+            <TabsList variant="line" className="max-w-full flex-wrap group-data-[orientation=horizontal]/tabs:h-auto">
               {TABS.map((key) => (
                 <TabsTrigger key={key} value={key} className="min-h-tap">
                   {`${viewOf(data, key).title} · ${String(viewOf(data, key).total)}`}

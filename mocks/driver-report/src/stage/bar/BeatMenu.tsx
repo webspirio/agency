@@ -4,68 +4,39 @@
  *  Choosing one rebuilds the whole demo deterministically (§5.8): a fresh server from the seed, every entry of an
  *  earlier beat plus every AUTO entry up to the beat's clock, the clock set there, every toggle off and all four
  *  panes reloaded. That is the recovery for anything that went wrong on stage, so it must be reachable in one tap
- *  from anywhere — which is why it is a bar control and not a hidden-menu item.
+ *  from anywhere — which is why it is a bar control and not a hidden-menu item, and why «T» opens it (§5.10).
  *
- *  Kept as plain buttons under `role="menu"` rather than a kit popover: the bar is dark chrome outside both
- *  products' token sets, and this needs no portal, no focus trap and no animation. Esc closes it (§5.10), and so
- *  does a pointer anywhere else. */
-import { useEffect, useRef, useState, type JSX } from 'react';
+ *  The panel, the click-outside and the Esc are `BarMenu`'s, shared with «Перемотати до… ▾» and «⋯». Its OPEN state
+ *  is the stage page's, because «T» and «R» open two of these from the keyboard and Esc closes whichever is open —
+ *  so which one that is has to be known in one place. */
+import type { JSX } from 'react';
 import { fmtTime } from '../../app/format';
 import { BEATS } from '../../domain/script';
-import { BAR_CONTROL } from './StageToggle';
+import { BarMenu, BAR_MENU_ITEM } from './BarMenu';
 
-export function BeatMenu({ onPick }: { onPick(n: number): void }): JSX.Element {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const outside = (e: PointerEvent): void => {
-      const el = box.current;
-      if (el !== null && e.target instanceof Node && !el.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', outside);
-    return () => { document.removeEventListener('pointerdown', outside); };
-  }, [open]);
-
+export function BeatMenu({
+  open,
+  onOpen,
+  onPick,
+}: {
+  open: boolean;
+  onOpen(open: boolean): void;
+  onPick(n: number): void;
+}): JSX.Element {
   return (
-    <div
-      ref={box}
-      className="relative shrink-0"
-      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
-    >
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        className={BAR_CONTROL}
-      >
-        Такт ▾
-      </button>
-      {open ? (
-        <div
-          role="menu"
-          aria-label="Такт"
-          className="absolute left-0 top-[36px] z-20 w-[360px] overflow-hidden rounded-[8px] bg-stage-bar py-[4px]
-            shadow-[0_24px_60px_-20px_rgb(0_0_0/.9)] ring-1 ring-white/[0.10]"
+    <BarMenu label="Такт ▾" name="Такт" open={open} onOpen={onOpen} width={360}>
+      {BEATS.map((b) => (
+        <button
+          key={b.n}
+          type="button"
+          role="menuitem"
+          onClick={() => { onOpen(false); onPick(b.n); }}
+          className={BAR_MENU_ITEM}
         >
-          {BEATS.map((b) => (
-            <button
-              key={b.n}
-              type="button"
-              role="menuitem"
-              onClick={() => { setOpen(false); onPick(b.n); }}
-              className="flex w-full items-center justify-between gap-[12px] px-[12px] py-[6px] text-left text-[13px]
-                font-medium text-stage-text hover:bg-[#1b242a] focus-visible:outline-2
-                focus-visible:-outline-offset-2 focus-visible:outline-stage-accent"
-            >
-              <span>{b.title}</span>
-              <span className="font-mono text-stage-text-2">{fmtTime(b.clock)}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+          <span>{b.title}</span>
+          <span className="font-mono text-stage-text-2">{fmtTime(b.clock)}</span>
+        </button>
+      ))}
+    </BarMenu>
   );
 }

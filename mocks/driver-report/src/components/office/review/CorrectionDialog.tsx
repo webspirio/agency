@@ -27,6 +27,7 @@ import { Dialog, DialogDescription, DialogPortal, DialogTitle } from '@agency/ki
 import { fmtKm } from '../../../app/format';
 import { codeOf } from '../../../api/contract';
 import { useCreateCorrection } from '../../../api/hooks';
+import { useWriteOnce } from '../../../app/once';
 import { SAYS_CORRECTION } from '../../../api/says';
 import { allRows } from '../../../api/stores';
 import { server } from '../../../api/server';
@@ -66,12 +67,19 @@ export function CorrectionDialog({ open, onOpenChange, target, onSaved }: {
   const current = grouped(digitsOf(target.current));
   const expected = target.expected === null ? null : grouped(digitsOf(target.expected));
 
+  /** `save.isPending` is state, so it is still false for a second click inside the same React batch — measured as
+   *  two corrections in `never.office.test.tsx` (§8.6 #13, `src/app/once.ts`). */
+  const once = useWriteOnce();
   const submit = (): void => {
     if (reason === null || digits === '') return;
+    const body = { record_key: target.record_key, field: 'odometer' as const, value: digits, reason,
+      ...(note === '' ? {} : { note }) };
+    if (!once.claim(JSON.stringify(body))) return;
     setRefused(null);
     save.mutate(
-      { record_key: target.record_key, field: 'odometer', value: digits, reason, ...(note === '' ? {} : { note }) },
+      body,
       {
+        onSettled: () => { once.release(); },
         onSuccess: (view) => {
           onSaved(view);
           onOpenChange(false);

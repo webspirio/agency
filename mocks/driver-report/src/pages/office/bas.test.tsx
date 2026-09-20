@@ -39,9 +39,15 @@ describe('«В BAS» (§4.2 C-11, §8.3 C-11, D8, beat 11)', () => {
     expect(await screen.findByText('Файл КТЛ-подорожні-21.09.2026.csv · 58 рядків · збережено')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Імпорт у BAS (імітація)' }));
     expect(await screen.findByText('Створено 58 чернеток · не проведено · проводить бухгалтер')).toBeInTheDocument();
-    // «Exported rows gain «У BAS 21.09 16:07 · версія 1»» — by pattern on the version, which is the DAY's and not
-    // this page's to pin.
-    expect((await screen.findAllByText(/^У BAS 21\.09 16:07 · версія \d+$/)).length).toBeGreaterThan(0);
+    // §4.2 C-11: «Exported rows gain «У BAS 21.09 16:07 · версія 1»». The number is the EXPORT's, not the day's.
+    // W3-05 measured «версія 27» on ПЛ-000412 and «версія 14» on ПЛ-000411 against «версія 1» on every example
+    // row: the line was showing `day.version`, which counts every record the driver ever committed to that day,
+    // so the two real pilot days — the only two with a real day's worth of records — read as if BAS held a
+    // twenty-seventh revision of a document it had just been given once. The day's revision count still decides
+    // whether a re-import is «без змін»; it is simply not what «версія» in this sentence means.
+    for (const line of await screen.findAllByText(/^У BAS 21\.09 16:07 · версія \d+$/)) {
+      expect(line).toHaveTextContent('У BAS 21.09 16:07 · версія 1');
+    }
     await user.click(screen.getByRole('button', { name: 'Імпорт у BAS (імітація)' }));
     expect(await screen.findByText('Уже в BAS без змін 58 · нових 0')).toBeInTheDocument();
     expect(screen.getByText('Макет: у вашу базу нічого не надсилається')).toBeInTheDocument();

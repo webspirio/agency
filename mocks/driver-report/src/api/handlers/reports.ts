@@ -96,13 +96,16 @@ export function reportHandlers(s: Server) {
       for (const id of row.day_ids) {
         const day = s.stores.truckDays.get(id);
         if (day === undefined) continue;
-        if (day.exported !== null && day.exported.version === day.version) {
+        // «Без змін» is a question about the DAY (has anything happened to it since it went in?), while «версія»
+        // is a count of the EXPORT document. Two numbers, and they were one until W3-06.
+        if (day.exported !== null && day.exported.day_version === day.version) {
           unchanged += 1;
           continue;
         }
         if (day.exported === null) created += 1;
         else updated += 1;
-        s.stores.truckDays.update(day.id, { exported: { export_id: row.id, at: now, version: day.version } });
+        s.stores.truckDays.update(day.id, { exported: { export_id: row.id, at: now,
+          version: (day.exported?.version ?? 0) + 1, day_version: day.version } });
       }
       const imp: NonNullable<ExportRow['import']> = { at: now, created, updated, unchanged,
         corrections: row.scope === 'FLEET' && created !== 0 ? [FLEET_CONFLICT] : [] };

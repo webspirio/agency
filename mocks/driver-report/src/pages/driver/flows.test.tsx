@@ -69,6 +69,25 @@ describe('arrive and say what is happening (§3.3 D-04, D-05, §8.2 D-04/05, bea
     expect(screen.queryByRole('button', { name: 'Зняти' })).toBeNull();
     await waitFor(() => expect(handed().receipt?.title).toMatch(/^На місці 13:45/));
   });
+  // THE PANEL DRIVEN FROM HOME, which is the only way a driver can reach it (§8.2 D-05 #5). The test below mounts
+  // `SegmentPanel` directly and was green throughout the defect W3-05 measured in a real browser: tapping the
+  // StopCard's status line navigated to `/` with `state.panel = 'segment'`, the panel mounted, and `useFlow`'s
+  // opening effect then REPLACED the history state with `{ step, draftId, depth }` — dropping `panel`. Home
+  // re-rendered home, the panel unmounted, and every tap left an orphan «Продовжимо: Що зараз?» card behind. One
+  // of the twenty-one driver screens could not be shown at all.
+  it('opens «Що зараз?» from home’s status line and leaves nothing behind (D-05, §8.2 D-05 #5)', async () => {
+    await atBeat(4, { at: demo('07:52') });
+    const { user } = renderAt('/');
+    await user.click(await screen.findByRole('button', { name: /Черга · з 06:10/ }));
+    expect(await screen.findByText('Що зараз?')).toBeInTheDocument();
+    expect(screen.getByText('Зараз: Черга · з 06:10')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Ваги' }));
+    expect(await screen.findByText('Ваги · з 07:52')).toBeInTheDocument();
+    expect(handed().record).toMatchObject({ type: 'SEGMENT', payload: { chip: 'SCALES' } });
+    // A two-tap question that left a «Продовжимо: …» card on home would be a chore the app invented.
+    expect(screen.queryByText(/Продовжимо: Що зараз\?/)).toBeNull();
+    expect(Object.keys(server.phone(PAVLO).drafts)).toHaveLength(0);
+  });
   it('lists the kind’s own mark first in «Що зараз?» and records a segment (D-05)', async () => {
     await atBeat(4, { at: demo('07:52') });
     const done = vi.fn();

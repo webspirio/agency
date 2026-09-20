@@ -6,8 +6,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { JSX } from 'react';
 import { demo } from '../../domain/clock';
-import { ConsoleHeader, ContactCell, DocDots, LiveLine, ResponsiveTable, saveFile, Sidebar, StatusPill, useConsoleMode,
-  type RTColumn } from './index';
+import { ConsoleHeader, ContactCell, DocDots, LiveLine, Panel, ResponsiveTable, saveFile, Sidebar, StatusPill,
+  useConsoleMode, type RTColumn } from './index';
 import { CheckCheck } from 'lucide-react';
 
 afterEach(cleanup);   // no globals here: Testing Library would not unmount by itself (src/app/speed.test.ts)
@@ -59,7 +59,7 @@ describe('the console shell (§4.1, §8.3 shell)', () => {
   it('makes every row a button that Enter opens, and turns rows into cards on a phone', async () => {
     const onOpen = vi.fn();
     const rows = [{ id: 'a', plate: 'АР 1234 ВС' }, { id: 'b', plate: 'АР 9012 МК' }];
-    const cols = [{ id: 'plate', header: 'Машина', cell: (r: { plate: string }) => r.plate }];
+    const cols = [{ id: 'plate', header: 'Машина', width: 240, cell: (r: { plate: string }) => r.plate }];
     const { rerender } = render(<ResponsiveTable columns={cols} rows={rows} rowKey={(r) => r.id} onOpen={onOpen} card={(r) => <p>card {r.plate}</p>} mode="wide" />);
     const row = screen.getByRole('button', { name: /АР 1234 ВС/ });
     row.focus();
@@ -74,8 +74,8 @@ describe('the console shell (§4.1, §8.3 shell)', () => {
     type Row = { id: string; plate: string; norm: string };
     const rows: Row[] = [{ id: 'a', plate: 'АР 8150 КС', norm: '32,0' }];
     const cols: RTColumn<Row>[] = [
-      { id: 'fuel', header: 'Пальне', cell: (r) => r.plate },
-      { id: 'norm', header: 'Норма', hideAt: ['compact'], mergeInto: 'fuel',
+      { id: 'fuel', header: 'Пальне', width: 240, cell: (r) => r.plate },
+      { id: 'norm', header: 'Норма', width: 88, hideAt: ['compact'], mergeInto: 'fuel',
         cell: (r) => r.norm, mergedCell: (r) => `норма ${r.norm}` },
     ];
     const table = (mode: 'wide' | 'compact'): JSX.Element =>
@@ -86,6 +86,19 @@ describe('the console shell (§4.1, §8.3 shell)', () => {
     rerender(table('compact'));
     expect(screen.queryByRole('columnheader', { name: 'Норма' })).toBeNull();
     expect(screen.getByText('норма 32,0')).toBeInTheDocument();
+  });
+  /* Measured in Chrome at 946 px, the width the stage's console frame runs at, while re-measuring §8.6 #22: the
+   * panel head of «Парк зараз» read «Маш…». Title and hint were both `truncate` inside one `min-w-0` row, and the
+   * title is the first flex item, so the hint's long sentence — «потребують дії — зверху · порядок не
+   * змінюється, поки курсор над таблицею» — took the room and the panel's NAME was the thing that gave way. The
+   * name is the identity of the panel and the hint is its footnote, so the name is `shrink-0` now. A token test,
+   * because jsdom cannot measure a truncation; the browser was the instrument. */
+  it('never lets a panel’s hint truncate its title (§4.1 PanelHead)', () => {
+    render(<Panel title="Машини" hint="потребують дії — зверху · порядок не змінюється, поки курсор над таблицею"><p>rows</p></Panel>);
+    const title = screen.getByRole('heading', { name: 'Машини' });
+    expect(title.className.split(/\s+/)).toContain('shrink-0');
+    expect(title.className.split(/\s+/)).not.toContain('truncate');
+    expect(screen.getByText(/потребують дії/).className.split(/\s+/)).toContain('truncate');
   });
   it('saves a file through a blob link, never a dialog', () => {
     URL.createObjectURL = vi.fn(() => 'blob:mock');

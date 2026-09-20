@@ -184,7 +184,7 @@ export function ShiftStartPage(): JSX.Element {
       bar={(
         <ActionBar>
           <PrimaryAction icon={Check} verb={YES} busy={commit.busy} onPress={confirm} />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <QuietButton half label={OTHER_TRUCK} onPress={() => { flow.patch({ picker: 'TRUCK' }); }} />
             <QuietButton half label={OTHER_TRAILER} onPress={() => { flow.patch({ picker: 'TRAILER' }); }} />
           </div>

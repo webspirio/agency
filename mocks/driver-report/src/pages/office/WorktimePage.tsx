@@ -18,7 +18,7 @@
 import type { JSX } from 'react';
 import { useWorktime } from '../../api/hooks';
 import { useScope, useServerNow } from '../../app/live';
-import { EmptyPanel, MockBanner, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode,
+import { colW, EmptyPanel, MockBanner, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode,
   type RTColumn } from '../../components/office';
 import { ExampleChip, SimChip } from '../../components/shared';
 import { businessDate } from '../../domain/clock';
@@ -36,28 +36,35 @@ export function WorktimePage(): JSX.Element {
   const list = useWorktime(month, scope);
   const rows = list.data?.data ?? [];
 
+  // §4.2 C-15's nine columns and their shares: 1 136 with the chevron at wide, 690 below it (`fit.test.tsx`).
+  // «Різниця» and «Робота у вихідний» already folded under «Тахограф» at rail and now fold at compact too — five
+  // columns is what a 690 px pane holds, and the tacho cell is the one that carries a sentence.
   const columns: RTColumn<WorktimeRow>[] = [
-    { id: 'driver', header: 'Водій', width: 170, cell: (r) => (
+    { id: 'driver', header: 'Водій', width: colW(mode, { wide: 150, narrow: 150 }), cell: (r) => (
       <span className="flex items-center gap-[8px]">
         <span className="text-[14px] font-medium text-ink">{r.driver}</span>
         {r.simulated ? <SimChip /> : null}
         {r.example ? <ExampleChip /> : null}
       </span>
     ) },
-    { id: 'shifts', header: 'Змін', width: 74, align: 'right',
+    { id: 'shifts', header: 'Змін', width: colW(mode, { wide: 60, narrow: 56 }), align: 'right',
       cell: (r) => <span className="font-mono text-[14px] text-ink">{r.shifts}</span> },
-    { id: 'span', header: 'Тривалість змін', width: 140, align: 'right',
+    { id: 'span', header: 'Тривалість змін', width: colW(mode, { wide: 120, narrow: 116 }), align: 'right',
       cell: (r) => <span className="font-mono text-[14px] text-ink">{r.span}</span> },
-    { id: 'on_site', header: 'На точках', width: 110, align: 'right',
+    { id: 'on_site', header: 'На точках', width: colW(mode, { wide: 96, narrow: 100 }), align: 'right',
       cell: (r) => <span className="font-mono text-[14px] text-text-2">{r.on_site}</span> },
-    { id: 'night', header: 'Нічні 22–06', width: 110, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'on_site',
-      cell: (r) => <span className="font-mono text-[14px] text-text-2">{r.night}</span> },
-    { id: 'curfew', header: 'Комендантська, спека', width: 200, hideAt: ['compact', 'rail'], mergeInto: 'tacho',
+    { id: 'night', header: 'Нічні 22–06', width: 96, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'on_site',
+      cell: (r) => <span className="font-mono text-[14px] text-text-2">{r.night}</span>,
+      // A merged line loses its header, so it has to label itself: a bare «9 год» under «61 год» says nothing.
+      mergedCell: (r) => <span className="font-mono text-[13px] text-text-2">{`нічні ${r.night}`}</span> },
+    { id: 'curfew', header: 'Комендантська, спека', width: 160, hideAt: ['compact', 'rail'], mergeInto: 'tacho',
       cell: (r) => <span className="text-[13px] text-text-2">{r.curfew_heat}</span> },
-    { id: 'tacho', header: 'Тахограф', cell: (r) => <span className="text-[13px] text-ink">{r.tacho}</span> },
-    { id: 'diff', header: 'Різниця', width: 120, align: 'right', hideAt: ['rail'], mergeInto: 'tacho',
-      cell: (r) => <span className="font-mono text-[14px] text-ink">{r.diff}</span> },
-    { id: 'weekend', header: 'Робота у вихідний за графіком', width: 220, hideAt: ['rail'], mergeInto: 'tacho',
+    { id: 'tacho', header: 'Тахограф', width: colW(mode, { wide: 160, narrow: 228 }),
+      cell: (r) => <span className="text-[13px] text-ink">{r.tacho}</span> },
+    { id: 'diff', header: 'Різниця', width: 100, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'tacho',
+      cell: (r) => <span className="font-mono text-[14px] text-ink">{r.diff}</span>,
+      mergedCell: (r) => <span className="font-mono text-[13px] text-ink">{`різниця ${r.diff}`}</span> },
+    { id: 'weekend', header: 'Робота у вихідний за графіком', width: 154, hideAt: ['compact', 'rail'], mergeInto: 'tacho',
       cell: (r) => <span className="text-[13px] text-text-2">{r.weekend}</span> },
   ];
 

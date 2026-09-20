@@ -1,0 +1,202 @@
+{
+  "getBindPreview": [
+    "{driver_name:string,initials:string,status:string,truck_model:string,truck_plate:string}"
+  ],
+  "confirmBinding": [
+    "{bound_at:instant,device_id:seq-id,driver_id:seq-id,driver_name:string}"
+  ],
+  "getToday": [
+    "{auto_events:[]empty,corrections_to_ack:[]empty,day:{alert_min:number,docs_in_office:number,docs_total:number,ended_at:instant,km:number,on_shift_min:number,on_site_min:number,owed:[]string,started_at:instant},device:{bound:boolean,id:seq-id,os_label:string,revoked:boolean},driver:{id:seq-id,name:string,short_name:string},first_time:{examples_seen:[]string,first_arrival:boolean,office_sees_read:boolean},last_contact_at:instant,odometer_ref:{at:instant,basis:string,kind:string,place_gen:string,place_short:string,source:string,value:number},on_call:{name:string,phone:string,role_label:string,until:string},paper:{owed:[]string,receipts:[]{by_short:string,date:date,label:string,received_at:instant}},plan:{caption:string,imported_label:string,mass_label:string,stops:[]{accepted_at:instant,compartments:null,drop_count:null,drop_index:null,kind:string,label:string,label_gen:string,mass_t:dec3,no_photos:boolean,place_id:seq-id,plan_key:string,planned_km:number,seq:number,short:string,stop_id:seq-id,town:string,town_loc:string,ttn_expected:number,ttn_nos:[]string,weigh_ticket:boolean}|{accepted_at:instant,compartments:string,drop_count:number,drop_index:number,kind:string,label:string,label_gen:string,mass_t:dec3,no_photos:boolean,place_id:seq-id,plan_key:string,planned_km:number,seq:number,short:string,stop_id:seq-id,town:string,town_loc:string,ttn_expected:number,ttn_nos:[]string,weigh_ticket:boolean}|{accepted_at:null,compartments:null,drop_count:null,drop_index:null,kind:string,label:string,label_gen:string,mass_t:null,no_photos:boolean,place_id:seq-id,plan_key:string,planned_km:number,seq:number,short:string,stop_id:seq-id,town:string,town_loc:string,ttn_expected:number,ttn_nos:[]empty,weigh_ticket:boolean},trip_no:string},records:[]{accepted_at:instant,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{chip:string,claimed_at:null,new_place:boolean,odometer:null,order:string,unplanned_kind:null},photos_expected:number,photos_received:number,place_id:seq-id,received_at:instant,seq:number,stop_id:seq-id,type:string,voided:boolean}|{accepted_at:instant,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{chip:string,claimed_at:null,new_place:boolean,odometer:{basis:string,choice:string,expected:number,page_key:string,read:number,source:string,value:number},order:string,unplanned_kind:null},photos_expected:number,photos_received:number,place_id:seq-id,received_at:instant,seq:number,stop_id:seq-id,type:string,voided:boolean}|{accepted_at:instant,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{deferred:null,drop_index:number,no_doc_reason:null,pages:[]string},photos_expected:number,photos_received:number,place_id:seq-id,received_at:instant,seq:number,stop_id:seq-id,type:string,voided:boolean}|{accepted_at:instant,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{deferred:null,no_doc_reason:null,pages:[]string,ttn_count:number},photos_expected:number,photos_received:number,place_id:seq-id,received_at:instant,seq:number,stop_id:seq-id,type:string,voided:boolean}|{accepted_at:instant,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{deferred:string,drop_index:number,no_doc_reason:null,pages:[]empty},photos_expected:number,photos_received:number,place_id:seq-id,received_at:instant,seq:number,stop_id:seq-id,type:string,voided:boolean}|{accepted_at:instant,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{deferred:string,odometer:{basis:string,choice:string,expected:number,page_key:string,read:number,source:string,value:number},pages:[]string},photos_expected:number,photos_received:number,place_id:seq-id,received_at:instant,seq:number,stop_id:seq-id,type:string,voided:boolean}|{accepted_at:instant,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{page_key:string,request_id:seq-id,supersedes:string},photos_expected:number,photos_received:number,place_id:seq-id,received_at:instant,seq:number,stop_id:seq-id,type:string,voided:boolean}|{accepted_at:null,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{at:instant,closed_by:string,road_stop_key:string},photos_expected:number,photos_received:number,place_id:null,received_at:instant,seq:number,stop_id:null,type:string,voided:boolean}|{accepted_at:null,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{can_drive:null,reason:string},photos_expected:number,photos_received:number,place_id:null,received_at:instant,seq:number,stop_id:null,type:string,voided:boolean}|{accepted_at:null,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{card_mask:string,deferred:boolean,full_tank:boolean,odometer:{basis:string,choice:string,expected:number,page_key:string,read:number,source:string,value:number},receipt_no:string,rro_no:string,station:string,sum_uah:dec2},photos_expected:number,photos_received:number,place_id:seq-id,received_at:instant,seq:number,stop_id:null,type:string,voided:boolean}|{accepted_at:null,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{documents:number,km:number,shift_id:seq-id},photos_expected:number,photos_received:number,place_id:null,received_at:instant,seq:number,stop_id:null,type:string,voided:boolean}|{accepted_at:null,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{inline:null,odometer:{basis:string,choice:string,expected:number,page_key:string,read:number,source:string,value:number},plan_match:boolean,trailer_id:seq-id,truck_id:seq-id},photos_expected:number,photos_received:number,place_id:null,received_at:instant,seq:number,stop_id:null,type:string,voided:boolean}|{accepted_at:null,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{odometer:{basis:string,choice:string,expected:number,page_key:string,read:number,source:string,value:number},place_id:seq-id},photos_expected:number,photos_received:number,place_id:null,received_at:instant,seq:number,stop_id:null,type:string,voided:boolean}|{accepted_at:null,committed_at:instant,key:string,late:boolean,occurred_at:instant,payload:{request_id:seq-id},photos_expected:number,photos_received:number,place_id:null,received_at:instant,seq:number,stop_id:null,type:string,voided:boolean},requests:[]{artefact:string,by_short:string,created_at:instant,doc_index:number,done_at:null,id:seq-id,page_key:string,page_no:number,reason_line:string,reasons:[]string,record_key:string,seen_at:null,stop_id:seq-id,target_label:string,thumb_variant:string,type:string},requests_done_today:[]{done_at:instant,id:seq-id},server_time:instant,shift:{attested_at:instant,end_odometer:number,ended_at:instant,id:seq-id,start_odometer:number,started_at:instant,trailer_plate:string,truck_plate:string},trailer:{body_label:string,compartments:number,id:seq-id,plate:string},truck:{can_km:null,gnss:string,has_can:boolean,id:seq-id,model:string,plate:string,speed_kmh:null,telematics:string}}"
+  ],
+  "listNearbyPlaces": [
+    "{data:[]{distance_km:number,group:string,kind:string,place_id:seq-id,short:string,stop_id:null,ttn_no:null},limit:number,page:number,total:number}"
+  ],
+  "submitRecord": [
+    "{duplicate:boolean,id:seq-id,key:string,received_at:instant}"
+  ],
+  "uploadPhoto": [
+    "{page_key:string,received_at:instant}"
+  ],
+  "sendHeartbeat": [
+    "{revoked:boolean,server_time:instant}"
+  ],
+  "getMyDay": [
+    "{corrections:[]empty,date:date,day_confirmed_at:null,empty:boolean,km_line:string,late_notes:[]empty,on_site_line:string,pages:[]{artefact:string,captured_at:instant,doc_index:number,drawn_variant:string,image:null,key:string,page_no:number,state_line:string,stop_id:null}|{artefact:string,captured_at:instant,doc_index:number,drawn_variant:string,image:null,key:string,page_no:number,state_line:string,stop_id:seq-id},paper:[]string,printed_at:null,rows:[]{accepted_line:null,kind:string,late_line:null,lines:[]empty,stop_id:null,title:string}|{accepted_line:null,kind:string,late_line:null,lines:[]string,stop_id:null,title:string}|{accepted_line:string,kind:string,late_line:null,lines:[]string,stop_id:seq-id,title:string},span_line:string}"
+  ],
+  "getMyMonth": [
+    "{days:[]{date:date,line:string},lines:[]string,month:string,title:string}"
+  ],
+  "getOfficeSummary": [
+    "{caption:string,clock:instant,closed_today:number,counts:{bas_ready:number,days_to_confirm:number,now:number,originals:number,review:number},example:boolean,on_call:{name:string,until:string},scope:string,tiles:{at_stops:{line:string,value:number},no_contact:{line:string,value:number},not_started:{lines:[]string,value:number}},user:{id:seq-id,initials:string,name:string,role:string,role_label:string}}"
+  ],
+  "listFleet": [
+    "{data:[]{badge:string,changed_at:instant,contact:{at:instant,stale:boolean,unsent_at_contact:number},docs:{label:string,receipts:string,signed:string,ttn:string},driver:string,example:boolean,odometer:{source:string,value:number},phone:string,plate:string,rank:number,simulated:boolean,state:string,state_line:string,state_since:instant,taken_by:null,truck_day_id:seq-id,truck_id:seq-id}|{badge:string,changed_at:instant,contact:{at:instant,stale:boolean,unsent_at_contact:number},docs:{label:string,receipts:string,signed:string,ttn:string},driver:string,example:boolean,odometer:{source:string,value:number},phone:string,plate:string,rank:number,simulated:boolean,state:string,state_line:string,state_since:null,taken_by:null,truck_day_id:seq-id,truck_id:seq-id}|{badge:string,changed_at:null,contact:{at:instant,stale:boolean,unsent_at_contact:number},docs:{label:string,receipts:string,signed:string,ttn:string},driver:string,example:boolean,odometer:{source:string,value:number},phone:string,plate:string,rank:number,simulated:boolean,state:string,state_line:empty-body,state_since:null,taken_by:null,truck_day_id:null,truck_id:seq-id}|{badge:string,changed_at:null,contact:{at:instant,stale:boolean,unsent_at_contact:number},docs:{label:string,receipts:string,signed:string,ttn:string},driver:string,example:boolean,odometer:{source:string,value:number},phone:string,plate:string,rank:number,simulated:boolean,state:string,state_line:string,state_since:null,taken_by:null,truck_day_id:null,truck_id:seq-id}|{badge:string,changed_at:null,contact:{at:instant,stale:boolean,unsent_at_contact:number},docs:{label:string,receipts:string,signed:string,ttn:string},driver:string,example:boolean,odometer:{source:string,value:number},phone:string,plate:string,rank:number,simulated:boolean,state:string,state_line:string,state_since:null,taken_by:null,truck_day_id:seq-id,truck_id:seq-id}|{badge:string,changed_at:null,contact:{at:null,stale:boolean,unsent_at_contact:number},docs:{label:string,receipts:string,signed:string,ttn:string},driver:string,example:boolean,odometer:{source:string,value:number},phone:null,plate:string,rank:number,simulated:boolean,state:string,state_line:string,state_since:null,taken_by:null,truck_day_id:seq-id,truck_id:seq-id}|{badge:string,changed_at:null,contact:{at:null,stale:boolean,unsent_at_contact:number},docs:{label:string,receipts:string,signed:string,ttn:string},driver:string,example:boolean,odometer:{source:string,value:number},phone:string,plate:string,rank:number,simulated:boolean,state:string,state_line:string,state_since:null,taken_by:null,truck_day_id:null,truck_id:seq-id},limit:number,page:number,total:number}"
+  ],
+  "listExceptions": [
+    "{data:[]{age_min:number,code:string,evidence:null,example:boolean,group:string,id:string,lane:string,meta:string,opened_at:instant,phone:null,primary_action:string,request_line:null,resolved:null,taken_by:null,target:{page_key:null,record_key:null,stop_id:null},title:string,tone:string,truck_day_id:null,truck_plate:empty-body,values:null}|{age_min:number,code:string,evidence:null,example:boolean,group:string,id:string,lane:string,meta:string,opened_at:instant,phone:string,primary_action:string,request_line:null,resolved:null,taken_by:null,target:{page_key:null,record_key:null,stop_id:null},title:string,tone:string,truck_day_id:null,truck_plate:string,values:null}|{age_min:number,code:string,evidence:null,example:boolean,group:string,id:string,lane:string,meta:string,opened_at:instant,phone:string,primary_action:string,request_line:null,resolved:null,taken_by:null,target:{page_key:null,record_key:null,stop_id:null},title:string,tone:string,truck_day_id:seq-id,truck_plate:string,values:null}|{age_min:number,code:string,evidence:{kind:string,text:string},example:boolean,group:string,id:string,lane:string,meta:string,opened_at:instant,phone:string,primary_action:string,request_line:null,resolved:null,taken_by:null,target:{page_key:string,record_key:string,stop_id:null},title:string,tone:string,truck_day_id:seq-id,truck_plate:string,values:{current:string,expected:string}},limit:number,page:number,total:number}"
+  ],
+  "updateException": [
+    "{age_min:number,code:string,evidence:null,example:boolean,group:null,id:string,lane:string,meta:string,opened_at:instant,phone:string,primary_action:string,request_line:null,resolved:null,taken_by:string,target:{page_key:null,record_key:null,stop_id:null},title:string,tone:string,truck_day_id:null,truck_plate:string,values:null}"
+  ],
+  "getStopReview": [
+    "{accepted:{at:instant,by:string},day_status:string,docs:[]{blank_reverse:boolean,derived:{text:string,tone:string},doc_index:number,id:seq-id,match_line:string,no:string,printed:[]{field:string,label:string,ocr:string,required:boolean,source:string,source_line:string,value:string},printed_confirmed:number,printed_required:number,reverse:[]{field:string,label:string,ocr:null,required:boolean,source:null,source_line:null,value:null}|{field:string,label:string,ocr:null,required:boolean,source:string,source_line:string,value:string},switch_label:string},driver:{phone:string,short:string},pages:[]{artefact:string,caption:string,doc_index:number,drawn_variant:string,image:null,key:string,page_no:number,provenance:string,received:boolean,record_key:string,request:null,superseded_by:null,supersedes:null,target_label:string}|{artefact:string,caption:string,doc_index:number,drawn_variant:string,image:null,key:string,page_no:number,provenance:string,received:boolean,record_key:string,request:null,superseded_by:null,supersedes:string,target_label:string}|{artefact:string,caption:string,doc_index:number,drawn_variant:string,image:null,key:string,page_no:number,provenance:string,received:boolean,record_key:string,request:{by:string,id:seq-id,reasons:[]string,states:{cancelled:null,delivered:instant,done:instant,seen:instant,sent:instant},target_label:string,type:string,unseen_line:null},superseded_by:string,supersedes:null,target_label:string},requests:[]{by:string,id:seq-id,reasons:[]string,states:{cancelled:null,delivered:instant,done:instant,seen:instant,sent:instant},target_label:string,type:string,unseen_line:null},status:string,stop:{id:seq-id,kind:string,line:string,title:string},truck:{plate:string},truck_day_id:seq-id}"
+  ],
+  "reviewStop": [
+    "{accepted:{at:instant,by:string},day_status:string,docs:[]{blank_reverse:boolean,derived:{text:string,tone:string},doc_index:number,id:seq-id,match_line:string,no:string,printed:[]{field:string,label:string,ocr:string,required:boolean,source:string,source_line:string,value:string},printed_confirmed:number,printed_required:number,reverse:[]{field:string,label:string,ocr:null,required:boolean,source:null,source_line:null,value:null}|{field:string,label:string,ocr:null,required:boolean,source:string,source_line:string,value:string},switch_label:string},driver:{phone:string,short:string},pages:[]{artefact:string,caption:string,doc_index:number,drawn_variant:string,image:null,key:string,page_no:number,provenance:string,received:boolean,record_key:string,request:null,superseded_by:null,supersedes:null,target_label:string}|{artefact:string,caption:string,doc_index:number,drawn_variant:string,image:null,key:string,page_no:number,provenance:string,received:boolean,record_key:string,request:null,superseded_by:null,supersedes:string,target_label:string}|{artefact:string,caption:string,doc_index:number,drawn_variant:string,image:null,key:string,page_no:number,provenance:string,received:boolean,record_key:string,request:{by:string,id:seq-id,reasons:[]string,states:{cancelled:null,delivered:instant,done:instant,seen:instant,sent:instant},target_label:string,type:string,unseen_line:null},superseded_by:string,supersedes:null,target_label:string},requests:[]{by:string,id:seq-id,reasons:[]string,states:{cancelled:null,delivered:instant,done:instant,seen:instant,sent:instant},target_label:string,type:string,unseen_line:null},status:string,stop:{id:seq-id,kind:string,line:string,title:string},truck:{plate:string},truck_day_id:seq-id}"
+  ],
+  "createRequest": [
+    "{by:string,id:seq-id,reasons:[]string,states:{cancelled:null,delivered:null,done:null,seen:null,sent:instant},target_label:string,type:string,unseen_line:null}"
+  ],
+  "createCorrection": [
+    "{ack:null,at:instant,by:string,driver_wording:string,field:string,id:seq-id,needs_ack:boolean,new:string,old:string,reason:string,record_key:string}"
+  ],
+  "listTruckDays": [
+    "{data:[]{attested_at:instant,badge:string,date:date,docs:string,driver:string,example:boolean,exported_at:null,flags_open:number,id:seq-id,km:number,plate:string,span:{from:instant,to:instant},status:string,waybill_no:null}|{attested_at:null,badge:string,date:date,docs:string,driver:string,example:boolean,exported_at:null,flags_open:number,id:seq-id,km:number,plate:string,span:{from:instant,to:instant},status:string,waybill_no:null},limit:number,page:number,total:number}"
+  ],
+  "getTruckDay": [
+    "{badges:[]empty,consequence:string,day:{badge:string,confirmed:null,date:date,example:boolean,id:seq-id,printed_at:null,signed_at:null,status:string,truck_plate:string,version:number,waybill_no:null},driver_attested_at:instant,flags:[]empty,flags_open:number,fuel_block:[]string,history:[]{at:instant,by:string,text:string},legs:[]{arrival_driver:instant,arrival_ttn:string,from:string,km:number,loaded:boolean,mass:dec3,n:number,original:string,tkm:dec1,to:string,ttn:[]string}|{arrival_driver:instant,arrival_ttn:string,from:string,km:number,loaded:boolean,mass:null,n:number,original:string,tkm:null,to:string,ttn:[]empty}|{arrival_driver:null,arrival_ttn:null,from:string,km:number,loaded:boolean,mass:null,n:number,original:string,tkm:null,to:string,ttn:[]empty},print_lines:[]string,requisites:[]{key:string,label:string,note:null,plate:null,value:string}|{key:string,label:string,note:null,plate:string,value:string}|{key:string,label:string,note:string,plate:null,value:string},summary:{documents:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string},fuel:{hold_lines:[]string,label:string,lines:[]string,simulated:boolean,value:string},odometer:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string},time:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string}},timeline:[]{at:instant,event:string,example:boolean,odometer:null,place_short:null,simulated:boolean,source:string,thumbs:[]empty,to:instant}|{at:instant,event:string,example:boolean,odometer:null,place_short:null,simulated:boolean,source:string,thumbs:[]empty,to:null}|{at:instant,event:string,example:boolean,odometer:null,place_short:string,simulated:boolean,source:string,thumbs:[]empty,to:null}|{at:instant,event:string,example:boolean,odometer:null,place_short:string,simulated:boolean,source:string,thumbs:[]string,to:null}|{at:instant,event:string,example:boolean,odometer:{source:string,value:number},place_short:string,simulated:boolean,source:string,thumbs:[]string,to:null},version:number}"
+  ],
+  "confirmTruckDay": [
+    "{badges:[]empty,consequence:string,day:{badge:string,confirmed:{at:instant,by:string},date:date,example:boolean,id:seq-id,printed_at:null,signed_at:null,status:string,truck_plate:string,version:number,waybill_no:string},driver_attested_at:instant,flags:[]empty,flags_open:number,fuel_block:[]string,history:[]{at:instant,by:string,text:string},legs:[]{arrival_driver:instant,arrival_ttn:string,from:string,km:number,loaded:boolean,mass:dec3,n:number,original:string,tkm:dec1,to:string,ttn:[]string}|{arrival_driver:instant,arrival_ttn:string,from:string,km:number,loaded:boolean,mass:null,n:number,original:string,tkm:null,to:string,ttn:[]empty}|{arrival_driver:null,arrival_ttn:null,from:string,km:number,loaded:boolean,mass:null,n:number,original:string,tkm:null,to:string,ttn:[]empty},print_lines:[]string,requisites:[]{key:string,label:string,note:null,plate:null,value:string}|{key:string,label:string,note:null,plate:string,value:string}|{key:string,label:string,note:string,plate:null,value:string},summary:{documents:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string},fuel:{hold_lines:[]string,label:string,lines:[]string,simulated:boolean,value:string},odometer:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string},time:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string}},timeline:[]{at:instant,event:string,example:boolean,odometer:null,place_short:null,simulated:boolean,source:string,thumbs:[]empty,to:instant}|{at:instant,event:string,example:boolean,odometer:null,place_short:null,simulated:boolean,source:string,thumbs:[]empty,to:null}|{at:instant,event:string,example:boolean,odometer:null,place_short:string,simulated:boolean,source:string,thumbs:[]empty,to:null}|{at:instant,event:string,example:boolean,odometer:null,place_short:string,simulated:boolean,source:string,thumbs:[]string,to:null}|{at:instant,event:string,example:boolean,odometer:{source:string,value:number},place_short:string,simulated:boolean,source:string,thumbs:[]string,to:null},version:number}"
+  ],
+  "printTruckDay": [
+    "{badges:[]empty,consequence:string,day:{badge:string,confirmed:null,date:date,example:boolean,id:seq-id,printed_at:instant,signed_at:null,status:string,truck_plate:string,version:number,waybill_no:null},driver_attested_at:instant,flags:[]empty,flags_open:number,fuel_block:[]string,history:[]{at:instant,by:string,text:string},legs:[]{arrival_driver:instant,arrival_ttn:string,from:string,km:number,loaded:boolean,mass:dec3,n:number,original:string,tkm:dec1,to:string,ttn:[]string}|{arrival_driver:instant,arrival_ttn:string,from:string,km:number,loaded:boolean,mass:null,n:number,original:string,tkm:null,to:string,ttn:[]empty}|{arrival_driver:null,arrival_ttn:null,from:string,km:number,loaded:boolean,mass:null,n:number,original:string,tkm:null,to:string,ttn:[]empty},print_lines:[]string,requisites:[]{key:string,label:string,note:null,plate:null,value:string}|{key:string,label:string,note:null,plate:string,value:string}|{key:string,label:string,note:string,plate:null,value:string},summary:{documents:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string},fuel:{hold_lines:[]string,label:string,lines:[]string,simulated:boolean,value:string},odometer:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string},time:{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string}},timeline:[]{at:instant,event:string,example:boolean,odometer:null,place_short:null,simulated:boolean,source:string,thumbs:[]empty,to:instant}|{at:instant,event:string,example:boolean,odometer:null,place_short:null,simulated:boolean,source:string,thumbs:[]empty,to:null}|{at:instant,event:string,example:boolean,odometer:null,place_short:string,simulated:boolean,source:string,thumbs:[]empty,to:null}|{at:instant,event:string,example:boolean,odometer:null,place_short:string,simulated:boolean,source:string,thumbs:[]string,to:null}|{at:instant,event:string,example:boolean,odometer:{source:string,value:number},place_short:string,simulated:boolean,source:string,thumbs:[]string,to:null},version:number}"
+  ],
+  "getKeyPoints": [
+    "{data:[]{arrived_at:instant,departed_at:instant,departed_label:string,odometer:number,place:string,plate:string,simulated:boolean,source:string}|{arrived_at:instant,departed_at:null,departed_label:string,odometer:number,place:string,plate:string,simulated:boolean,source:string},limit:number,page:number,total:number}"
+  ],
+  "getExportPreview": [
+    "{confirmed:number,count_line:string,date:date,last_export_id:null,last_import:null,scope:string,sheets:{legs:{columns:[]string,rows:[]{cells:[]string,confirmed:boolean,ettn:boolean,example:boolean,exported_line:null},title:string,total:number},refuels:{columns:[]string,rows:[]{cells:[]string,confirmed:boolean,ettn:boolean,example:boolean,exported_line:null},title:string,total:number},waybills:{columns:[]string,rows:[]{cells:[]string,confirmed:boolean,ettn:boolean,example:boolean,exported_line:null},title:string,total:number},worktime:{columns:[]string,rows:[]{cells:[]string,confirmed:boolean,ettn:boolean,example:boolean,exported_line:null},title:string,total:number}},still_on_shift:[]string,unconfirmed:number}"
+  ],
+  "createExport": [
+    "{content:string,file_name:string,id:seq-id,mime:string,rows:number}"
+  ],
+  "importExport": [
+    "{at:instant,corrections:[]string,created:number,lines:[]string,note:empty-body,unchanged:number,updated:number}"
+  ],
+  "listTrucks": [
+    "{data:[]{badge:string,days:number,days_confirmed:string,deviation:dec1,docs_on_time:string,example:boolean,fuel_rate:dec1,fuel_uah:dec2,idle_over_free:null,km:number,km_loaded:number,method_label:string,norm:dec1,over_tolerance:boolean,plate:string,simulated:boolean,site_hours:number,truck_id:seq-id},limit:number,page:number,total:number}"
+  ],
+  "getTruckFuel": [
+    "{cells:[]{hold_lines:[]empty,label:string,lines:[]string,simulated:boolean,value:string}|{hold_lines:[]string,label:string,lines:[]empty,simulated:boolean,value:string},example:boolean,mismatches:[]string,month:{badge:string,days:number,days_confirmed:string,deviation:dec1,docs_on_time:string,example:boolean,fuel_rate:dec1,fuel_uah:dec2,idle_over_free:null,km:number,km_loaded:number,method_label:string,norm:dec1,over_tolerance:boolean,plate:string,simulated:boolean,site_hours:number,truck_id:seq-id},month_strip:[]{date:date,state:string},norm_block:{dispatcher:[]string,hold:string,lines:[]string,trend:[]dec1,trend_label:string},truck:{id:seq-id,line:string,plate:string}}"
+  ],
+  "listOriginals": [
+    "{data:[]{days:number,docs:[]{id:seq-id,label:string,received_at:null,received_by:null},driver:string,example:boolean,group:string,id:string,note:null,trip_no:string}|{days:number,docs:[]{id:seq-id,label:string,received_at:null,received_by:null},driver:string,example:boolean,group:string,id:string,note:string,trip_no:string},limit:number,page:number,total:number}"
+  ],
+  "receiveOriginal": [
+    "{days:number,docs:[]{id:seq-id,label:string,received_at:instant,received_by:string},driver:string,example:boolean,group:string,id:string,note:null,trip_no:string}"
+  ],
+  "listWorktime": [
+    "{data:[]{curfew_heat:string,diff:string,driver:string,example:boolean,night:string,on_site:string,shifts:string,simulated:boolean,span:string,tacho:string,weekend:string},limit:number,page:number,total:number}"
+  ],
+  "listDrivers": [
+    "{data:[]{binding:{bound_at:instant,code:null,device_label:string,expires_at:null,state:string},example:boolean,full_name:string,id:seq-id,mode:string,phone_label:string,pilot:boolean,plate:string,tab_no:string}|{binding:{bound_at:null,code:null,device_label:null,expires_at:null,state:string},example:boolean,full_name:string,id:seq-id,mode:string,phone_label:string,pilot:boolean,plate:string,tab_no:string},limit:number,page:number,total:number}"
+  ],
+  "createBindCode": [
+    "{code:string,expires_at:instant,url:string}"
+  ],
+  "refusals": {
+    "confirmBinding.BIND_CODE_EXPIRED": [
+      "410",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "submitRecord.DEVICE_REVOKED": [
+      "403",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "uploadPhoto.DEVICE_REVOKED": [
+      "403",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "updateException.EXCEPTION_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,id:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "getStopReview.STOP_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,id:seq-id,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "reviewStop.STOP_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,id:seq-id,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "reviewStop.DAY_CONFIRMED": [
+      "409",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "reviewStop.VALUE_INVALID": [
+      "400",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant,value:string}"
+    ],
+    "createRequest.REQUEST_ALREADY_OPEN": [
+      "409",
+      "{at:instant,by:string,code:string,error:string,message:string,path:string,requestId:seq-id,state:string,statusCode:number,timestamp:instant}"
+    ],
+    "createRequest.TARGET_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,record_key:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createCorrection.TARGET_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,record_key:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createCorrection.DAY_CONFIRMED": [
+      "409",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createCorrection.VALUE_INVALID": [
+      "400",
+      "{code:string,error:string,field:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant,value:string}"
+    ],
+    "getTruckDay.TRUCK_DAY_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "confirmTruckDay.TRUCK_DAY_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "confirmTruckDay.DAY_CHANGED": [
+      "409",
+      "{at:instant,by:string,change:string,code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "printTruckDay.TRUCK_DAY_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "importExport.EXPORT_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "getTruckFuel.TRUCK_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "receiveOriginal.DOCUMENT_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createBindCode.DRIVER_NOT_FOUND": [
+      "404",
+      "{code:string,error:string,message:string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ]
+  },
+  "malformed": {
+    "submitRecord.emptyBody": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "submitRecord.forgedFields": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "reviewStop.wrongType": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ],
+    "createExport.badScope": [
+      "400",
+      "{error:string,message:[]string,path:string,requestId:seq-id,statusCode:number,timestamp:instant}"
+    ]
+  }
+}

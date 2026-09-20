@@ -43,7 +43,12 @@ export function PageHead({
           <div className="mt-[6px] max-w-[64ch] text-o-lede text-text-2">{description}</div>
         )}
       </div>
-      {actions === undefined ? null : <div className="flex shrink-0 flex-wrap items-center gap-[8px]">{actions}</div>}
+      {/* `max-w-full` beside `shrink-0`: without it the actions row keeps its max-content width and `flex-wrap`
+          never fires, because there is nothing to wrap inside. Measured at 390 px on «В BAS», whose two actions
+          are 398 px together — «Імпорт у BAS (імітація)» sat 24 px outside `main` and scrolled it (§8.3 Shell #4).
+          `shrink-0` still stops the title squeezing them on a wide page; `max-w-full` only caps the row at the
+          header, which is where wrapping starts. */}
+      {actions === undefined ? null : <div className="flex max-w-full shrink-0 flex-wrap items-center gap-[8px]">{actions}</div>}
     </header>
   );
 }

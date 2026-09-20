@@ -22,7 +22,7 @@ import { DateStepper } from '@agency/kit/date-stepper';
 import { toast } from '@agency/kit/toast';
 import { Download } from 'lucide-react';
 import { asBusinessDate, type BusinessDate } from '@agency/mock';
-import { PageHead, Panel, ResponsiveTable, SkeletonRows, EmptyPanel, saveFile, useConsoleMode,
+import { colW, PageHead, Panel, ResponsiveTable, SkeletonRows, EmptyPanel, saveFile, useConsoleMode,
   type ConsoleMode, type RTColumn } from '../../components/office';
 import { Plate, SimChip, SourceBadge } from '../../components/shared';
 import { useScope, useServerNow } from '../../app/live';
@@ -50,19 +50,29 @@ function askedDate(raw: string | null): BusinessDate | null {
   }
 }
 
-/** The six columns of §4.2 C-10, at every console mode: six narrow cells fit a rail, and dropping one would take away
- *  half of what a key point IS. `mode` is still the caller's, because a page — not a table — decides the fold. */
+/** The six columns of §4.2 C-10, and their shares. Nothing is dropped: below `wide` «Джерело» becomes «Одометр»'s
+ *  second line, which is where a badge belongs anyway — it vouches for that number and for nothing else. Wide adds
+ *  up to 1 036 with the chevron, narrow to 690, against the 1 136 and 690 px panes of `fit.test.tsx`.
+ *  `mode` is still the caller's, because a page — not a table — decides the fold. */
+const W = {
+  plate: { wide: 168, narrow: 150 },
+  place: { wide: 268, narrow: 168 },
+  arrived: { wide: 108, narrow: 90 },
+  departed: { wide: 176, narrow: 132 },
+  odometer: { wide: 128, narrow: 110 },
+};
+
 export function KeyPointsTable({ rows, mode }: { rows: KeyPointRow[]; mode: ConsoleMode }): JSX.Element {
   const columns: RTColumn<KeyPointRow>[] = [
-    { id: 'plate', header: 'Машина', width: 168, cell: (r) => <Plate plate={r.plate} size="sm" /> },
-    { id: 'place', header: 'Місце', cell: (r) => r.place },
-    { id: 'arrived', header: 'Прибуття', width: 108,
+    { id: 'plate', header: 'Машина', width: colW(mode, W.plate), cell: (r) => <Plate plate={r.plate} size="sm" /> },
+    { id: 'place', header: 'Місце', width: colW(mode, W.place), cell: (r) => r.place },
+    { id: 'arrived', header: 'Прибуття', width: colW(mode, W.arrived),
       cell: (r) => <span className="font-mono tabular-nums">{fmtTime(r.arrived_at)}</span> },
-    { id: 'departed', header: 'Виїзд', width: 176,
+    { id: 'departed', header: 'Виїзд', width: colW(mode, W.departed),
       cell: (r) => <span className="font-mono tabular-nums">{r.departed_label}</span> },
-    { id: 'odometer', header: 'Одометр', width: 128, align: 'right',
+    { id: 'odometer', header: 'Одометр', width: colW(mode, W.odometer), align: 'right',
       cell: (r) => <span className="font-mono tabular-nums">{fmtKm(r.odometer)}</span> },
-    { id: 'source', header: 'Джерело', width: 148,
+    { id: 'source', header: 'Джерело', width: 148, hideAt: ['compact', 'rail'], mergeInto: 'odometer',
       cell: (r) => (
         <span className="inline-flex items-center gap-[6px]">
           <SourceBadge source={r.source} />

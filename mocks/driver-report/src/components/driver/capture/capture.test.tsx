@@ -1,7 +1,7 @@
 // mocks/driver-report/src/components/driver/capture/capture.test.tsx
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.hoisted(() => { vi.stubEnv('VITE_MOCK', '1'); window.history.replaceState(null, '', '/?profile=driver&device=device-000001&stage=1'); });
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { engineFor } from '../../../app/capture/engine';
 import { looksDuplicate } from '../../../app/capture/similarity';
@@ -34,6 +34,30 @@ describe('the camera (§3.3 D-06, §8.2 D-06, D4)', () => {
     await userEvent.dblClick(shutter);
     expect(onShot).toHaveBeenCalledTimes(1);
     expect(gum).not.toHaveBeenCalled();
+  });
+
+  /* MEASURED 2026-09-20, in a whole-suite `pnpm verify` run and never standalone: the shutter's 80 ms flash is a
+     REAL timer with no unmount cleanup, so a test FILE whose last shot lands inside that window has its jsdom realm
+     torn down underneath the callback, and `setFlash` throws «ReferenceError: window is not defined» into vitest's
+     unhandled-error channel. That is the `test` row FAILED with ZERO failing tests — a flaky red, which CLAUDE.md
+     names as the fastest route to a gate somebody switches off. It surfaced from refuel.test.tsx once in six runs.
+     Fake timers make it deterministic: the pending timer is COUNTABLE after the screen is gone. */
+  it('leaves no timer running behind it when the screen goes away', () => {
+    /* `fireEvent`, not `userEvent`: user-event's own delay is a timer, so setting it up under fake timers and then
+       counting what is pending would count its bookkeeping as well as the flash — and, measured here, it simply
+       hangs. One synchronous click is all this needs. */
+    vi.useFakeTimers();
+    try {
+      const { unmount } = render(<CameraScreen title="ТТН 1 з 1 — лицьовий бік" hint="ТТН на сидіння, весь аркуш у рамці" artefact="TTN_FRONT"
+        row2={[]} engine="DRAWN" drawn={{ artefact: 'TTN_FRONT', doc_index: 1, page_no: 1, variant: 'ttn-004517-front', value: null, sim_read: null }}
+        onBack={() => {}} onShot={() => {}} onRow2={() => {}} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Зняти' }));
+      expect(vi.getTimerCount()).toBe(1);   // the flash is running while the screen is on
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);   // …and nothing of it survives the screen
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Beyond the plan's case: what the one shot HANDS BACK, which is the whole point of the screen, and the frame the

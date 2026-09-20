@@ -56,6 +56,28 @@ const times = (a: number, k: number): number => a * k;
 
 const px = (v: number): number => Math.round(v);
 
+/** The width at which the bar's FULL labels stop fitting, MEASURED IN CHROME on 2026-09-20 at the rehearsal canvas:
+ *  with every label at its long spelling the bar's content is 1 819 px, so at 1 440 it was CLIPPED and «Скинути
+ *  демо», «⋯», the link indicator and the guard chips sat off the right-hand edge — silently, because the canvas is
+ *  `overflow-hidden` and nothing errors. jsdom cannot see it: no layout engine, so `getBoundingClientRect` is zeros
+ *  and every stage test was green throughout. 1 830 is that 1 819 plus a little; it is a threshold to re-measure
+ *  when a label changes, never a number to adjust until something fits. */
+export const BAR_WIDE_LABELS = 1830;
+
+/** Which spellings the presenter bar may use (§5.2, §5.4 rows 1, 4, 6–8).
+ *
+ *  THE WINDOW IS NOT THE QUESTION, and that was the defect. In `canvas` mode the bar is drawn on the FIXED
+ *  1 440 × 900 canvas and scaled as a whole, so its own CSS width is 1 440 at a 1 440 window and at a 1 920 one
+ *  alike — asking `W >= 1440` handed the widest form of the bar to the one box that can never hold it.
+ *
+ *  So the two decisions are separated. `identity` — «Сцена · Звіт водія · КТЛ», §5.4 row 1 — is a claim about the
+ *  canvas being the rehearsal size. `compact` is a claim about whether the long labels FIT, and at every size this
+ *  demo is ever shown at they do not: the canvas is 1 440, and a reflow is narrower still. */
+export function barLabels(mode: StageLayout['mode'], W: number): { identity: boolean; compact: boolean } {
+  const barW = mode === 'canvas' ? CANVAS.w : W;
+  return { identity: gte(barW, CANVAS.w), compact: lt(barW, BAR_WIDE_LABELS) };
+}
+
 /** «Масштаб 88 %» whenever what the audience sees is smaller than what was rehearsed, else nothing (§5.4 #13).
  *  A plain space before the «%», not the NBSP §0.1 asks of a NUMBER: the spec pins this label three times and the
  *  W2-10 test compares it as a raw string, so the byte is not ours to improve. */

@@ -135,14 +135,18 @@ function DayView({ date, today }: { date: BusinessDate; today: DriverToday }): J
 
   return (
     <LightPage title={TITLE} onBack={() => { navigate('/'); }}>
+      {/* `min-w-0` on all three: `flex-1` is `flex: 1 1 0%` with `min-width: auto`, so each cell refuses to go
+          below its own min-content and the row simply got wider than the phone. At 200 % root size that pushed
+          `#/day` to a 397 px document against 360 (§8.5, measured in Chrome). With the floor removed each cell
+          takes a third of the row and «вт 22.09 ›» wraps inside it. `text-center` keeps the wrapped line placed. */}
       <div className="flex min-h-[3.5rem] w-full items-center gap-2">
         <button type="button" onClick={guard(() => { navigate(`/day/${prev}`); })}
-          className="tap-ring flex min-h-tap flex-1 items-center justify-center rounded-[12px] px-2 text-[1rem] leading-[1.375rem]">
+          className="tap-ring flex min-h-tap min-w-0 flex-1 items-center justify-center rounded-[12px] px-2 text-center text-[1rem] leading-[1.375rem]">
           {`${PREV} ${fmtDay(prev)}`}
         </button>
-        <span className="tnum flex-1 text-center text-[1rem] leading-[1.375rem] font-semibold">{fmtDay(date)}</span>
+        <span className="tnum min-w-0 flex-1 text-center text-[1rem] leading-[1.375rem] font-semibold">{fmtDay(date)}</span>
         <button type="button" disabled={ahead} onClick={guard(() => { navigate(`/day/${next}`); })}
-          className="tap-ring flex min-h-tap flex-1 items-center justify-center rounded-[12px] px-2 text-[1rem] leading-[1.375rem]"
+          className="tap-ring flex min-h-tap min-w-0 flex-1 items-center justify-center rounded-[12px] px-2 text-center text-[1rem] leading-[1.375rem]"
           style={ahead ? { color: 'var(--text-2)', opacity: 0.5 } : undefined}>
           {`${fmtDay(next)} ${NEXT}`}
         </button>
@@ -188,7 +192,7 @@ function DayView({ date, today }: { date: BusinessDate; today: DriverToday }): J
           {view.corrections.map((c) => (
             <HoldCard key={c.id} icon={Pencil} title={correctionLine(c, current)}>
               {!c.needs_ack || c.ack !== null ? null : (
-                <span className="flex gap-2 pt-2">
+                <span className="flex flex-wrap gap-2 pt-2">
                   <QuietButton half label={AGREE} onPress={guard(() => { ack(c, true); })} />
                   <QuietButton half tone="hold" label={DISAGREE} onPress={guard(() => { ack(c, false); })} />
                 </span>

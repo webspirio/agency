@@ -95,6 +95,21 @@ describe('office review kit (§4.2 C-02 … C-06)', () => {
     expect(input).toHaveValue('07:48');
     expect(onCommit).not.toHaveBeenCalled();
   });
+  // §8.3 C-04 #1, measured in Chrome at 1 440 px and re-measured after the fix. The fields column is a 520 px
+  // `card-ring overflow-hidden` at x 296–816, and the chip was `h-[28px] … whitespace-nowrap`: a sentence that did
+  // not fit simply ran out of the card and was cut. «OCR: ТОВ «Дніпро-Корм» · ЄДРПОУ 31785062» ended 101 px past
+  // the edge, «OCR: ПП «Птахофабрика «Злагода» · ЄДРПОУ …» 162 px past it and «Вантаж» 8 px — so the operator was
+  // asked to confirm three values they could not read. jsdom has no layout engine and cannot see a clipped pixel;
+  // what it CAN hold is the spelling the browser proved wrong. A TOKEN comparison, never a substring — the gate
+  // measured one of its own assertions passing spuriously because `max-h-full` contains `h-full`.
+  it('lets a long OCR suggestion wrap instead of running out of the card (§8.3 C-04 #1)', () => {
+    const { container } = render(<OcrSuggestion value="ПП «Птахофабрика «Злагода» · ЄДРПОУ 31785062" />);
+    const chip = container.querySelector('span > span');
+    const tokens = (chip?.className ?? '').split(/\s+/);
+    expect(tokens).not.toContain('whitespace-nowrap');
+    expect(tokens).not.toContain('h-[28px]');
+    expect(tokens).toContain('min-h-[28px]');
+  });
   it('confesses an OCR suggestion and tracks a request', () => {
     render(<><OcrSuggestion value="004517" /><RequestTrack request={{ id: 'r', type: 'RETAKE_PHOTO', target_label: 'ТТН 2 з 2, зворотний бік', reasons: ['BLUR'],
       by: 'Н. Шевчук', unseen_line: null, states: { sent: demo('08:43'), delivered: demo('08:43'), seen: demo('08:43'), done: demo('08:44'), cancelled: null } }} /></>);

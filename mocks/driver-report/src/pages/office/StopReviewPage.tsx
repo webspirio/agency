@@ -33,6 +33,7 @@ import { CheckCheck, ClipboardCheck, Clock } from 'lucide-react';
 import { Segmented } from '@agency/kit/segmented';
 import { codeOf } from '../../api/contract';
 import { useReviewStop, useStopReview } from '../../api/hooks';
+import { useWriteOnce } from '../../app/once';
 import { SAYS_STOP_REVIEW } from '../../api/says';
 import { fmtTime } from '../../app/format';
 import { EmptyPanel, PageHead, Panel, SkeletonRows, StatusPill, useConsoleMode } from '../../components/office';
@@ -80,11 +81,16 @@ export function StopReviewPage(): JSX.Element {
   const locked = view?.day_status === 'CONFIRMED';
   const accepted = view?.status === 'ACCEPTED';
 
-  /** One write, one refusal slot. `field` is set only for a time, which is the one refusal about a VALUE. */
+  /** One write, one refusal slot. `field` is set only for a time, which is the one refusal about a VALUE.
+   *  The latch is what makes a double click ONE audit line: `review.isPending` is state and has not flipped for a
+   *  second click inside the same React batch (§8.6 #13; `src/app/once.ts` carries the measurement). */
+  const once = useWriteOnce();
   const send = (body: ReviewStopIn, where: Where, field: TtnField | null): void => {
+    if (!once.claim(JSON.stringify(body))) return;
     setRefusal(null);
     setTimeError(null);
     review.mutate(body, {
+      onSettled: () => { once.release(); },
       onError: (err) => {
         const code = codeOf('reviewStop', err);
         const text = code === undefined ? NO_CODE : SAYS_STOP_REVIEW[code];

@@ -16,16 +16,18 @@
  *  - the clock runs from the beat's moment, never from the wall date. */
 import { useEffect, useState, type CSSProperties, type JSX } from 'react';
 import { useParams } from 'react-router';
-import { server } from '../api/server';
+import { server, type StageUi } from '../api/server';
 import { urlBeat } from '../app/device';
 import { useServerNow, useServerValue } from '../app/live';
-import { between, gte, toInt } from '../domain/num';
+import { between, toInt } from '../domain/num';
 import { ConsoleFrame } from './ConsoleFrame';
 import { beatOf, CONSOLE_CAPTION, phoneOf, STAGE_PHONES, useHub } from './hub';
-import { STAGE_CANVAS, stageLayout } from './layout';
+import { useStageKeys } from './keys';
+import { barLabels, STAGE_CANVAS, stageLayout } from './layout';
+import { recoverFromLog, startLog } from './log';
 import { PhoneFrame } from './PhoneFrame';
 import { ensureBooted, watchLiveTwins } from './runner';
-import { StageBar } from './bar/StageBar';
+import { StageBar, type BarMenuId } from './bar/StageBar';
 
 /** `/beat/:n` (§2.5) wins, then `?beat=`, then the beat the demo opens on. */
 function routeBeat(raw: string | undefined): number {
@@ -35,6 +37,11 @@ function routeBeat(raw: string | undefined): number {
   }
   return urlBeat(0);
 }
+
+/** «F» (§5.2, §5.10): both → phone large → console large → both. `consoleZoom` rides with it, because "console
+ *  large" is not a stage layout alone — the pane is an iframe with its own viewport, so the only way to enlarge
+ *  what is IN it is the `zoom: 1.15` its own shell reads off the shared server. */
+const NEXT_FOCUS: Record<StageUi['focus'], StageUi['focus']> = { both: 'phone', phone: 'console', console: 'both' };
 
 /** The window, as the layout sees it. */
 function useWindowSize(): { w: number; h: number } {
@@ -54,8 +61,50 @@ export function StagePage(): JSX.Element {
   const now = useServerNow();
   const size = useWindowSize();
   const boot = routeBeat(params.n);
+  const [menu, setMenu] = useState<BarMenuId>(null);
 
-  useEffect(() => { void ensureBooted(boot); }, [boot]);
+  /** RECOVERY FIRST, then the URL's beat (§5.8, EC-166). A reload mid-demo — a laptop that slept, a browser that
+   *  discarded the tab, a presenter who hit ⌘R — must come back to the beat, clock, toggles and live records it
+   *  left, and only when there is no log to recover from does `?beat=` decide. Both are idempotent, so the second
+   *  StrictMode pass costs nothing. */
+  useEffect(() => {
+    void (async () => {
+      if (!(await recoverFromLog())) await ensureBooted(boot);
+    })();
+  }, [boot]);
+
+  /** And from here on the log follows the demo. It is a log of ACTIONS: the seed still regenerates on load. */
+  useEffect(() => startLog(), []);
+
+  /** §5.8: «The URL hash follows the beat». It did not — W3-05 measured `location.hash` still reading `#/beat/0`
+   *  after «Такт 7», corrected only by a reload, which is the wrong half of EC-166 to have working: a fresh tab at
+   *  `#/beat/3` landed on beat 3, but the tab the presenter is standing in lied about where it stood.
+   *
+   *  `replaceState`, not an assignment to `location.hash`, for two reasons measured together: an assignment pushes
+   *  a history entry, so Back would walk the beats the presenter had already left, and it fires `hashchange`, which
+   *  moves the hash router and re-renders this page with a new `params.n` for no gain. `replaceState` writes the
+   *  address bar and nothing else — which is exactly what a reload needs to read. */
+  useEffect(() => {
+    if (ui.beat === null) return;
+    const hash = `#/beat/${String(ui.beat)}`;
+    if (window.location.hash !== hash) window.history.replaceState(window.history.state, '', hash);
+  }, [ui.beat]);
+
+  /** §5.10. Each pane forwards these from inside its iframe (`forwardStageKeys`), so they work wherever the
+   *  presenter's last click landed. */
+  useStageKeys({
+    p: () => { server.setUi({ barHidden: !server.ui.barHidden }); },
+    f: () => {
+      const focus = NEXT_FOCUS[server.ui.focus];
+      server.setUi({ focus, consoleZoom: focus === 'console' });
+    },
+    1: () => { server.setUi({ single: 'phone' }); },
+    2: () => { server.setUi({ single: 'console' }); },
+    3: () => { server.setUi({ single: 'both' }); },
+    t: () => { setMenu('beat'); },
+    r: () => { setMenu('rewind'); },
+    Escape: () => { setMenu(null); },
+  });
 
   /** A live clock from the beat's moment on: the rebuild leaves it frozen so the replay is deterministic (§5.8). */
   const ready = ui.beat !== null;
@@ -74,6 +123,9 @@ export function StagePage(): JSX.Element {
 
   const layout = stageLayout({ W: size.w, H: size.h, viewport: toggles.viewport, focus: ui.focus,
     single: ui.single, barHidden: ui.barHidden });
+  /** Which spellings the bar may use — asked of the BAR'S box rather than of the window, because in `canvas` mode
+   *  they are not the same number (see `barLabels`). */
+  const labels = barLabels(layout.mode, size.w);
   const beat = beatOf(ui.beat);
   const framed = phoneOf(ui.phone) ?? STAGE_PHONES[0];
 
@@ -102,7 +154,7 @@ export function StagePage(): JSX.Element {
         {ui.barHidden ? null : (
           <div className="absolute inset-x-0 top-0 z-10" style={{ height: layout.bar }}>
             <StageBar hub={hub} ui={ui} toggles={toggles} now={now} scaleLabel={layout.scaleLabel}
-              wide={gte(size.w, STAGE_CANVAS.w)} />
+              wide={labels.identity} compact={labels.compact} menu={menu} onMenu={setMenu} />
           </div>
         )}
 

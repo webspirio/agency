@@ -24,7 +24,7 @@ import { useOriginals, useReceiveOriginal } from '../../api/hooks';
 import { SAYS_ORIGINAL } from '../../api/says';
 import { fmtTime, pluralN } from '../../app/format';
 import { useScope } from '../../app/live';
-import { EmptyPanel, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode,
+import { colW, EmptyPanel, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode,
   type RTColumn } from '../../components/office';
 import { ExampleChip } from '../../components/shared';
 import type { OriginalsRow } from '../../domain/dto';
@@ -99,19 +99,22 @@ export function OriginalsPage(): JSX.Element {
     receive.mutate({ docId }, { onSettled: () => { setBusyDoc(null); } });
   };
 
+  // §4.2 C-14's five columns and their shares: 1 136 with the chevron at wide, 690 below it (`fit.test.tsx`).
+  // «Документи» keeps the lion's share at every mode — it is the only column here with buttons in it.
   const columns: RTColumn<OriginalsRow>[] = [
-    { id: 'driver', header: 'Водій', width: 180, cell: (r) => (
+    { id: 'driver', header: 'Водій', width: colW(mode, { wide: 180, narrow: 150 }), cell: (r) => (
       <span className="flex items-center gap-[8px]">
         <span className="text-[14px] font-medium text-ink">{r.driver}</span>
         {r.example ? <ExampleChip /> : null}
       </span>
     ) },
-    { id: 'trip', header: 'Рейс', width: 132,
+    { id: 'trip', header: 'Рейс', width: colW(mode, { wide: 132, narrow: 104 }),
       cell: (r) => <span className="font-mono text-[13px] text-text-2">{r.trip_no}</span> },
-    { id: 'docs', header: 'Документи', cell: (r) => <Docs row={r} busyDoc={busyDoc} onReceive={take} /> },
-    { id: 'days', header: 'Днів', width: 96,
+    { id: 'docs', header: 'Документи', width: colW(mode, { wide: 468, narrow: 336 }),
+      cell: (r) => <Docs row={r} busyDoc={busyDoc} onReceive={take} /> },
+    { id: 'days', header: 'Днів', width: colW(mode, { wide: 96, narrow: 60 }),
       cell: (r) => <span className="text-[14px] text-ink">{pluralN(r.days, DAYS)}</span> },
-    { id: 'note', header: 'Примітка', width: 220, hideAt: ['rail'], mergeInto: 'driver',
+    { id: 'note', header: 'Примітка', width: 220, hideAt: ['compact', 'rail'], mergeInto: 'driver',
       cell: (r) => <span className="text-[13px] text-text-2">{r.note ?? NONE}</span> },
   ];
 

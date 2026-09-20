@@ -37,6 +37,18 @@ describe('the presenter stage (§5, §8.4)', () => {
     await user.click(screen.getByRole('radio', { name: 'Регіс-машина · Павло' }));
     expect(screen.getByRole('button', { name: /GPS зник/ })).toBeDisabled();
   });
+  // §5.8: «The URL hash follows the beat (`#/beat/7`)». It did not — W3-05 measured `location.hash` still reading
+  // `#/beat/0` after «Такт 7», and only a reload put it right. That is the wrong half of EC-166 to have working: a
+  // fresh tab at `#/beat/3` landed on beat 3, but the tab the presenter is ACTUALLY standing in lied about where
+  // it stood, so a reload mid-demo would come back to the wrong beat whenever the log was unreadable.
+  it('follows the beat in the URL hash (§5.8, EC-166)', async () => {
+    await atBeat(3);
+    const { user } = renderAt('/');
+    await user.click(await screen.findByRole('button', { name: 'Такт ▾' }));
+    await user.click(screen.getByRole('menuitem', { name: /Такт 8 · Ферма, тривога, машина в русі/ }));
+    await waitFor(() => expect(server.ui.beat).toBe(8));
+    await waitFor(() => expect(window.location.hash).toBe('#/beat/8'));
+  });
   it('turns the phones offline and says so in hold, idempotently', async () => {
     await atBeat(7);
     const { user } = renderAt('/');

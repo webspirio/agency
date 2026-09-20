@@ -14,7 +14,7 @@ import type { JSX } from 'react';
 import { useSearchParams } from 'react-router';
 import { useDrivers } from '../../api/hooks';
 import { useScope } from '../../app/live';
-import { EmptyPanel, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode,
+import { colW, EmptyPanel, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode,
   type RTColumn } from '../../components/office';
 import { ExampleChip, Plate } from '../../components/shared';
 import type { DriverRow } from '../../domain/dto';
@@ -35,22 +35,28 @@ export function DriversPage(): JSX.Element {
   const openId = params.get('open');
   const open = openId === null ? null : (rows.find((r) => r.id === openId) ?? null);
 
+  // §4.2 C-16's six columns and their shares: 1 136 with the chevron at wide, 690 below it, against the panes
+  // `fit.test.tsx` holds every console list to. «Таб. №» joins «Пілот» under the name below wide — both are facts
+  // about the person, and a four-column list of people is what fits 690 px.
   const columns: RTColumn<DriverRow>[] = [
-    { id: 'driver', header: 'Водій', width: 240, cell: (r) => (
+    { id: 'driver', header: 'Водій', width: colW(mode, { wide: 240, narrow: 170 }), cell: (r) => (
       <span className="flex items-center gap-[8px]">
         <span className="text-[14px] font-medium text-ink">{r.full_name}</span>
         {r.example ? <ExampleChip /> : null}
       </span>
     ) },
-    { id: 'tab', header: 'Таб. №', width: 96,
-      cell: (r) => <span className="font-mono text-[14px] text-text-2">{r.tab_no}</span> },
-    { id: 'truck', header: 'Машина', width: 140,
+    { id: 'tab', header: 'Таб. №', width: 96, hideAt: ['compact', 'rail'], mergeInto: 'driver',
+      cell: (r) => <span className="font-mono text-[14px] text-text-2">{r.tab_no}</span>,
+      mergedCell: (r) => <span className="font-mono text-[13px] text-text-2">{`таб. № ${r.tab_no}`}</span> },
+    { id: 'truck', header: 'Машина', width: colW(mode, { wide: 140, narrow: 120 }),
       cell: (r) => (r.plate === NONE ? <span className="text-[14px] text-text-2">{NONE}</span> : <Plate plate={r.plate} size="sm" />) },
-    { id: 'mode', header: 'Режим', width: 130,
+    { id: 'mode', header: 'Режим', width: colW(mode, { wide: 130, narrow: 110 }),
       cell: (r) => <span className="text-[14px] text-ink">{MODE[r.mode]}</span> },
-    { id: 'phone', header: 'Телефон', cell: (r) => <span className="text-[14px] text-text-2">{r.phone_label}</span> },
-    { id: 'pilot', header: 'Пілот', width: 90, hideAt: ['rail'], mergeInto: 'driver',
-      cell: (r) => <span className="text-[14px] text-ink">{r.pilot ? YES : NONE}</span> },
+    { id: 'phone', header: 'Телефон', width: colW(mode, { wide: 400, narrow: 250 }),
+      cell: (r) => <span className="text-[14px] text-text-2">{r.phone_label}</span> },
+    { id: 'pilot', header: 'Пілот', width: 90, hideAt: ['compact', 'rail'], mergeInto: 'driver',
+      cell: (r) => <span className="text-[14px] text-ink">{r.pilot ? YES : NONE}</span>,
+      mergedCell: (r) => <span className="text-[13px] text-text-2">{`пілот: ${r.pilot ? YES : NONE}`}</span> },
   ];
 
   return (

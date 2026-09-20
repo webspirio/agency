@@ -19,7 +19,7 @@
 import type { JSX } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { SelectField } from '@agency/kit/select-field';
-import { PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode,
+import { colW, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode,
   type RTColumn } from '../../components/office';
 import { ExampleChip, Plate, SimChip } from '../../components/shared';
 import { useScope, useServerNow } from '../../app/live';
@@ -57,8 +57,15 @@ export function TrucksPage(): JSX.Element {
   const query = useTrucks(scope, month, sort);
   const rows = query.data?.data ?? [];
 
+  // §4.2 C-12's eleven columns and their shares: 1 136 with the chevron at wide, 690 below it (`fit.test.tsx`).
+  // Eleven columns in a 690 px pane is 59 px each, so below wide «Пальне, грн» and «Днів підтверджено» fold with
+  // «Днів», «Норма» and «Простій» — §4.2 folds the last two at rail, and 946 px is the width the demo runs at.
+  // The narrow numbers are MEASURED against the longest unbreakable token each column has to host, not split
+  // evenly: a merged line whose longest WORD does not fit breaks mid-word, and «підтверджено» in a 70 px
+  // «Документи вчасно» read «підтв / ерджено» at 946 px. 130 + 112 + 138 + 76 + 74 + 120 = 650, + the 40 px
+  // chevron = the 690 px pane exactly.
   const columns: RTColumn<TruckMonthRow>[] = [
-    { id: 'plate', header: 'Машина', width: 208,
+    { id: 'plate', header: 'Машина', width: colW(mode, { wide: 148, narrow: 130 }),
       cell: (r) => (
         <span className="inline-flex flex-wrap items-center gap-[6px]">
           <Plate plate={r.plate} size="sm" />
@@ -66,12 +73,12 @@ export function TrucksPage(): JSX.Element {
           {r.example ? <ExampleChip /> : null}
         </span>
       ) },
-    { id: 'days', header: 'Днів', width: 72, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'plate',
+    { id: 'days', header: 'Днів', width: 52, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'plate',
       cell: (r) => <span className="font-mono tabular-nums">{String(r.days)}</span>,
       mergedCell: (r) => <span className="font-mono tabular-nums">{`днів ${String(r.days)}`}</span> },
-    { id: 'km', header: 'Км (з вантажем)', width: 152, align: 'right',
+    { id: 'km', header: 'Км (з вантажем)', width: colW(mode, { wide: 112, narrow: 112 }), align: 'right',
       cell: (r) => <span className="font-mono tabular-nums">{fmtKm(r.km)} ({fmtKm(r.km_loaded)})</span> },
-    { id: 'fuel', header: 'Пальне, л/100 (метод)', width: 208,
+    { id: 'fuel', header: 'Пальне, л/100 (метод)', width: colW(mode, { wide: 148, narrow: 138 }),
       cell: (r) => (
         <span className="inline-flex flex-wrap items-baseline gap-[6px]">
           <span className="font-mono tabular-nums">{fmtRate(r.fuel_rate)}</span>
@@ -79,10 +86,10 @@ export function TrucksPage(): JSX.Element {
           {r.simulated ? <SimChip /> : null}
         </span>
       ) },
-    { id: 'norm', header: 'Норма', width: 88, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'fuel',
+    { id: 'norm', header: 'Норма', width: 64, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'fuel',
       cell: (r) => <span className="font-mono tabular-nums">{fmtRate(r.norm)}</span>,
       mergedCell: (r) => <span className="font-mono tabular-nums">{`норма ${fmtRate(r.norm)}`}</span> },
-    { id: 'deviation', header: 'Відхилення', width: 120, align: 'right',
+    { id: 'deviation', header: 'Відхилення', width: colW(mode, { wide: 92, narrow: 76 }), align: 'right',
       cell: (r) => (
         <span
           className={r.over_tolerance
@@ -92,18 +99,18 @@ export function TrucksPage(): JSX.Element {
           {fmtPct(r.deviation)}
         </span>
       ) },
-    { id: 'uah', header: 'Пальне, грн', width: 136, align: 'right', hideAt: ['rail'], mergeInto: 'km',
+    { id: 'uah', header: 'Пальне, грн', width: 104, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'km',
       cell: (r) => <span className="font-mono tabular-nums">{fmtDec(r.fuel_uah)}</span>,
       mergedCell: (r) => <span className="font-mono tabular-nums">{`грн ${fmtDec(r.fuel_uah)}`}</span> },
-    { id: 'site', header: 'На точках, год', width: 128, align: 'right',
+    { id: 'site', header: 'На точках, год', width: colW(mode, { wide: 88, narrow: 74 }), align: 'right',
       cell: (r) => <span className="font-mono tabular-nums">{String(r.site_hours)}</span> },
-    { id: 'idle', header: 'Простій понад безкоштовні', width: 200, align: 'right',
+    { id: 'idle', header: 'Простій понад безкоштовні', width: 104, align: 'right',
       hideAt: ['compact', 'rail'], mergeInto: 'site',
       cell: (r) => <span>{r.idle_over_free ?? NONE}</span>,
       mergedCell: (r) => <span>{`простій ${r.idle_over_free ?? NONE}`}</span> },
-    { id: 'docs', header: 'Документи вчасно', width: 160, align: 'right',
+    { id: 'docs', header: 'Документи вчасно', width: colW(mode, { wide: 96, narrow: 120 }), align: 'right',
       cell: (r) => <span className="font-mono tabular-nums">{r.docs_on_time}</span> },
-    { id: 'confirmed', header: 'Днів підтверджено', width: 160, align: 'right', hideAt: ['rail'], mergeInto: 'docs',
+    { id: 'confirmed', header: 'Днів підтверджено', width: 88, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'docs',
       cell: (r) => <span className="font-mono tabular-nums">{r.days_confirmed}</span>,
       mergedCell: (r) => <span className="font-mono tabular-nums">{`підтверджено ${r.days_confirmed}`}</span> },
   ];

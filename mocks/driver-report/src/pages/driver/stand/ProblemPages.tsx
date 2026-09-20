@@ -36,7 +36,7 @@ export function BreakdownQuestion({ onBack, onAnswer }: {
       title={TITLE}
       onBack={onBack}
       bar={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <QuietButton half icon={Wrench} label="Можу їхати" onPress={() => { onAnswer(true); }} />
           <QuietButton half icon={Wrench} label="Не можу їхати" tone="hold" onPress={() => { onAnswer(false); }} />
         </div>

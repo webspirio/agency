@@ -100,6 +100,16 @@ export function CameraScreen({ title, hint, artefact, counter, taken, row2, engi
   const stream = useRef<MediaStream | null>(null);
   const armed = useRef(true);
   const pressedAt = useRef(0);
+  const flashTimer = useRef<number | null>(null);
+
+  // The flash is the one timer this screen starts, and it OUTLIVES the screen unless it is cleared here. MEASURED
+  // 2026-09-20 in a whole-suite run: a test file whose last shot lands inside the 80 ms window has its jsdom realm
+  // torn down underneath the callback, `setFlash` throws «ReferenceError: window is not defined» into vitest's
+  // unhandled-error channel, and the `test` row is FAILED with zero failing tests. On a phone the same leak is a
+  // setState into a tree the driver has already left.
+  useEffect(() => () => {
+    if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+  }, []);
 
   // The next title re-arms the shutter. Keyed on the counter too, so a flow that shoots the same title twice (two
   // copies of one page) still gets its second shot. It clears the 50 ms window with it: that window exists to drop
@@ -153,7 +163,7 @@ export function CameraScreen({ title, hint, artefact, counter, taken, row2, engi
     pressedAt.current = now;
     armed.current = false;
     setFlash(true);
-    window.setTimeout(() => { setFlash(false); }, FLASH_MS);
+    flashTimer.current = window.setTimeout(() => { flashTimer.current = null; setFlash(false); }, FLASH_MS);
     hand(engine === 'DRAWN' ? 'DRAWN' : 'INPAGE', frame);
   };
 

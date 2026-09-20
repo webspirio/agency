@@ -12,6 +12,7 @@ import { server } from '../api/server';
 import { allRows } from '../api/stores';
 import { BEATS, HRYHORII, OLEH, PAVLO, type Beat } from '../domain/script';
 import type { Scope } from '../domain/types';
+import { clearLog } from './log';
 import { consoleHash, rebuild } from './runner';
 
 export type FrameName = 'phone-1' | 'phone-2' | 'phone-3' | 'console';
@@ -124,9 +125,11 @@ const hub: Hub = {
     server.setToggle('gpsLost', gpsLost);
   },
   /** «Скинути демо» (§5.4 #10): beat 0 IS the seed at 05:14, whatever the wall date — the clock comes from the beat
-   *  and never from `Date.now()` (EC-129). The stage log is W3-03's to clear. */
-  reset() {
-    return goBeat(0);
+   *  and never from `Date.now()` (EC-129). The stage log goes with it, so the reload that follows a reset opens on
+   *  beat 0 rather than restoring the rehearsal this button was pressed to throw away (§5.8). */
+  async reset() {
+    clearLog();
+    await goBeat(0);
   },
   frames: { register, reloadAll },
 };

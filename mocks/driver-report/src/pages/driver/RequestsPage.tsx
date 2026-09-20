@@ -67,7 +67,15 @@ export function RequestsPage(): JSX.Element {
     push('REQUEST_SEEN', { request_id: id }, null);
   }, []);
 
+  /** A REF, not state (§8.6 #13, EC-137). Two taps 50 ms apart land in ONE React batch, so both handlers run against
+   *  the same render and a `useState` flag would still read false for the second — measured in
+   *  `never.driver.test.tsx`, which filed two `REQUEST_REPLY` records, each with its own freshly minted seq. A
+   *  reply ends the page, so one per mount is the whole rule; `markSeen` above already works this way. */
+  const replied = useRef(false);
+
   const reply = (id: string, kind: ReplyKind): void => {
+    if (replied.current) return;
+    replied.current = true;
     push('REQUEST_REPLY', { request_id: id, reply: kind }, { title: `${ANSWER}: ${wordOf(kind)}`, next: null });
     navigate('/', { replace: true });
   };

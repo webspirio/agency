@@ -112,7 +112,16 @@ describe('driver chrome (§3.1, §6.5)', () => {
     for (const tile of tiles) {
       const tokens = new Set((tile.getAttribute('class') ?? '').split(/\s+/).filter((t) => t !== ''));
       expect(tokens).toContain('min-w-0');
-      expect(tokens).toContain('flex-1');
+      // `grow basis-[9rem]` rather than `flex-1`, which is `flex: 1 1 0%` and therefore never wraps. W3-05
+      // measured the second half of the same criterion at the gate size: at 360 px with 130 % text the geometry
+      // was fine — no scroll, the bar inside 640 — but the WORDS were not «fully visible». «Заправка» needed
+      // 108 px of an 81 px cell and read «Запр…», and §8.2 D-02 #2 asks for the word, not for the row. A basis in
+      // REM grows with the text, so at 130 % two tiles no longer fit 328 px and the row drops the second onto its
+      // own line at full width; at 100 % 2 × 144 px + 8 px still fits and nothing moves. `min-w-0` stays, because
+      // while they DO share a line the sub-line must still be allowed to ellipse.
+      expect(tokens).toContain('grow');
+      expect(tokens).toContain('basis-[9rem]');
+      expect(tokens).not.toContain('flex-1');
     }
   });
 
@@ -127,7 +136,9 @@ describe('driver chrome (§3.1, §6.5)', () => {
     for (const btn of container.querySelectorAll('button')) {
       const tokens = new Set((btn.getAttribute('class') ?? '').split(/\s+/).filter((t) => t !== ''));
       expect(tokens).toContain('min-w-0');
-      expect(tokens).toContain('flex-1');
+      expect(tokens).toContain('grow');
+      expect(tokens).toContain('basis-[9rem]');   // the same rem basis, for the same reason, one component along
+      expect(tokens).not.toContain('flex-1');
     }
   });
 });

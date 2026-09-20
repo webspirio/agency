@@ -64,7 +64,12 @@ type Joined = { [T in RecordType]: RecordView & { type: T; payload: Payloads[T] 
 function deferredCards(today: DriverToday, now: Instant): Owed[] {
   const alive = today.records.filter((r) => !r.voided && atOrBefore(r.occurred_at, now)) as Joined[];
   const settled = new Set(alive.flatMap((r) => (r.type === 'DOCS_ADDED' && r.stop_id !== null ? [r.stop_id] : [])));
-  const shortOf = (stopId: string): string => today.plan?.stops.find((s) => s.stop_id === stopId)?.short ?? '';
+  /** The PLACE'S OWN NAME — «Лан», not the TripRail's «Лан, Балабине». §2.4's deep-link table, §3.2's home diagram,
+   *  §3.3 D-08 and `UnloadedPage`'s own docblock all spell this card «… з підписом і щитка — Лан», and `short` made
+   *  it read «— Лан, Балабине». The one place that spells it with a town is §3.3 D-06's LOADING example
+   *  («… фото ТТН — Вільнянськ», where the stop's own name is «Дніпро-Корм»); that path is not in the demo and its
+   *  card now reads «— Дніпро-Корм». Flagged for the owner rather than decided twice. */
+  const nameOf = (stopId: string): string => today.plan?.stops.find((s) => s.stop_id === stopId)?.label ?? '';
   const owedBy = (r: Joined): Owed[] => {
     if (r.type === 'REFUEL') {
       // ONE sentence, composed where the refuel flow composes it: «Зніму пізніше» already hands that receipt
@@ -75,11 +80,11 @@ function deferredCards(today: DriverToday, now: Instant): Owed[] {
     const stopId = r.stop_id;
     if (stopId === null || settled.has(stopId)) return [];
     if (r.type === 'UNLOADED' && r.payload.deferred !== null) {
-      return [{ key: r.key, title: `${NEEDED}: фото ТТН з підписом і щитка — ${shortOf(stopId)}`,
+      return [{ key: r.key, title: `${NEEDED}: фото ТТН з підписом і щитка — ${nameOf(stopId)}`,
         to: `/stop/${stopId}/later` }];
     }
     if (r.type === 'LOADED' && r.payload.deferred !== null) {
-      return [{ key: r.key, title: `${NEEDED}: фото ТТН — ${shortOf(stopId)}`, to: `/stop/${stopId}/later` }];
+      return [{ key: r.key, title: `${NEEDED}: фото ТТН — ${nameOf(stopId)}`, to: `/stop/${stopId}/later` }];
     }
     return [];
   };
@@ -140,7 +145,7 @@ export function PinnedCards({ today, now, drafts, officeSeesRead, shiftOpen, rc,
 
       {today.corrections_to_ack.map((c) => (
         <HoldCard key={c.id} icon={Pencil} title={correctionLine(c)}>
-          <span className="flex gap-2 pt-2">
+          <span className="flex flex-wrap gap-2 pt-2">
             <QuietButton half label={AGREE} onPress={() => { onAck(c, true); }} />
             <QuietButton half label={DISAGREE} onPress={() => { onAck(c, false); }} />
           </span>

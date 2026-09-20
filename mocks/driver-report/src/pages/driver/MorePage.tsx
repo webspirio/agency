@@ -202,19 +202,24 @@ export function MorePage(): JSX.Element {
       {shiftOpen ? <Row icon={Flag} label={END_SHIFT} onPress={() => { go('/shift/end'); }} /> : null}
       <Row icon={ShieldCheck} label={OFFICE_SEES} onPress={() => { go('/office-sees'); }} />
 
-      <div className="card-ring flex min-h-tap w-full items-center gap-3 px-4">
+      {/* BOTH `flex-wrap`s are §8.5's «without horizontal scroll», measured: at 360 px this row could not break,
+          so `documentElement.scrollWidth` read 386 against 360 at 130 % — the gate size, with «Темна» clipped —
+          and 594 at 200 %. The outer wrap drops the switch onto its own line; the inner one drops «Темна» under
+          «Світла». `min-h-tap` on the segments is §8.5's other half: they were `min-h-[2.75rem]` = 44 px inside a
+          56 px shell, the one control on the driver route under the 3.5rem floor. */}
+      <div className="card-ring flex min-h-tap w-full flex-wrap items-center gap-3 px-4 py-2">
         <span className="shrink-0 text-[1.125rem] leading-[1.5rem] font-semibold">{THEME}</span>
         <span
           role="group"
           aria-label={THEME}
-          className="ml-auto flex min-h-tap items-center gap-1 rounded-[12px] p-1"
+          className="ml-auto flex min-h-tap flex-wrap items-center gap-1 rounded-[12px] p-1"
           style={{ background: 'var(--bench)' }}
         >
           <button
             type="button"
             aria-pressed={!dark}
             onClick={() => { setDark(false); }}
-            className="flex min-h-[2.75rem] items-center gap-2 rounded-[10px] px-3 text-[1rem] leading-[1.375rem] font-semibold"
+            className="flex min-h-tap items-center gap-2 rounded-[10px] px-3 text-[1rem] leading-[1.375rem] font-semibold"
             style={dark ? undefined : { background: 'var(--label)', boxShadow: 'var(--elev-1)' }}
           >
             <Sun aria-hidden="true" className="size-[1.125rem] shrink-0" />
@@ -224,7 +229,7 @@ export function MorePage(): JSX.Element {
             type="button"
             aria-pressed={dark}
             onClick={() => { setDark(true); }}
-            className="flex min-h-[2.75rem] items-center gap-2 rounded-[10px] px-3 text-[1rem] leading-[1.375rem] font-semibold"
+            className="flex min-h-tap items-center gap-2 rounded-[10px] px-3 text-[1rem] leading-[1.375rem] font-semibold"
             style={dark ? { background: 'var(--label)', boxShadow: 'var(--elev-1)' } : undefined}
           >
             <Moon aria-hidden="true" className="size-[1.125rem] shrink-0" />

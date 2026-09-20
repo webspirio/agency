@@ -17,7 +17,7 @@
  *
  *  EVERY TAP THAT OPENS OR CONTINUES A FLOW GOES THROUGH `guard()` (§3.1, D-19) — «Мій день» included, because that
  *  is the tap §8.2 D-19 #1 measures. The guard is the shell's ONE motion lock, taken from `useDriverGuard()`. */
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { CalendarDays, Ellipsis, ShieldOff } from 'lucide-react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { useToday } from '../../api/hooks';
@@ -72,6 +72,15 @@ export function HomePage(): JSX.Element {
   const [committed, setCommitted] = useState<string | null>(null);
   const [startFor, setStartFor] = useState<string | null>(null);
   const [closeFor, setCloseFor] = useState<string | null>(null);
+  /** THE STATE ABOVE DRAWS «Записую…»; THESE REFS ARE WHAT ACTUALLY STOP THE SECOND TAP (§8.6 #13, EC-137).
+   *  Two taps 50 ms apart land in ONE React batch, so both handlers run against the same render and `busy` still
+   *  reads false for the second — measured in `never.driver.test.tsx`, where «Закінчилось» closed the same road
+   *  stop twice, each record carrying a freshly minted seq, so `enqueue`'s one-key-one-entry rule could not fold
+   *  them either. A flow commits through `flow.commit`, which is idempotent on its draft; home's four commits have
+   *  no draft, so they need their own. They are declared HERE, above the early returns below, because a hook after
+   *  a conditional return is «Rendered more hooks than during the previous render». */
+  const fired = useRef<string | null>(null);
+  const acked = useRef<Set<string>>(new Set());
 
   if (today === null) {
     return <DriverScreen header={<AppHeader />}><DriverSkeleton /></DriverScreen>;
@@ -95,6 +104,13 @@ export function HomePage(): JSX.Element {
    *  nothing while a tap on the next one is free (§3.1 «Commit behaviour», EC-137). */
   const tag = `${view.mode}:${view.openStop?.stop.stop_id ?? ''}:${road?.key ?? ''}:${view.primary?.target.kind ?? ''}`;
   const busy = committed === tag;
+  /** Claims `tag` for this commit, or answers false because it is already spent. */
+  const claim = (): boolean => {
+    if (fired.current === tag) return false;
+    fired.current = tag;
+    setCommitted(tag);
+    return true;
+  };
 
   function commit<T extends RecordType>(type: T, payload: Payloads[T], at: Instant,
     receipt: { title: string; next: string | null } | null, stopId: string | null = null): void {
@@ -132,11 +148,13 @@ export function HomePage(): JSX.Element {
   });
 
   const acknowledge = (c: CorrectionView, agree: boolean): void => {
+    if (acked.current.has(c.id)) return;      // §8.6 #13: one answer per correction, however often it is tapped
+    acked.current.add(c.id);
     commit('CORRECTION_ACK', { correction_id: c.id, agree }, now, null);
   };
 
   const runPrimary = guard((target: PrimaryTarget) => {
-    if (busy) return;
+    if (fired.current === tag) return;
     switch (target.kind) {
       case 'shift-start':
       case 'new-shift':
@@ -162,12 +180,11 @@ export function HomePage(): JSX.Element {
         void navigate('/day');
         return;
       case 'leave':
-        setCommitted(tag);
+        if (!claim()) return;
         commit('STOP_LEFT', {}, now, { title: `${DC.primary.leave} ${fmtTime(now)}`, next: null }, target.stopId);
         return;
       case 'close-road-stop':
-        if (road === null) return;
-        setCommitted(tag);
+        if (road === null || !claim()) return;
         closeRoadStop(road.key, road.since, now, 'DRIVER');
     }
   });
@@ -248,7 +265,8 @@ export function HomePage(): JSX.Element {
 
         <SyncStrip state={syncState(entries, offline, today.last_contact_at)} />
 
-        <div className="flex gap-2">
+        {/* `flex-wrap`, for the same reason as the tiles: at 130 % «Мій день» had 86 px for a 101 px label. */}
+        <div className="flex flex-wrap gap-2">
           <QuietButton half icon={CalendarDays} label={DC.links.myDay} onPress={() => { open('/day'); }} />
           <QuietButton half icon={Ellipsis} label={DC.links.more} onPress={() => { open('/more'); }} />
         </div>

@@ -275,7 +275,12 @@ export async function rebuild(beat: number): Promise<void> {
   }
   await heartbeats(b.clock);
   server.clock.set(b.clock);
-  server.setUi({ beat, phone: b.phone, scope: b.scope, cue: b.cue });
+  // The presenter's CHROME goes back with the demo. «Такт n» is the recovery for anything that went wrong on stage
+  // (§5.8), and what it has to recover from includes a bar hidden with «P», a single pane left on «2» and a console
+  // still zoomed from «F» — each of which opens the next beat on a layout nobody chose and none of which is visible
+  // as a cause. §5.4 #9 says every toggle turns off; this is that sentence about the four values that live in `ui`.
+  server.setUi({ beat, phone: b.phone, scope: b.scope, cue: b.cue, focus: 'both', single: 'both',
+    consoleZoom: false, barHidden: false });
   server.emit({ type: 'rebuilt', beat });
 }
 

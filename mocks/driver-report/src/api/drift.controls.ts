@@ -2,9 +2,12 @@
 /** THE PROOF THAT THIS CONTRACT BITES. Every @ts-expect-error below must stay an error; imported by nothing, compiled
  *  by the mock’s own `tsc -b`. The directive applies to the NEXT line and an object-literal error is reported at the
  *  offending PROPERTY, so those directives sit inside the literal. */
-import type { CodeOf, Equal, Expect, Leaks, Paginated, ParamsOf, ReqOf, ResOf, Transport } from '@agency/mock';
-import { call, fail, type Api } from './contract';
-import type { DriverToday, FleetRow, RecordIn, RecordView } from '../domain/dto';
+import type { CodeOf, Equal, Expect, HandlersOf, Leaks, Paginated, ParamsOf, ReqOf, ResOf, Route,
+  Transport } from '@agency/mock';
+import { call, fail, toRoutes, type Api } from './contract';
+import { httpClient } from './client';
+import { makeHandlers } from './routes';
+import type { DriverToday, FleetRow, MyDay, RecordIn, RecordView, StopReview } from '../domain/dto';
 import type { RecordPayload } from '../domain/types';
 
 export type ParamsComeFromThePath = Expect<Equal<ParamsOf<Api['getStopReview']['path']>, { id: string }>>;
@@ -86,3 +89,51 @@ export const strangeSentence = {
 
 /** ParamsOf erases non-param segments: a path rename is invisible to types. call() takes a KEY, so no copy drifts. */
 export type SegmentRenameIsInvisibleToTypes = Expect<Equal<ParamsOf<'/office/stops/:id'>, ParamsOf<'/office/stop/:id'>>>;
+
+/* ── the HANDLER-level controls (W3-01) ──────────────────────────────────────────────────────────────────────── *
+ *
+ * Everything above is about the call SITE. These four are about the SINK — `toRoutes` in routes.ts, the one line
+ * nobody edits — and the two RESIDUALS it does not close. Each residual is written down here as a live type that
+ * compiles CLEAN, so nobody has to rediscover it by reading the diagnostics: the wire golden
+ * (`wire.golden.test.ts`) is the ground truth for both, and its own limit is that it drives each operation once,
+ * with one actor, so it fingerprints whichever branch that actor takes. */
+
+// @ts-expect-error this handler returns only part of a StopReview.
+export const handlerReturnsTooLittle: HandlersOf<Api>['getStopReview'] = () => ({ stop: { id: 'x', kind: 'LOADING', title: '', line: '' } });
+
+/** The stored row the office keeps: everything the wire declares, plus a column the driver must never receive. */
+type StoredReview = StopReview & { internal_note: string };
+declare const wideRow: StoredReview;
+declare const narrowRow: StopReview;
+
+/** THE SINK BITES. A handler returning MORE than its operation declares is a compile error at `toRoutes`, and the
+ *  diagnostic names the operation. It is DEEP and it survives `async`. */
+export function sinkRefusesALeak(): void {
+  // @ts-expect-error the row carries internal_note, which getStopReview does not declare.
+  const table: Route[] = toRoutes({ ...makeHandlers(), getStopReview: () => wideRow });
+  void table;
+}
+/** A branch subtype-reduces to the declared row: green by design; the wire golden is the ground truth. */
+export const subtypeReducedBranchIsGreen: Route[] = toRoutes({
+  ...makeHandlers(),
+  getStopReview: (c) => (c.actor.role === 'operator' ? wideRow : narrowRow),
+});
+/** An annotated widening is green under every scheme here; the golden catches the extra key on the wire. */
+export const annotatedWideningIsGreen: HandlersOf<Api>['getStopReview'] = () => {
+  const out: StopReview = wideRow;
+  return out;
+};
+/** The seam is a TYPE, not a lint rule: `httpClient` is an opaque `Transport` that only `call()` unwraps, so a raw
+ *  verb is TS2339 in every file this mock compiles — hooks and components included, which no single-file AST walk
+ *  reaches. Measured in the lab: 13 of 19 spellings evaded the regex that used to guard this. */
+export function transportIsOpaque(): void {
+  // @ts-expect-error a raw verb on the transport is not a member of it.
+  void httpClient.get('/driver/today');
+  // @ts-expect-error the instance itself is not callable either.
+  void httpClient({ url: '/driver/today' });
+  // @ts-expect-error a verb no list ever named is refused by the same mechanism.
+  void httpClient.postForm('/driver/records', {});
+}
+/** §8.6 #24: an office note can never reach the driver — neither driver response declares one. */
+export type DriverTodayHasNoNote = Expect<Equal<'note' extends keyof DriverToday ? true : false, false>>;
+export type MyDayHasNoNote = Expect<Equal<'note' extends keyof MyDay ? true : false, false>>;

@@ -7,6 +7,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:tz": "TZ=UTC vitest run && TZ=Europe/Warsaw vitest run",
     "lint": "oxlint --max-warnings=0"
   },
   "dependencies": {

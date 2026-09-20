@@ -15,7 +15,7 @@ export { StatusPill } from './StatusPill';
 export { RowRule } from './RowRule';
 export { DocDots } from './DocDots';
 export { ContactCell } from './ContactCell';
-export { ResponsiveTable, type RTColumn } from './ResponsiveTable';
+export { colW, ResponsiveTable, type RTColumn } from './ResponsiveTable';
 export { MockBanner } from './MockBanner';
 export { EmptyPanel } from './EmptyPanel';
 export { SkeletonRows } from './SkeletonRows';

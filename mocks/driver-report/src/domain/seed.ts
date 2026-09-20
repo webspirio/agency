@@ -599,7 +599,7 @@ function seedHistory(s: Stores, r: Refs): void {
       import: { at, created: ids.length, updated: 0, unchanged: 0, corrections: [] } });
     for (const id of ids) {
       const day = must(s.truckDays.get(id), id);
-      s.truckDays.update(id, { exported: { export_id: row.id, at, version: day.version } });
+      s.truckDays.update(id, { exported: { export_id: row.id, at, version: 1, day_version: day.version } });
     }
   }
 }

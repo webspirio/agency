@@ -19,7 +19,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@agency/kit/dropdown-menu';
 import { fmtKm } from '../../../app/format';
-import { ContactCell, DocDots, LiveLine, type ConsoleMode, type RTColumn } from '../../../components/office';
+import { colW, ContactCell, DocDots, LiveLine, type ConsoleMode, type RTColumn } from '../../../components/office';
 import { CallPopover } from '../../../components/office/review';
 import { ExampleChip, Plate, SimChip, SourceBadge } from '../../../components/shared';
 import { OC } from '../../../copy/office';
@@ -112,26 +112,34 @@ function OdometerCell({ row }: { row: FleetRow }): JSX.Element {
   );
 }
 
-/** The per-mode widths of §4.2 C-01's own column table. They are NOT one number each: «Машина» grows at compact
- *  because the driver line folds into it, «Стан» stops being 300 and becomes the flex column, and «Зв'язок» gives
- *  up 40 px on the way down. A single width for all three modes is what makes a console scroll sideways (§8.6 #22). */
-const W: Record<'truck' | 'state' | 'odometer' | 'contact', Record<ConsoleMode, number | undefined>> = {
-  truck: { wide: 170, compact: 190, rail: 170, mobile: undefined },
-  state: { wide: 300, compact: undefined, rail: undefined, mobile: undefined },
-  odometer: { wide: 130, compact: 130, rail: 120, mobile: undefined },
-  contact: { wide: 150, compact: 120, rail: 110, mobile: undefined },
+/** The per-mode widths of §4.2 C-01's own column table, as the SHARES `ResponsiveTable` lays the table out in.
+ *
+ *  Two numbers each, not three: `wide` is §4.2's own row and adds up to 1 068 with the chevron, inside the 1 136 px
+ *  pane 1 440 gives. The narrow one is used at compact AND rail, because rail hides a superset of what compact
+ *  hides — so the compact total is the binding one, and it is 690, the pane the stage's 946 px console has.
+ *
+ *  WHAT CHANGED IN W3-06, and why it is a deviation from §4.2's column table: «Документи» merged into «Стан» at
+ *  rail only, and now merges at compact too. Measured in Chrome at 946 px: with it on screen the compact row of
+ *  §4.2 (190 + 130 + 80 + 120 + 48) leaves «Стан» 82 px of a 690 px pane, and the whole board had already been
+ *  clipped — the menu and the chevron of every row sat outside the panel. The dots do not disappear; they become
+ *  «Стан»'s second line, which is what `mergeInto` is for. «Стан» gets 192 px instead of 82. */
+const W: Record<'truck' | 'state' | 'odometer' | 'contact', { wide: number; narrow: number }> = {
+  truck: { wide: 170, narrow: 180 },
+  state: { wide: 300, narrow: 192 },
+  odometer: { wide: 130, narrow: 120 },
+  contact: { wide: 150, narrow: 110 },
 };
 
-/** §4.2 C-01's column table, with its widths and its two folds. */
+/** §4.2 C-01's column table, with its widths and its three folds. */
 export function boardColumns(p: { mode: ConsoleMode; now: Instant; live: Live; actions: RowActions }): RTColumn<FleetRow>[] {
   return [
-    { id: 'truck', header: 'Машина', width: W.truck[p.mode], cell: (r) => <TruckCell row={r} /> },
+    { id: 'truck', header: 'Машина', width: colW(p.mode, W.truck), cell: (r) => <TruckCell row={r} /> },
     { id: 'driver', header: 'Водій', width: 150, hideAt: ['compact', 'rail'], mergeInto: 'truck', cell: (r) => <DriverCell row={r} /> },
-    { id: 'state', header: 'Стан', width: W.state[p.mode], cell: (r) => <StateCell row={r} live={p.live} /> },
-    { id: 'odometer', header: 'Одометр', width: W.odometer[p.mode], cell: (r) => <OdometerCell row={r} /> },
-    { id: 'docs', header: 'Документи', width: 80, hideAt: ['rail'], mergeInto: 'state',
+    { id: 'state', header: 'Стан', width: colW(p.mode, W.state), cell: (r) => <StateCell row={r} live={p.live} /> },
+    { id: 'odometer', header: 'Одометр', width: colW(p.mode, W.odometer), cell: (r) => <OdometerCell row={r} /> },
+    { id: 'docs', header: 'Документи', width: 80, hideAt: ['compact', 'rail'], mergeInto: 'state',
       cell: (r) => <DocDots ttn={r.docs.ttn} signed={r.docs.signed} receipts={r.docs.receipts} label={r.docs.label} /> },
-    { id: 'contact', header: "Зв'язок", width: W.contact[p.mode],
+    { id: 'contact', header: "Зв'язок", width: colW(p.mode, W.contact),
       cell: (r) => <ContactCell at={r.contact.at} unsent={r.contact.unsent_at_contact} stale={r.contact.stale} now={p.now} /> },
     { id: 'menu', header: '', width: 48, align: 'right',
       cell: (r) => <Stop><RowMenu row={r} actions={p.actions} /></Stop> },

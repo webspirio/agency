@@ -60,7 +60,7 @@ describe('export — a pilot day derived from its records (§7.3, §7.6 «Histor
   it('writes Павло’s ПЛ-000398 from his odometer readings, legs, receipt and shift', () => {
     expect(pilot('WAYBILLS', '2026-09-18').rows).toEqual([{ cells: ['ПЛ-000398', '18.09.2026', 'АР 1234 ВС', 'Ватаманюк П.',
       '0213', '411413', 'ФОТО', '411625', 'ФОТО', '212', '98', '193,80', 'OCR чека', '11,55', 'так'], confirmed: true,
-      example: false, ettn: false, exported_line: 'У BAS 19.09 07:30 · версія 9' }]);
+      example: false, ettn: false, exported_line: 'У BAS 19.09 07:30 · версія 1' }]);   // «версія» is the EXPORT's, not the day's revision count (§4.2 C-11)
   });
   it('writes one «Ділянки» row per leg, the loaded one with its ТТН, mass and t·km', () => {
     expect(pilot('LEGS', '2026-09-18').rows.map((r) => r.cells)).toEqual([
@@ -79,7 +79,10 @@ describe('export — a pilot day derived from its records (§7.3, §7.6 «Histor
   it('marks an imported day with its BAS line, and never writes that line into a file', () => {
     const v = pilot('WAYBILLS', '2026-09-20');
     expect(v.rows.map((r) => [r.cells[2], r.cells[9], r.cells[6], r.exported_line])).toEqual([
-      ['АР 1234 ВС', '365', 'ФОТО', 'У BAS 20.09 18:30 · версія 4'], ['АР 9012 МК', '296', 'CAN', 'У BAS 20.09 18:30 · версія 4']]);
+      // §4.2 C-11 pins «версія 1» for a day BAS has been given once, and these two were. The number used to be
+      // `day.version` — every record the driver committed — which is why the only two days with a real history
+      // read «версія 27» and «версія 14» on screen beside «версія 1» on every example row (W3-05).
+      ['АР 1234 ВС', '365', 'ФОТО', 'У BAS 20.09 18:30 · версія 1'], ['АР 9012 МК', '296', 'CAN', 'У BAS 20.09 18:30 · версія 1']]);
     const all = { WAYBILLS: v, LEGS: pilot('LEGS', '2026-09-20'), REFUELS: pilot('REFUELS', '2026-09-20'),
       WORKTIME: pilot('WORKTIME', '2026-09-20') };
     expect([toCsv(v), toJson(all)].filter((text) => text.includes('У BAS'))).toEqual([]);

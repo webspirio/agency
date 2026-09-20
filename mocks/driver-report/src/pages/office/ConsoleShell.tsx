@@ -25,15 +25,22 @@ import { Toaster } from '@agency/kit/sonner';
 import { toast } from '@agency/kit/toast';
 import { useOfficeSummary } from '../../api/hooks';
 import { BootGate } from '../../app/boot';
-import { setScope, useDriverWrites, useLiveSync, useScope, useServerNow } from '../../app/live';
+import { IS_STAGE } from '../../app/device';
+import { setScope, useDriverWrites, useLiveSync, useScope, useServerNow, useServerValue } from '../../app/live';
 import { ensureLightDefault } from '../../app/theme';
 import { ConsoleHeader, Sidebar, useConsoleMode, type ConsoleMode } from '../../components/office';
 import { OC } from '../../copy/office';
 import type { Counts, OfficeSummary } from '../../domain/dto';
+import { forwardStageKeys } from '../../stage/keys';
 
 /** What the sidebar counts while the summary is in flight. A zero is wrong for one frame, but an ABSENT badge moves
  *  every label sideways when it lands, and the eye reads that as a change in the data. */
 const NO_COUNTS: Counts = { now: 0, review: 0, days_to_confirm: 0, originals: 0, bas_ready: 0 };
+/** «F» → console large (§5.2). The stage cannot enlarge what is inside an iframe from outside it, so it sets
+ *  `ui.consoleZoom` on the shared server and THIS pane answers by zooming its own document. On the root rather than
+ *  on a box inside it, because that is what keeps `h-dvh` equal to the frame: zooming an element inside the
+ *  document would make the console 15 % taller than the pane it sits in and hand the audience a scrollbar. */
+const CONSOLE_ZOOM = '1.15';
 const NO_USER: OfficeSummary['user'] = { id: '', name: '', initials: '', role: 'OPERATOR', role_label: '' };
 /** §4.1 «Page»: 32 px wide · 24 px compact and rail · 16 px mobile; max-width 1 320. */
 const PAD: Record<ConsoleMode, string> = {
@@ -51,10 +58,21 @@ function Console(): JSX.Element {
   const [sheet, setSheet] = useState(false);
   const navigate = useNavigate();
 
+  const zoomed = useServerValue((s) => s.ui.consoleZoom);
+
   useLiveSync();
   useEffect(() => {
     ensureLightDefault();
   }, []);
+  /** §5.10, the pane half: a key pressed in this iframe never reaches the stage document, so it is re-emitted on the
+   *  shared server. Only on the stage — a console opened on its own has no bar to hide. */
+  useEffect(() => (IS_STAGE ? forwardStageKeys() : undefined), []);
+  useEffect(() => {
+    if (!zoomed) return undefined;
+    const root = document.documentElement;
+    root.style.setProperty('zoom', CONSOLE_ZOOM);
+    return () => { root.style.removeProperty('zoom'); };
+  }, [zoomed]);
 
   // §5.9 #4: driver-originated writes only, bottom-right, 4 s, ONE at a time — the fixed id is what replaces the
   // previous one in place. The ghost button opens the day the record landed in.

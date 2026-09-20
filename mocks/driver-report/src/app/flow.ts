@@ -2,8 +2,9 @@
 /** A driver flow: an ordered list of named steps on ONE route (§2.2 «Steps are state, not routes»).
  *
  *  - Opening a flow mints its seq, idempotency key and `occurred_at` into a draft at once (D11, EC-137), in
- *    `server.phone(DEVICE_ID).drafts`, and replaces the entry that opened it with `{ step, draftId }` in its history
- *    state. Every retry, repeat tap and resume reuses that key, so the server can dedupe on it.
+ *    `server.phone(DEVICE_ID).drafts`, and MERGES `{ step, draftId, depth }` into the history state of the entry
+ *    that opened it — merges, not replaces: whatever the host put there is its own and is carried through (see
+ *    `hostState`). Every retry, repeat tap and resume reuses that key, so the server can dedupe on it.
  *  - Each step change pushes a history entry with the SAME pathname: the URL never names a step, and Android Back (or a
  *    mouse's back button) walks back one step with its answers intact (EC-159). The draft follows the step shown, so
  *    home's «Продовжимо: …» resumes where the thumb left it.
@@ -46,6 +47,22 @@ function stepState(raw: unknown): StepState | null {
   const { step, draftId, depth } = raw as Record<string, unknown>;
   if (typeof step !== 'string' || typeof draftId !== 'string') return null;
   return { step, draftId, depth: typeof depth === 'number' && Number.isInteger(depth) && gt(depth, 0) ? depth : 0 };
+}
+
+/** EVERYTHING IN THE ENTRY'S STATE THAT IS NOT THE FLOW'S. A flow owns three keys — `step`, `draftId`, `depth` —
+ *  and it used to write exactly those three OVER whatever else the entry carried. Measured by W3-05 in a browser:
+ *  «Що зараз?» opens as `navigate('/', { state: { panel: 'segment' } })` — D-05 is a PANEL, so a pasted link can
+ *  never drop anybody into it — the panel mounts, and the opening effect below then replaced that state with the
+ *  three flow keys. `panel` was gone, home re-rendered home, the panel unmounted, and every tap left an orphan
+ *  «Продовжимо: Що зараз?» card. One of the twenty-one driver screens could not be shown in the built app.
+ *
+ *  Wave 2's cross-page contracts ride on the same state (`ArriveContext`, the loading's `noDoc`), so carrying the
+ *  rest through is what a flow owed its host all along. `commit` and `leave` still navigate away with NO state,
+ *  which is what closes the panel. */
+function hostState(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== 'object' || raw === null) return {};
+  const { step: _step, draftId: _draftId, depth: _depth, ...rest } = raw as Record<string, unknown>;
+  return rest;
 }
 
 /* ── the drafts ───────────────────────────────────────────────────── */
@@ -151,6 +168,8 @@ export function useFlow<S extends string>(opts: { flow: FlowKind; steps: readonl
   const gone = stored === undefined;
   const fresh = state === null;
   const { pathname } = location;
+  /** The host's own keys on this entry, carried through every navigate this flow makes. */
+  const host = hostState(location.state);
 
   useEffect(() => {
     if (gone) {
@@ -159,7 +178,7 @@ export function useFlow<S extends string>(opts: { flow: FlowKind; steps: readonl
     }
     if (fresh) {
       server.emit({ type: 'outbox', device_id: DEVICE_ID });   // the draft openOnce wrote silently
-      navigate(pathname, { replace: true, state: { step, draftId, depth: 0 } });
+      navigate(pathname, { replace: true, state: { ...host, step, draftId, depth: 0 } });
       return;
     }
     if (saved !== step) patchDraft(DEVICE_ID, draftId, () => ({ step }));   // Back and Forward save the step
@@ -179,7 +198,7 @@ export function useFlow<S extends string>(opts: { flow: FlowKind; steps: readonl
     total: steps.length,
     draft,
     go(next) {
-      navigate(pathname, { state: { step: next, draftId, depth: depth + 1 } });
+      navigate(pathname, { state: { ...host, step: next, draftId, depth: depth + 1 } });
     },
     back() {
       if (gt(depth, 0)) {
@@ -188,7 +207,7 @@ export function useFlow<S extends string>(opts: { flow: FlowKind; steps: readonl
       }
       const prev = steps[index - 1];
       if (prev === undefined) leave();
-      else navigate(pathname, { replace: true, state: { step: prev, draftId, depth: 0 } });   // resumed mid-flow
+      else navigate(pathname, { replace: true, state: { ...host, step: prev, draftId, depth: 0 } });   // resumed mid-flow
     },
     patch(data) {
       edit((d) => ({ data: { ...d.data, ...data } }));

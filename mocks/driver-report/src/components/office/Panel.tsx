@@ -3,6 +3,10 @@
  *  own, because what it holds is usually a table that must reach both edges.
  *
  *  Head 56 px: title 15/600, hint 13 px `--text-2`, and a right slot for a mono counter or a 36 px ghost button.
+ *  THE TITLE DOES NOT SHRINK and the hint does. Both used to `truncate` inside one `min-w-0` row, and the title is
+ *  the first flex item — so at 946 px, the width the stage's console frame runs at, «Парк зараз»'s panel read
+ *  «Маш…» while its hint sentence kept its room (measured in Chrome, W3-06). The name of a panel is what the
+ *  operator navigates by; the hint is its footnote.
  *  Footer note 13 px behind a 14 px icon — the "why" sentence, which is the thing that makes a console page teach
  *  instead of merely list. Both are optional and neither renders as an empty bar when it has nothing to say. */
 import type { JSX, ReactNode } from 'react';
@@ -30,8 +34,8 @@ export function Panel({
       {head ? (
         <header className="flex h-[56px] items-center justify-between gap-[16px] border-b border-line/70 px-[20px] py-[14px]">
           <div className="flex min-w-0 items-baseline gap-[10px]">
-            {title === undefined ? null : <h2 className="truncate text-[15px] leading-[1.35] font-semibold text-ink">{title}</h2>}
-            {hint === undefined ? null : <p className="truncate text-[13px] text-text-2">{hint}</p>}
+            {title === undefined ? null : <h2 className="shrink-0 text-[15px] leading-[1.35] font-semibold text-ink">{title}</h2>}
+            {hint === undefined ? null : <p className="min-w-0 truncate text-[13px] text-text-2">{hint}</p>}
           </div>
           {right === undefined ? null : <div className="flex shrink-0 items-center gap-[8px]">{right}</div>}
         </header>

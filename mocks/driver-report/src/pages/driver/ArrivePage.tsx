@@ -98,7 +98,9 @@ export function ArrivePage(): JSX.Element {
   const [exampleSeen, setExampleSeen] = useState(false);
   const [prompted, setPrompted] = useState(false);
   const [preStepDone, setPreStepDone] = useState(false);
-  /** Read on the FIRST render, before `useFlow`'s effect replaces this entry's state with its own. */
+  /** Read on the FIRST render, before `useFlow`'s effect writes its own keys over this entry's state. (Since
+   *  W3-06 the flow MERGES rather than replaces, so `arrive` would survive there too — but a mount-only ref is
+   *  what the draft copy below needs either way, and it is the draft that every later step reads.) */
   const opened = useRef(arriveOf(location.state));
   const copied = useRef(false);
 
@@ -107,8 +109,8 @@ export function ArrivePage(): JSX.Element {
     if (copied.current) return;
     copied.current = true;
     if (opened.current !== null) flow.patch({ arrive: opened.current });
-    // Mount only, deliberately: `location.state` is the flow's own after `useFlow`'s first effect, and the draft
-    // openOnce minted during this render already exists. A dep list on `flow` would re-run every render.
+    // Mount only, deliberately: after `useFlow`'s first effect this entry's state carries the flow's own keys, and
+    // the draft openOnce minted during this render already exists. A dep list on `flow` would re-run every render.
   }, []);
 
   // R+C with a trusted position: the truck marked its own arrival, so there is nothing to ask. The draft this render

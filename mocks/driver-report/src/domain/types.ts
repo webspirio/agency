@@ -102,7 +102,12 @@ export type TruckDay = { id: string; truck_id: string; driver_id: string | null;
   version: number; status: 'OPEN' | 'READY' | 'CONFIRMED'; waybill_no: string | null;
   confirmed_by: string | null; confirmed_at: Instant | null; confirm_reason: string | null;
   printed_at: Instant | null; signed_at: Instant | null;
-  exported: { export_id: string; at: Instant; version: number } | null;
+  /** `version` is the EXPORT document's — 1 the first time this day went into BAS, 2 when a change sent a
+   *  correction under the same number (§4.2 C-11 «У BAS 21.09 16:07 · версія 1»). `day_version` is the day's
+   *  own revision at that moment, and it is what decides whether a re-import is «без змін»: the two are
+   *  different numbers and used to be one, which made the only two days with a real record history read
+   *  «версія 27» and «версія 14» beside «версія 1» on every example row (W3-05). */
+  exported: { export_id: string; at: Instant; version: number; day_version: number } | null;
   example: boolean; figures: ExampleDayFigures | null };
 
 export type OdometerSource = 'CAN' | 'DASH_PHOTO' | 'PLAN_CONFIRMED' | 'DRIVER_TYPED' | 'UNREAD' | 'OFFICE_EDIT'

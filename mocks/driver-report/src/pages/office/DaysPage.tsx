@@ -19,7 +19,7 @@ import { useTruckDays } from '../../api/hooks';
 import { fmtDay, fmtKm, fmtTime, plural } from '../../app/format';
 import { useScope } from '../../app/live';
 import {
-  EmptyPanel, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode, type RTColumn,
+  colW, EmptyPanel, PageHead, Panel, ResponsiveTable, SkeletonRows, useConsoleMode, type RTColumn,
 } from '../../components/office';
 import { ExampleChip, Plate } from '../../components/shared';
 import { OC } from '../../copy/office';
@@ -59,8 +59,11 @@ export function DaysPage(): JSX.Element {
   const shown = useTruckDays(state, scope);
   const rows = shown.data?.data ?? [];
 
+  // §4.2 C-07's eight columns and their shares: 1 136 with the chevron at wide, 690 below it (`fit.test.tsx`).
+  // «Км» joins «Зміна» and «Документи» joins «Позначки» below wide — the four that stay are the four a person
+  // scanning for a day to confirm reads: which truck, which day, how long it ran, and whether the driver signed.
   const columns: RTColumn<TruckDayRow>[] = [
-    { id: 'truck', header: 'Машина', width: 208, cell: (r) => (
+    { id: 'truck', header: 'Машина', width: colW(mode, { wide: 208, narrow: 176 }), cell: (r) => (
       <span className="flex flex-wrap items-center gap-[8px]">
         <Plate plate={r.plate} size="sm" />
         <span className="text-[13px] text-text-2">{OC.badge[r.badge]}</span>
@@ -68,14 +71,17 @@ export function DaysPage(): JSX.Element {
       </span>
     ) },
     { id: 'driver', header: 'Водій', width: 148, hideAt: ['compact', 'rail'], mergeInto: 'truck', cell: (r) => r.driver },
-    { id: 'date', header: 'Дата', width: 104, cell: (r) => fmtDay(r.date) },
-    { id: 'span', header: 'Зміна', width: 132, cell: (r) => <span className="font-mono text-[14px]">{spanOf(r)}</span> },
-    { id: 'km', header: 'Км', width: 76, align: 'right', cell: (r) => <span className="font-mono text-[14px]">{fmtKm(r.km)}</span> },
-    { id: 'docs', header: 'Документи', width: 108, hideAt: ['rail'], mergeInto: 'flags', cell: (r) => r.docs },
-    { id: 'flags', header: 'Позначки', width: 168, cell: (r) => (r.flags_open === 0
+    { id: 'date', header: 'Дата', width: colW(mode, { wide: 104, narrow: 90 }), cell: (r) => fmtDay(r.date) },
+    { id: 'span', header: 'Зміна', width: colW(mode, { wide: 132, narrow: 110 }), cell: (r) => <span className="font-mono text-[14px]">{spanOf(r)}</span> },
+    { id: 'km', header: 'Км', width: 76, align: 'right', hideAt: ['compact', 'rail'], mergeInto: 'span',
+      cell: (r) => <span className="font-mono text-[14px]">{fmtKm(r.km)}</span>,
+      mergedCell: (r) => <span className="font-mono text-[13px]">{`${fmtKm(r.km)} км`}</span> },
+    { id: 'docs', header: 'Документи', width: 108, hideAt: ['compact', 'rail'], mergeInto: 'flags',
+      cell: (r) => r.docs, mergedCell: (r) => `документи ${r.docs}` },
+    { id: 'flags', header: 'Позначки', width: colW(mode, { wide: 168, narrow: 138 }), cell: (r) => (r.flags_open === 0
       ? '—'
       : <span className="text-hold">{`${fmtKm(r.flags_open)} · ${plural(r.flags_open, FLAG_FORMS)}`}</span>) },
-    { id: 'attested', header: 'Водій', width: 152, cell: (r) => (r.attested_at === null
+    { id: 'attested', header: 'Водій', width: colW(mode, { wide: 152, narrow: 136 }), cell: (r) => (r.attested_at === null
       ? <span className="text-hold">не підтвердив</span>
       : `підтвердив ${fmtTime(r.attested_at)}`) },
   ];
