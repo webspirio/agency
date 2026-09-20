@@ -19,8 +19,13 @@ export type PrimaryTarget = { kind: 'shift-start' } | { kind: 'arrive'; stopId: 
   | { kind: 'shift-end' } | { kind: 'close-road-stop' } | { kind: 'elsewhere' } | { kind: 'my-day' }
   | { kind: 'new-shift' };
 export type Action = { verb: string; place: string | null; target: PrimaryTarget };
+/** `status.text` is the WHOLE sentence and stays the delivery mark's accessible name; `note` is the part the rail must
+ *  still say in WORDS. The rail draws a clock, one tick or two ticks and nothing else (D-02) — a driver reads that
+ *  grammar off every messenger he owns — but «фото 1 з 4 ще в телефоні» is information no glyph carries, and §8.6 #1's
+ *  own check names that line, so it is split out rather than dropped. */
 export type TripStopView = { stop_id: string; state: 'done' | 'current' | 'future'; time: string; place: string;
-  detail: string; hold: string | null; status: { text: string; icon: 'Check' | 'CheckCheck' | 'CloudOff' | 'CloudUpload' | 'Clock';
+  detail: string; hold: string | null; status: { text: string; note: string | null;
+    icon: 'Check' | 'CheckCheck' | 'CloudOff' | 'CloudUpload' | 'Clock';
     tone: 'plain' | 'hold' } | null; departure: { text: string; simulated: boolean } | null };
 export type TripMarkerView = { after_stop_id: string; kind: 'REFUEL' | 'ROAD_STOP'; text: string };
 export type OpenStop = { stop: PlannedStopView; arrived_at: Instant; auto: boolean; segment: { chip: SegmentChip; since: Instant } | null;
@@ -212,14 +217,19 @@ function detailOf(s: StopState): string {
 /** The office's side of a done row: nothing while its completion is still in the phone (HomePage draws that from the
  *  outbox), else «Прийнято диспетчером» / «В офісі ✓», with the photos still in the phone when there are any (§6.6). */
 function statusOf(s: StopState): TripStopView['status'] {
-  const view = s.completion?.acked ?? null;
-  if (view === null) return null;
-  if ((view.accepted_at ?? s.stop.accepted_at) !== null) return { text: DC.status.accepted, icon: 'CheckCheck', tone: 'plain' };
-  if (lt(view.photos_received, view.photos_expected)) {
-    return { text: `${DC.status.inOffice} · ${DC.status.photosLeft(view.photos_expected - view.photos_received, view.photos_expected)}`,
-      icon: 'CloudUpload', tone: 'hold' };
+  if (s.completion === null) return null;
+  const view = s.completion.acked;
+  /* The stop is finished but the record is still in the outbox — the clock, and the rail's only «нічого не втрачено»
+     state. It used to be `null`, i.e. a done stop with no mark at all, which reads as «нічого не сталося». */
+  if (view === null) return { text: DC.status.savedOffline, note: null, icon: 'Clock', tone: 'plain' };
+  if ((view.accepted_at ?? s.stop.accepted_at) !== null) {
+    return { text: DC.status.accepted, note: null, icon: 'CheckCheck', tone: 'plain' };
   }
-  return { text: DC.status.inOffice, icon: 'Check', tone: 'plain' };
+  if (lt(view.photos_received, view.photos_expected)) {
+    const note = DC.status.photosLeft(view.photos_expected - view.photos_received, view.photos_expected);
+    return { text: `${DC.status.inOffice} · ${note}`, note, icon: 'CloudUpload', tone: 'hold' };
+  }
+  return { text: DC.status.inOffice, note: null, icon: 'Check', tone: 'plain' };
 }
 
 /** RG: the completion's commit, or unknown when the photos came after the truck moved; R+C: the Ruptela OUT (§3.3 D-02). */
@@ -229,11 +239,11 @@ function departureOf(s: StopState, today: DriverToday, now: Instant): TripStopVi
   if (today.truck?.telematics === 'RUPTELA') {
     const anchor = s.arrived_at ?? done.at;
     const out = today.auto_events.find((e) => e.kind === 'OUT' && atStop(e, s.stop) && atOrBefore(e.at, now) && !isBefore(e.at, anchor));
-    return out === undefined ? null : { text: `Виїхав ${fmtTime(out.at)} · Ruptela`, simulated: true };
+    return out === undefined ? null : { text: `${fmtTime(out.at)} · Ruptela`, simulated: true };
   }
   const deferred = done.type === 'STOP_LEFT' ? null : done.payload.deferred;
-  return deferred !== null ? { text: 'виїзд — невідомо, за ТТН', simulated: false }
-    : { text: `виїзд — не раніше ${fmtTime(done.committed)} (запис)`, simulated: false };
+  return deferred !== null ? { text: 'невідомо, за ТТН', simulated: false }
+    : { text: `не раніше ${fmtTime(done.committed)}`, simulated: false };
 }
 
 function rowsOf(states: StopState[], open: StopState | null, today: DriverToday, now: Instant): TripStopView[] {

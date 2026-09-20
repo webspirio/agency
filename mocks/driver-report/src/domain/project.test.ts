@@ -114,7 +114,7 @@ describe('the TripRail card (§3.3 D-02, §6.1 move 1)', () => {
       ['future', '+116 км', 'Лан, Балабине', 'Вивантаження 2 з 2 · відсіки 4–6 · ТТН 004518 · 12,400 т', 'Фото на території заборонені'],
       ['future', '+23 км', 'База', 'Повернення на базу', null],
     ]);
-    expect(p.trip.stops[0]!.departure).toEqual({ text: 'виїзд — не раніше 08:40 (запис)', simulated: false });
+    expect(p.trip.stops[0]!.departure).toEqual({ text: 'не раніше 08:40', simulated: false });
   });
   it('marks refuels and road stops between done stops', () => {
     const refuel = rv('REFUEL', '08:57', null, { station: 'ОККО Н-08', receipt_no: '58213', rro_no: null, sum_uah: '22800.00', card_mask: '****4417', full_tank: true, odometer: null, deferred: false }, 422);
@@ -148,21 +148,22 @@ describe('closing, departures and what the office already has (§3.3 D-02, D-11)
     const arrived2 = rv('ARRIVED', '10:05', 's2', { order: 'PLANNED', claimed_at: null, chip: 'QUEUE', odometer: null, unplanned_kind: null, new_place: false }, 440);
     const unloaded = rv('UNLOADED', '11:50', 's2', { drop_index: 1, pages: [], deferred: null, no_doc_reason: null }, 441);
     const two = project(today({ shift: shiftOpen, records: [arrived, loaded, arrived2, unloaded] }), [], demo('12:00'));
-    expect(two.trip.stops.map((s) => s.departure)).toEqual([null, { text: 'виїзд — не раніше 11:50 (запис)', simulated: false }, null, null]);
+    expect(two.trip.stops.map((s) => s.departure)).toEqual([null, { text: 'не раніше 11:50', simulated: false }, null, null]);
     const later = rv('LOADED', '08:40', 's1', { ttn_count: 2, pages: [], no_doc_reason: null, deferred: 'AFTER_EXIT' }, 419);
     expect(project(today({ shift: shiftOpen, records: [arrived, later] }), [], demo('08:50')).trip.stops[0]!.departure)
-      .toEqual({ text: 'виїзд — невідомо, за ТТН', simulated: false });
+      .toEqual({ text: 'невідомо, за ТТН', simulated: false });
     const rc = project(today({ shift: shiftOpen, truck: RC, records: [arrived, loaded], auto_events: [auto('OUT', '08:55', 's1')] }), [], demo('09:00'));
-    expect(rc.trip.stops[0]!.departure).toEqual({ text: 'Виїхав 08:55 · Ruptela', simulated: true });
+    expect(rc.trip.stops[0]!.departure).toEqual({ text: '08:55 · Ruptela', simulated: true });
   });
-  it('shows what the office already has on a done row, and nothing while the record is still in the phone', () => {
+  it('shows what the office already has on a done row, and the clock while the record is still in the phone', () => {
     const at = (records: RecordView[], pending: RecordIn[] = []) => project(today({ shift: shiftOpen, records }), pending, demo('10:30')).trip.stops[0]!;
-    expect(at([arrived, loaded]).status).toEqual({ text: 'В офісі ✓', icon: 'Check', tone: 'plain' });
-    expect(at([arrived, { ...loaded, accepted_at: demo('10:09') }]).status).toEqual({ text: 'Прийнято диспетчером', icon: 'CheckCheck', tone: 'plain' });
+    expect(at([arrived, loaded]).status).toEqual({ text: 'В офісі ✓', note: null, icon: 'Check', tone: 'plain' });
+    expect(at([arrived, { ...loaded, accepted_at: demo('10:09') }]).status).toEqual({ text: 'Прийнято диспетчером', note: null, icon: 'CheckCheck', tone: 'plain' });
     expect(at([arrived, { ...loaded, photos_expected: 4, photos_received: 3 }]).status)
-      .toEqual({ text: 'В офісі ✓ · фото 1 з 4 ще в телефоні', icon: 'CloudUpload', tone: 'hold' });
+      .toEqual({ text: 'В офісі ✓ · фото 1 з 4 ще в телефоні', note: 'фото 1 з 4 ще в телефоні', icon: 'CloudUpload', tone: 'hold' });
     const unsent = at([arrived], [pendingOf(loaded)]);
-    expect([unsent.state, unsent.status]).toEqual(['done', null]);
+    expect([unsent.state, unsent.status])
+      .toEqual(['done', { text: 'Збережено в телефоні', note: null, icon: 'Clock', tone: 'plain' }]);
   });
   it('forgets an undone record, whether the office has it or it is still in the phone', () => {
     expect(project(today({ shift: shiftOpen, records: [{ ...arrived, voided: true }] }), [], demo('06:20')).mode).toBe('B');

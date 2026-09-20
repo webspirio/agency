@@ -63,18 +63,18 @@ export function TodayCard({ today, now }: { today: DriverToday; now: Instant }):
   const kit = [truck?.model ?? '', trailer?.body_label ?? ''].filter((p) => p !== '').join(' · ');
 
   return (
-    <section className="card-ring flex flex-col gap-3 p-3">
+    <section className="card-ring flex flex-col gap-4 p-4">
       {cardIn === null ? null : (
-        <span className="flex items-center gap-2 text-[1rem] leading-[1.375rem]">
+        <span className="flex items-center gap-2 text-[1rem] leading-[1.5rem]">
           <CreditCard aria-hidden="true" className="size-[1.25rem] shrink-0" />
           <span className="min-w-0">{`Картку вставлено ${fmtTime(cardIn.at)}. Почати зміну?`}</span>
           <SimChip />
         </span>
       )}
       {plan === null ? (
-        <div className="empty-slot flex flex-col gap-1 px-3 py-4">
+        <div className="empty-slot flex flex-col gap-2 px-4 py-5">
           <span className="text-[1.125rem] leading-[1.5rem] font-semibold">{NO_PLAN}</span>
-          <span className="text-[1rem] leading-[1.375rem]" style={{ color: 'var(--text-2)' }}>{NO_PLAN_HINT}</span>
+          <span className="text-[1rem] leading-[1.5rem]" style={{ color: 'var(--text-2)' }}>{NO_PLAN_HINT}</span>
         </div>
       ) : (
         <h2 className="text-[1.125rem] leading-[1.5rem] font-semibold">{`Ваш рейс сьогодні: ${plan.caption}`}</h2>
@@ -91,11 +91,11 @@ export function TodayCard({ today, now }: { today: DriverToday; now: Instant }):
         </span>
       )}
       {kit === '' ? null : (
-        <span className="text-[1rem] leading-[1.375rem]" style={{ color: 'var(--text-2)' }}>{kit}</span>
+        <span className="text-[1rem] leading-[1.5rem]" style={{ color: 'var(--text-2)' }}>{kit}</span>
       )}
       {reference === null ? null : (
         <span className="flex flex-wrap items-center gap-2">
-          <span className="tnum text-[1rem] leading-[1.375rem]">{reference.text}</span>
+          <span className="tnum text-[1rem] leading-[1.5rem]">{reference.text}</span>
           {reference.simulated ? <SimChip /> : null}
         </span>
       )}

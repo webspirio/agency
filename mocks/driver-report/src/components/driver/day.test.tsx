@@ -16,13 +16,13 @@ afterEach(cleanup);
 
 const stops: TripStopView[] = [
   { stop_id: 's1', state: 'done', time: '06:10–08:40', place: 'Дніпро-Корм, Вільнянськ', detail: 'Завантаження · 2 ТТН · 24,4 т', hold: null,
-    status: { text: 'Прийнято диспетчером', icon: 'CheckCheck', tone: 'plain' }, departure: { text: 'виїзд — не раніше 08:40 (запис)', simulated: false } },
+    status: { text: 'Прийнято диспетчером', note: null, icon: 'CheckCheck', tone: 'plain' }, departure: { text: 'не раніше 08:40', simulated: false } },
   { stop_id: 's2', state: 'current', time: '+52 км', place: 'Злагода, Синельникове', detail: 'Вивантаження 1 з 2 · відсіки 1–3 · ТТН 004517 · 12,000 т', hold: null, status: null, departure: null },
   { stop_id: 's3', state: 'future', time: '+116 км', place: 'Лан, Балабине', detail: 'Вивантаження 2 з 2 · відсіки 4–6 · ТТН 004518 · 12,400 т', hold: 'Фото на території заборонені', status: null, departure: null },
 ];
 
 describe('the day as a road (§3.3 D-02, §6.1, §8.2 D-02 #5)', () => {
-  it('draws done, current and future stops with the markers and the departure line', () => {
+  it('draws done, current and future stops with the markers, the departure and the delivery mark', () => {
     const { container } = render(<TripRailCard header="Рейс Р-26-3312 · 24,4 т" source="план з BAS 20.09 17:40" stops={stops}
       markers={[{ after_stop_id: 's1', kind: 'REFUEL', text: '08:57 Заправка · ОККО Н-08' }]} emptySlot={null} />);
     expect(screen.getByText('Рейс Р-26-3312 · 24,4 т')).toBeInTheDocument();
@@ -32,8 +32,10 @@ describe('the day as a road (§3.3 D-02, §6.1, §8.2 D-02 #5)', () => {
     expect(container.querySelectorAll('[data-node="future"]')).toHaveLength(1);
     expect(screen.getByText('Фото на території заборонені')).toBeInTheDocument();
     expect(screen.getByText('08:57 Заправка · ОККО Н-08')).toBeInTheDocument();
-    expect(screen.getByText('виїзд — не раніше 08:40 (запис)')).toBeInTheDocument();
-    expect(screen.getByText('Прийнято диспетчером')).toBeInTheDocument();
+    // The departure now rides on the time line, muted behind a LogOut, instead of being its own paragraph.
+    expect(screen.getByText('не раніше 08:40')).toBeInTheDocument();
+    // The delivery mark is a glyph; the sentence survives as its accessible name so a screen reader still says it.
+    expect(screen.getByText('Прийнято диспетчером')).toHaveClass('sr-only');
   });
   it('times the stop from the server clock and opens «Що зараз?» from the status line', async () => {
     server.clock.set(demo('07:48'));

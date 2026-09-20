@@ -94,8 +94,8 @@ export function ReceiptCard({ title, status, next, createdWall, onUndo, onRedo, 
       }}
     >
       <div className="min-h-0 overflow-hidden">
-        <div className="card-ring flex items-start gap-3 p-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="card-ring flex items-start gap-3 p-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             <span className="text-[1.125rem] leading-[1.5rem] font-semibold">{title}</span>
             {status.acknowledged ? <span className="cl-stem block w-full" /> : null}
             <StatusLine
@@ -121,7 +121,7 @@ export function ReceiptCard({ title, status, next, createdWall, onUndo, onRedo, 
               }
             />
             {next === null ? null : (
-              <span className="text-[1rem] leading-[1.375rem]" style={{ color: 'var(--text-2)' }}>{next}</span>
+              <span className="text-[1rem] leading-[1.5rem]" style={{ color: 'var(--text-2)' }}>{next}</span>
             )}
           </div>
           {undone ? null : (

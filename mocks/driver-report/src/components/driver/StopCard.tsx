@@ -81,24 +81,24 @@ export function StopCard({ open, now, rc, onStatus, onAlertOver, onCall }: {
       : { text: rc ? ASK_OPTIONAL : ASK, tone: 'plain' as const, icon: Ellipsis };
 
   return (
-    <section className="card-ring flex flex-col gap-2 p-3">
+    <section className="card-ring flex flex-col gap-3 p-4">
       <h2 className="text-[1.625rem] leading-[2rem] font-semibold tracking-[-0.015em]">{titleOf(stop)}</h2>
       <span className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[1rem] leading-[1.375rem] font-medium" style={{ color: 'var(--text-2)' }}>
+        <span className="font-mono text-[1rem] leading-[1.5rem] font-medium" style={{ color: 'var(--text-2)' }}>
           {auto ? `На місці ${fmtTime(arrived)} · Ruptela` : `На місці ${fmtTime(arrived)}`}
         </span>
         {auto ? <SimChip /> : null}
       </span>
-      <span className="flex flex-col pt-1 pb-1">
-        <span className="text-[1rem] leading-[1.375rem]" style={{ color: 'var(--text-2)' }}>на місці</span>
+      <span className="flex flex-col pt-2 pb-2">
+        <span className="text-[1rem] leading-[1.5rem]" style={{ color: 'var(--text-2)' }}>на місці</span>
         <span className="font-mono text-[2.5rem] leading-[2.75rem] font-semibold tracking-[-0.01em]">
           {fmtTimer(Math.max(0, minutesBetween(arrived, now)))}
         </span>
       </span>
       <StatusLine tone={line.tone} icon={line.icon} text={line.text} onPress={onStatus} />
-      {stop.kind === 'DROP' ? <p className="text-[1rem] leading-[1.375rem]">{DROP_LINE}</p> : null}
+      {stop.kind === 'DROP' ? <p className="text-[1rem] leading-[1.5rem]">{DROP_LINE}</p> : null}
       {stop.no_photos ? (
-        <p className="text-[1rem] leading-[1.375rem]" style={{ color: 'var(--hold)' }}>{NO_PHOTO_LINE}</p>
+        <p className="text-[1rem] leading-[1.5rem]" style={{ color: 'var(--hold)' }}>{NO_PHOTO_LINE}</p>
       ) : null}
       {waiting && onCall !== undefined ? (
         <CallButton person={{ name: onCall.name, role: onCall.role_label }} phone={onCall.phone} />

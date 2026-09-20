@@ -21,7 +21,7 @@ export function DriverScreen({ dark = false, header, children, bar }: {
     >
       {header}
       <div className="flex-1">
-        <div className="mx-auto flex w-full max-w-[35rem] flex-col gap-3 px-gutter pt-3 pb-4">{children}</div>
+        <div className="mx-auto flex w-full max-w-[35rem] flex-col gap-4 break-words px-gutter pt-4 pb-6">{children}</div>
       </div>
       {bar}
     </div>

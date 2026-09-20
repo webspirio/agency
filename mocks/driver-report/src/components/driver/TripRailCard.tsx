@@ -24,7 +24,7 @@ export function TripRailCard({ header, source, stops, markers, emptySlot }: {
   emptySlot: string | null;
 }): JSX.Element {
   return (
-    <section className="card-ring flex flex-col gap-3 p-3">
+    <section className="card-ring flex flex-col gap-4 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 className="text-[1rem] leading-[1.375rem] font-semibold">{header}</h2>
         {source === '' ? null : (

@@ -20,11 +20,10 @@
  *  Rows stay ≥ 4rem and are INERT — a tap on the wrong row is how a driver files a drop under the other farm
  *  (§3.3 D-02 Interactions, EC-155). */
 import type { JSX } from 'react';
-import { Check, CheckCheck, Clock, CloudOff, CloudUpload, Fuel, Siren } from 'lucide-react';
+import { Check, CheckCheck, Clock, CloudOff, CloudUpload, Fuel, LogOut, Siren } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { TripMarkerView, TripStopView } from '../../domain/project';
 import { SimChip } from '../shared';
-import { StatusLine } from './StatusLine';
 
 type StopStatus = NonNullable<TripStopView['status']>;
 
@@ -94,29 +93,69 @@ function MarkerNode({ kind }: { kind: TripMarkerView['kind'] }): JSX.Element {
   );
 }
 
-/** The four facts of a planned stop, stacked (see the layout note above), plus the hold line, the office's state
- *  word and — under the last done stop only, because that is where `project()` puts it — the departure line. */
+/** The delivery mark: a clock, one tick or two, and no word at all (owner, 2026-09-20).
+ *
+ *  «В офісі ✓» was read as «in sync» by the first person shown the screen, and that is the wrong question — a driver
+ *  does not care about a connection, he cares whether the office HAS it. He already reads that grammar off every
+ *  messenger he owns: a clock while it waits, one tick when it lands, two when it is confirmed. So the rail draws the
+ *  glyph and the sentence becomes the ACCESSIBLE NAME — kept in the DOM rather than deleted, so a screen reader still
+ *  says «Прийнято диспетчером» and `src/copy/driver.ts` stays the one place the words live.
+ *
+ *  WEIGHT carries the third step, never hue: one tick is `--text-2`, two are full `--ink`. Merely DELIVERED must not
+ *  look like an achievement, and the accent may not report a state (§8.6 #6, D10). */
+function DeliveryMark({ status }: { status: NonNullable<TripStopView['status']> }): JSX.Element {
+  const Icon = RAIL_ICON[status.icon];
+  const ink = status.tone === 'hold' ? 'var(--hold)'
+    : status.icon === 'CheckCheck' ? 'var(--ink)'
+      : 'var(--text-2)';
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <Icon aria-hidden="true" className="size-[1.375rem] shrink-0" style={{ color: ink }} />
+      <span className="sr-only">{status.text}</span>
+      {status.note === null ? null : (
+        <span aria-hidden="true" className="min-w-0 text-[1rem] leading-[1.5rem] font-semibold" style={{ color: ink }}>
+          {status.note}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The four facts of a planned stop, stacked (see the layout note above), plus the hold line and the delivery mark.
+ *
+ *  THE DEPARTURE RIDES ON THE TIME LINE (owner, 2026-09-20). It used to be its own paragraph at the foot of the row —
+ *  «виїзд — не раніше 08:40 (запис)» — which put two clocks four lines apart and read as a second, competing fact.
+ *  It is the same fact seen from the other end: when this stop finished. So it sits beside the arrival window, muted
+ *  and behind a `LogOut`, and the difference between the two is carried by position, colour AND icon instead of by a
+ *  sentence. It is still only ever present on the last done stop — that is where `project()` puts it. */
 function StopRow({ stop }: { stop: TripStopView }): JSX.Element {
   return (
-    <span className="flex min-h-[4rem] flex-col gap-[2px] pb-3">
-      <span className="font-mono text-[0.875rem] leading-[1.25rem] font-medium" style={{ color: 'var(--text-2)' }}>
-        {stop.time}
+    <span className="flex min-h-[4rem] flex-col gap-1 pb-7">
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-mono text-[0.875rem] leading-[1.25rem] font-medium" style={{ color: 'var(--text-2)' }}>
+          {stop.time}
+        </span>
+        {stop.departure === null ? null : (
+          <span className="flex min-w-0 items-center gap-1" style={{ color: 'var(--text-2)' }}>
+            <LogOut aria-hidden="true" className="size-[1rem] shrink-0" />
+            <span className="min-w-0 font-mono text-[0.875rem] leading-[1.25rem] font-medium">{stop.departure.text}</span>
+            {stop.departure.simulated ? <SimChip /> : null}
+          </span>
+        )}
+        {/* A bare mark rides at the END of the time line, where a messenger puts its ticks — one line saved per done
+            stop, and the glyph sits beside the clock it is about rather than floating under the detail. */}
+        {stop.status === null || stop.status.note !== null ? null : (
+          <span className="ml-auto shrink-0"><DeliveryMark status={stop.status} /></span>
+        )}
       </span>
-      <span className="text-[1.125rem] leading-[1.5rem] font-semibold">{stop.place}</span>
-      <span className="text-[1rem] leading-[1.375rem]" style={{ color: 'var(--text-2)' }}>{stop.detail}</span>
+      <span className="text-[1.125rem] leading-[1.625rem] font-semibold">{stop.place}</span>
+      <span className="text-[1rem] leading-[1.5rem]" style={{ color: 'var(--text-2)' }}>{stop.detail}</span>
       {stop.hold === null ? null : (
-        <span className="text-[1rem] leading-[1.375rem]" style={{ color: 'var(--hold)' }}>{stop.hold}</span>
+        <span className="text-[1rem] leading-[1.5rem]" style={{ color: 'var(--hold)' }}>{stop.hold}</span>
       )}
-      {stop.status === null ? null : (
-        <span className="block pt-1">
-          <StatusLine tone={stop.status.tone} icon={RAIL_ICON[stop.status.icon]} text={stop.status.text} />
-        </span>
-      )}
-      {stop.departure === null ? null : (
-        <span className="flex flex-wrap items-center gap-1 pt-1 text-[1rem] leading-[1.375rem]" style={{ color: 'var(--text-2)' }}>
-          {stop.departure.text}
-          {stop.departure.simulated ? <SimChip /> : null}
-        </span>
+      {/* …but a mark that still has something to SAY keeps its own line, under the detail it qualifies. */}
+      {stop.status === null || stop.status.note === null ? null : (
+        <span className="block pt-2"><DeliveryMark status={stop.status} /></span>
       )}
     </span>
   );
@@ -129,7 +168,7 @@ export function TripRail({ stops, markers }: { stops: TripStopView[]; markers: T
       {items.map((item, i) => {
         const next = items[i + 1];
         return (
-          <li key={item.key} className="grid gap-3" style={{ gridTemplateColumns: `${RAIL_W} minmax(0, 1fr)` }}>
+          <li key={item.key} className="grid gap-4" style={{ gridTemplateColumns: `${RAIL_W} minmax(0, 1fr)` }}>
             <span aria-hidden="true" className="relative flex justify-center">
               {item.kind === 'marker' ? <MarkerNode kind={item.marker.kind} /> : <Node state={item.stop.state} />}
               {next === undefined ? null : (
@@ -144,7 +183,7 @@ export function TripRail({ stops, markers }: { stops: TripStopView[]; markers: T
             </span>
             {item.kind === 'marker'
               ? (
-                <span className="flex min-h-[2.5rem] items-center pb-2 text-[1rem] leading-[1.375rem]" style={{ color: 'var(--text-2)' }}>
+                <span className="flex min-h-[2.5rem] items-center pb-6 text-[1rem] leading-[1.5rem]" style={{ color: 'var(--text-2)' }}>
                   {item.marker.text}
                 </span>
               )

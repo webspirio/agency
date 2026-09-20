@@ -31,7 +31,7 @@ export function AppHeader({ tripNo }: { tripNo?: string }): JSX.Element {
       <div className="mx-auto flex h-[3.5rem] w-full max-w-[35rem] items-center gap-2 pr-2 pl-gutter">
         <KtlLockup size={15} />
         <span aria-hidden="true" className="block h-[1.25rem] w-px shrink-0" style={{ background: 'var(--line-2)' }} />
-        <span className="shrink-0 text-[1.0625rem] leading-[1.375rem] font-semibold">{DC.appName}</span>
+        <span className="min-w-0 truncate text-[1.0625rem] leading-[1.375rem] font-semibold">{DC.appName}</span>
         <span className="ml-auto flex min-w-0 items-center gap-1">
           {tripNo === undefined ? null : (
             <span

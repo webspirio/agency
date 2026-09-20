@@ -17,12 +17,12 @@ export function HoldCard({ icon: Icon, title, body, thumb, onPress, children }: 
   children?: ReactNode;
 }): JSX.Element {
   const inner = (
-    <div className="flex min-h-[4rem] w-full items-center gap-3 py-3 pr-3 pl-4">
+    <div className="flex min-h-[4rem] w-full items-center gap-3 py-4 pr-4 pl-4">
       <Icon aria-hidden="true" className="size-[1.5rem] shrink-0" style={{ color: 'var(--hold)' }} />
-      <span className="flex min-w-0 flex-1 flex-col gap-[2px] text-left">
+      <span className="flex min-w-0 flex-1 flex-col gap-1 text-left">
         <span className="text-[1.125rem] leading-[1.5rem] font-semibold">{title}</span>
         {body === undefined ? null : (
-          <span className="text-[1rem] leading-[1.375rem]" style={{ color: 'var(--text-2)' }}>{body}</span>
+          <span className="text-[1rem] leading-[1.5rem]" style={{ color: 'var(--text-2)' }}>{body}</span>
         )}
         {children}
       </span>
