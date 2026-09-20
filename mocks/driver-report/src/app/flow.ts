@@ -79,13 +79,28 @@ export function discardDraft(deviceId: string, draftId: string): void {
  *  transition it restarts) finds its draft again instead of minting a second key. */
 const openedBy = new Map<string, string>();
 
+/** The remembered draft of this entry, or nothing. A remembered id is only as good as its draft: `location.key` is
+ *  unique per entry in a browser, but a memory router keys its FIRST entry with the literal string 'default', so
+ *  every flow the page harness opens through `renderAt` asks about the same key. Once the phone has been rebuilt
+ *  (a stage reset, `atBeat`) the draft that key names is gone, and handing the id back anyway makes the flow read
+ *  «gone» and redirect home one frame after it paints — which made the ORDER of tests inside a file load-bearing.
+ *  A draft that has since been re-minted for a different flow is not this entry's either. */
+function remembered(entryKey: string, opts: { flow: FlowKind; stopId?: string | null }): string | null {
+  const known = openedBy.get(entryKey);
+  if (known === undefined) return null;
+  const draft = server.phone(DEVICE_ID).drafts[known];
+  if (draft !== undefined && draft.flow === opts.flow && draft.stop_id === (opts.stopId ?? null)) return known;
+  openedBy.delete(entryKey);
+  return null;
+}
+
 /** Mints the flow's draft during the render that opens it, so the very first frame already shows its key. It is
  *  written WITHOUT an event: an emit here would set state in every other subscriber in the middle of this render.
  *  The opening effect announces it. */
 function openOnce(entryKey: string, opts: { flow: FlowKind; stopId?: string | null; label: string }, first: string,
   path: string): string {
-  const known = openedBy.get(entryKey);
-  if (known !== undefined) return known;
+  const known = remembered(entryKey, opts);
+  if (known !== null) return known;
   const seq = server.mintSeq(DEVICE_ID);
   const key = recordKey(DEVICE_ID, seq);
   const draft: Draft = { id: key, flow: opts.flow, stop_id: opts.stopId ?? null, seq, key,

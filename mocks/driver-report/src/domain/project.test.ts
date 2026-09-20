@@ -5,7 +5,7 @@ import { project } from './project';
 import type { AutoEventView, DriverToday, PlannedStopView, RecordIn, RecordView } from './dto';
 
 const stop = (p: Partial<PlannedStopView> & Pick<PlannedStopView, 'stop_id' | 'seq' | 'kind' | 'label' | 'short'>): PlannedStopView => ({
-  plan_key: `3312-${p.seq}`, place_id: `place-${p.seq}`, town: '', ttn_expected: 0, ttn_nos: [], drop_index: null, drop_count: null,
+  plan_key: `3312-${p.seq}`, place_id: `place-${p.seq}`, label_gen: p.label, town: '', town_loc: '', ttn_expected: 0, ttn_nos: [], drop_index: null, drop_count: null,
   compartments: null, mass_t: null, planned_km: null, no_photos: false, weigh_ticket: false, accepted_at: null, ...p });
 const STOPS = [
   stop({ stop_id: 's1', seq: 1, kind: 'LOADING', label: 'Дніпро-Корм', short: 'Дніпро-Корм, Вільнянськ', town: 'Вільнянськ', ttn_expected: 2, ttn_nos: ['004517', '004518'], mass_t: '24.400', planned_km: 36 }),
@@ -15,13 +15,13 @@ const STOPS = [
 ];
 function today(p: Partial<DriverToday> = {}): DriverToday {
   return {
-    server_time: demo('05:14'), device: { id: 'device-000001', bound: true, revoked: false },
+    server_time: demo('05:14'), device: { id: 'device-000001', bound: true, revoked: false, os_label: 'Android 11 · Chrome' },
     driver: { id: 'driver-000001', name: 'Павло Ватаманюк', short_name: 'Ватаманюк П.' },
     truck: { id: 'truck-000001', plate: 'АР 1234 ВС', model: 'Scania R450', telematics: 'REGIS', has_can: false, speed_kmh: null, gnss: 'OK', can_km: null },
     trailer: { id: 'trailer-000001', plate: 'АР 7781 ХР', body_label: 'пневмобочка, 6 відсіків', compartments: 6 },
     plan: { trip_no: 'Р-26-3312', caption: 'Вільнянськ → Синельникове → Балабине', mass_label: '24,4 т', imported_label: 'план з BAS 20.09 17:40', stops: STOPS },
     shift: null, records: [], auto_events: [],
-    odometer_ref: { value: 412355, at: '2026-09-20T14:48:00.000Z' as never, source: 'DASH_PHOTO', basis: 'LAST_AT_BASE', place_short: 'База', kind: 'SHIFT_END_AT_BASE' },
+    odometer_ref: { value: 412355, at: '2026-09-20T14:48:00.000Z' as never, source: 'DASH_PHOTO', basis: 'LAST_AT_BASE', place_short: 'База', place_gen: 'Бази', kind: 'SHIFT_END_AT_BASE' },
     requests: [], requests_done_today: [], corrections_to_ack: [], paper: { owed: [], receipts: [] },
     on_call: { name: 'Ірина Коваленко', role_label: 'диспетчер', until: '20:00', phone: '+380 67 214 55 08' },
     last_contact_at: null, first_time: { examples_seen: [], office_sees_read: true, first_arrival: false }, day: null, ...p,
@@ -36,8 +36,8 @@ const loaded = rv('LOADED', '08:40', 's1', { ttn_count: 2, pages: [], no_doc_rea
 
 describe('home decides the one next action (§3.2)', () => {
   it('sends an unbound phone to #/bind and shows a revoked one the hold card', () => {
-    expect(project(today({ device: { id: 'd', bound: false, revoked: false } }), [], demo('05:14')).mode).toBe('UNBOUND');
-    expect(project(today({ device: { id: 'd', bound: true, revoked: true } }), [], demo('05:14')).mode).toBe('REVOKED');
+    expect(project(today({ device: { id: 'd', bound: false, revoked: false, os_label: null } }), [], demo('05:14')).mode).toBe('UNBOUND');
+    expect(project(today({ device: { id: 'd', bound: true, revoked: true, os_label: null } }), [], demo('05:14')).mode).toBe('REVOKED');
   });
   it('mode A before the shift: «Почати зміну»', () => {
     const p = project(today(), [], demo('05:14'));

@@ -359,6 +359,9 @@ function paperTrail(c: Ctx, day: TruckDay): string | null {
 /* ── the chronology ─────────────────────────────────────────────────────── */
 
 type Row = TimelineRow;
+/** The «Місце» of a row (§4.2 C-09), or null where a row HAS no place — `placeName` answers «Нове місце» for an
+ *  unknown id, which is right for an arrival and wrong for a tachograph break. */
+const placeOf = (w: World, id: string | null): string | null => (placeById(w, id) === null ? null : placeName(w, id));
 const point = (p: OdometerPoint | null): Row['odometer'] => {
   const source = p === null ? null : SOURCE_OF[p.source];
   return p === null || p.value === null || source === null ? null : { value: p.value, source };
@@ -380,19 +383,22 @@ function thumbs(c: Ctx, key: string): string[] {
 const deferredWords = (d: 'AT_PARKING' | 'AFTER_EXIT'): string => (d === 'AT_PARKING' ? 'фото на стоянці' : 'фото після виїзду');
 
 function recordRow(c: Ctx, d: Day, r: DriverRecord, stops: StopFacts[], legs: Leg[]): Row | null {
-  const base = { to: null, source: 'DRIVER' as const, odometer: point(reading(d, r)), thumbs: thumbs(c, r.key),
-    simulated: false, example: false };
   const stop = r.stop_id === null ? null : stops.find((f) => f.stop.id === r.stop_id) ?? null;
+  const base = { to: null, source: 'DRIVER' as const, odometer: point(reading(d, r)), thumbs: thumbs(c, r.key),
+    simulated: false, example: false, place_short: placeOf(c.w, stop?.place.id ?? r.place_id) };
   switch (r.type) {
     case 'SHIFT_START':
-      return { ...base, at: r.occurred_at, event: `Зміну почато · ${placeName(c.w, r.place_id ?? baseId(c.w))}` };
+      return { ...base, at: r.occurred_at, place_short: placeName(c.w, r.place_id ?? baseId(c.w)),
+        event: `Зміну почато · ${placeName(c.w, r.place_id ?? baseId(c.w))}` };
     case 'SHIFT_END':
-      return { ...base, at: r.occurred_at, event: `Зміну закінчено · ${placeName(c.w, r.place_id ?? r.payload.place_id ?? baseId(c.w))}` };
+      return { ...base, at: r.occurred_at, place_short: placeName(c.w, r.place_id ?? r.payload.place_id ?? baseId(c.w)),
+        event: `Зміну закінчено · ${placeName(c.w, r.place_id ?? r.payload.place_id ?? baseId(c.w))}` };
     case 'ARRIVED': {
       const place = placeById(c.w, stop?.place.id ?? r.place_id);
       const chip = r.payload.chip === null ? null : DC.segments[r.payload.chip];
-      return { ...base, at: r.occurred_at, event: dot([`На місці: ${place === null ? 'Нове місце' : place.short}`, chip,
-        place?.no_photos ? 'фото на фермі заборонені' : null]) };
+      return { ...base, at: r.occurred_at, place_short: place === null ? 'Нове місце' : place.short,
+        event: dot([`На місці: ${place === null ? 'Нове місце' : place.short}`, chip,
+          place?.no_photos ? 'фото на фермі заборонені' : null]) };
     }
     case 'LOADED': {
       const p = r.payload;
@@ -479,7 +485,7 @@ function markRows(c: Ctx, stops: StopFacts[]): Row[] {
     const who = field.source === 'OFFICE_TYPED' ? `введено з фото: ${userShort(c.w, field.by)}`
       : field.source === 'OCR' ? `OCR · ${userShort(c.w, field.by)}` : null;
     return [{ at, to: null, source: 'TTN', event: drop ? 'ТТН пред\'явлено (відмітка одержувача)' : dot(['Прибуття за ТТН', who]),
-      odometer: null, thumbs: [], simulated: false, example: false }];
+      place_short: f.place.short, odometer: null, thumbs: [], simulated: false, example: false }];
   });
 }
 
@@ -490,7 +496,8 @@ function telemetryRows(c: Ctx, d: Day): Row[] {
   return visibleTelemetry(c.w, d.truck.id, c.now).filter((t) => businessDate(t.at) === d.day.date).flatMap((t): Row[] => {
     const odometer = t.can_km === null ? null : { value: t.can_km, source: 'CAN' as const };
     const row = (source: SourceKey, event: string, to: Instant | null = null): Row[] =>
-      [{ at: t.at, to, source, event, odometer, thumbs: [], simulated: true, example: false }];
+      [{ at: t.at, to, source, event, place_short: placeOf(c.w, t.place_id), odometer, thumbs: [],
+        simulated: true, example: false }];
     const label = placeById(c.w, t.place_id)?.label ?? null;
     switch (t.kind) {
       case 'IN': return row('RUPTELA', `${label ?? NONE} IN`);
@@ -685,12 +692,12 @@ function exampleView(c: Ctx, day: TruckDay, truck: Truck, f: ExampleDayFigures):
   if (trail !== null) summary.documents.lines.push(trail);
   const onApp = driver?.mode === 'APP';
   const base = baseId(c.w);
-  const row = (at: Instant, source: SourceKey, event: string): TimelineRow =>
-    ({ at, to: null, source, event, odometer: null, thumbs: [], simulated: false, example: true });
+  const row = (at: Instant, source: SourceKey, event: string, place: string | null = null): TimelineRow =>
+    ({ at, to: null, source, event, place_short: place, odometer: null, thumbs: [], simulated: false, example: true });
   const call = f.call_entry === null ? []
     : [row(f.call_entry.at, 'FROM_CALL', `зі слів водія · дзвінок ${fmtTime(f.call_entry.at)} · ${f.call_entry.by_short}`)];
-  const rows = onApp ? [row(f.from, 'DRIVER', `Зміну почато · ${placeName(c.w, base)}`), ...call,
-    row(f.to, 'DRIVER', `Зміну закінчено · ${placeName(c.w, base)}`)] : call;
+  const rows = onApp ? [row(f.from, 'DRIVER', `Зміну почато · ${placeName(c.w, base)}`, placeName(c.w, base)), ...call,
+    row(f.to, 'DRIVER', `Зміну закінчено · ${placeName(c.w, base)}`, placeName(c.w, base))] : call;
   const open = openCount(c, day.id);
   const totals = { km: f.km, loaded: f.km_loaded, empty, tkm: null };
   return {

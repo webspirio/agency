@@ -74,6 +74,18 @@ describe('seed (§7.6)', () => {
     expect(placeOf(w, 'LAN')).toMatchObject({ no_photos: true, edrpou: '03767412', curfew: { from: '21:00', to: '06:00' }, label_gen: 'Лану' });
   });
 
+  it('authors every case a sentence needs, rather than deriving one from an ending', () => {
+    // «Завантаження у Вільнянську не записано» (§3.3 D-04) and «+23 км від «Лану»» (§3.3 D-09) are composed on the
+    // phone. No rule over endings gets «Вільнянську» and «Павлограді» both right from the nominative, so the
+    // locative is seeded beside the genitive and the page reads it.
+    expect(w.places.map((p) => [p.code, p.town_loc])).toEqual([
+      ['BASE', 'Запоріжжі'], ['DK', 'Вільнянську'], ['DK2', 'Вільнянську'], ['OKKO', 'Вільнянську'],
+      ['WOG', 'Синельниковому'], ['ZLAGODA', 'Синельниковому'], ['LAN', 'Балабиному'], ['DOBROBUT', 'Павлограді'],
+      ['BERIZKA', 'Підгородному'], ['HAVAN', 'Роздорах'], ['STEP', 'Славгороді'], ['KOLOS', 'Кушугумі'],
+      ['LUBOML', 'Любомлі'],
+    ]);
+  });
+
   it('carries Friday 18.09 as ПЛ-000398, confirmed, printed and signed', () => {
     expect(dayOf(w, 'АР 1234 ВС', '2026-09-18')).toMatchObject({ status: 'CONFIRMED', waybill_no: 'ПЛ-000398',
       confirmed_at: kyiv('2026-09-18 17:05'), signed_at: kyiv('2026-09-18 17:10') });

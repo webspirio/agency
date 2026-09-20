@@ -166,41 +166,43 @@ const DEVICES: readonly DeviceSeed[] = [
 
 /* ── places and the planned km of the library ──────────────────────────── */
 
-const place = (p: Pick<Place, 'code' | 'name' | 'short' | 'label' | 'label_gen' | 'town' | 'town_gen' | 'kind'>
+const place = (p: Pick<Place, 'code' | 'name' | 'short' | 'label' | 'label_gen' | 'town' | 'town_gen'
+  | 'town_loc' | 'kind'>
   & Partial<Omit<Place, 'id'>>): Omit<Place, 'id'> => ({ edrpou: null, no_photos: false, weigh_ticket: false,
   curfew: null, radius_m: 300, near_code: null, near_km: null, ...p });
 const PLACES: readonly Omit<Place, 'id'>[] = [
   place({ code: 'BASE', name: 'База КТЛ, Запоріжжя', short: 'База', label: 'База', label_gen: 'Бази', town: 'Запоріжжя',
-    town_gen: 'Запоріжжя', kind: 'BASE', curfew: { from: '00:00', to: '05:00' }, radius_m: 250 }),
+    town_gen: 'Запоріжжя', town_loc: 'Запоріжжі', kind: 'BASE', curfew: { from: '00:00', to: '05:00' },
+    radius_m: 250 }),
   place({ code: 'DK', name: 'Комбікормовий завод «Дніпро-Корм», Вільнянськ', short: 'Дніпро-Корм, Вільнянськ',
-    label: 'Дніпро-Корм', label_gen: 'Дніпро-Корму', town: 'Вільнянськ', town_gen: 'Вільнянська', kind: 'LOADING',
+    label: 'Дніпро-Корм', label_gen: 'Дніпро-Корму', town: 'Вільнянськ', town_gen: 'Вільнянська', town_loc: 'Вільнянську', kind: 'LOADING',
     edrpou: '31785062', radius_m: 400 }),
   place({ code: 'DK2', name: '«Дніпро-Корм», склад №2', short: 'Дніпро-Корм, склад №2', label: 'Дніпро-Корм, склад №2',
-    label_gen: 'Дніпро-Корму, склад №2', town: 'Вільнянськ', town_gen: 'Вільнянська', kind: 'LOADING',
+    label_gen: 'Дніпро-Корму, склад №2', town: 'Вільнянськ', town_gen: 'Вільнянська', town_loc: 'Вільнянську', kind: 'LOADING',
     edrpou: '31785062', near_code: 'DK', near_km: 2 }),
   place({ code: 'OKKO', name: 'АЗС ОККО, траса Н-08, Вільнянськ', short: 'ОККО Н-08', label: 'ОККО Н-08',
-    label_gen: 'ОККО Н-08', town: 'Вільнянськ', town_gen: 'Вільнянська', kind: 'REFUEL', radius_m: 150 }),
+    label_gen: 'ОККО Н-08', town: 'Вільнянськ', town_gen: 'Вільнянська', town_loc: 'Вільнянську', kind: 'REFUEL', radius_m: 150 }),
   place({ code: 'WOG', name: 'АЗС WOG, Синельникове', short: 'WOG Синельникове', label: 'WOG Синельникове',
-    label_gen: 'WOG Синельникове', town: 'Синельникове', town_gen: 'Синельникове', kind: 'REFUEL', radius_m: 150 }),
+    label_gen: 'WOG Синельникове', town: 'Синельникове', town_gen: 'Синельникове', town_loc: 'Синельниковому', kind: 'REFUEL', radius_m: 150 }),
   place({ code: 'ZLAGODA', name: 'Птахофабрика «Злагода», Синельникове', short: 'Злагода, Синельникове', label: 'Злагода',
-    label_gen: 'Злагоди', town: 'Синельникове', town_gen: 'Синельникове', kind: 'DROP', edrpou: '40217710', radius_m: 400 }),
+    label_gen: 'Злагоди', town: 'Синельникове', town_gen: 'Синельникове', town_loc: 'Синельниковому', kind: 'DROP', edrpou: '40217710', radius_m: 400 }),
   place({ code: 'LAN', name: 'Свинокомплекс «Лан», с. Балабине', short: 'Лан, Балабине', label: 'Лан', label_gen: 'Лану',
-    town: 'Балабине', town_gen: 'Балабиного', kind: 'DROP', edrpou: '03767412', no_photos: true,
+    town: 'Балабине', town_gen: 'Балабиного', town_loc: 'Балабиному', kind: 'DROP', edrpou: '03767412', no_photos: true,
     curfew: { from: '21:00', to: '06:00' }, radius_m: 500 }),
   place({ code: 'DOBROBUT', name: 'Свиноферма «Добробут», Павлоград', short: 'Добробут, Павлоград', label: 'Добробут',
-    label_gen: 'Добробуту', town: 'Павлоград', town_gen: 'Павлограда', kind: 'DROP', edrpou: '35120846', radius_m: 400 }),
+    label_gen: 'Добробуту', town: 'Павлоград', town_gen: 'Павлограда', town_loc: 'Павлограді', kind: 'DROP', edrpou: '35120846', radius_m: 400 }),
   place({ code: 'BERIZKA', name: 'Молочна ферма «Берізка», Підгородне', short: 'Берізка, Підгородне', label: 'Берізка',
-    label_gen: 'Берізки', town: 'Підгородне', town_gen: 'Підгородного', kind: 'DROP', edrpou: '34097215' }),
+    label_gen: 'Берізки', town: 'Підгородне', town_gen: 'Підгородного', town_loc: 'Підгородному', kind: 'DROP', edrpou: '34097215' }),
   place({ code: 'HAVAN', name: 'Елеватор «Хлібна Гавань», с. Роздори', short: 'Хлібна Гавань, Роздори',
-    label: 'Хлібна Гавань', label_gen: 'Хлібної Гавані', town: 'Роздори', town_gen: 'Роздорів', kind: 'DROP',
+    label: 'Хлібна Гавань', label_gen: 'Хлібної Гавані', town: 'Роздори', town_gen: 'Роздорів', town_loc: 'Роздорах', kind: 'DROP',
     weigh_ticket: true, radius_m: 400 }),
   place({ code: 'STEP', name: 'ФГ «Степ», тік біля смт Славгород', short: 'ФГ «Степ», Славгород', label: 'ФГ «Степ»',
-    label_gen: 'ФГ «Степ»', town: 'Славгород', town_gen: 'Славгорода', kind: 'LOADING' }),
+    label_gen: 'ФГ «Степ»', town: 'Славгород', town_gen: 'Славгорода', town_loc: 'Славгороді', kind: 'LOADING' }),
   place({ code: 'KOLOS', name: 'Агрофірма «Колос», с. Кушугум', short: 'Колос, Кушугум', label: 'Колос',
-    label_gen: 'Колосу', town: 'Кушугум', town_gen: 'Кушугума', kind: 'DROP', curfew: { from: '21:00', to: '06:00' },
+    label_gen: 'Колосу', town: 'Кушугум', town_gen: 'Кушугума', town_loc: 'Кушугумі', kind: 'DROP', curfew: { from: '21:00', to: '06:00' },
     radius_m: 400 }),
   place({ code: 'LUBOML', name: 'Стоянка очікування біля Любомля', short: 'Стоянка біля Любомля',
-    label: 'Стоянка біля Любомля', label_gen: 'Стоянки біля Любомля', town: 'Любомль', town_gen: 'Любомля',
+    label: 'Стоянка біля Любомля', label_gen: 'Стоянки біля Любомля', town: 'Любомль', town_gen: 'Любомля', town_loc: 'Любомлі',
     kind: 'BORDER', radius_m: 800 }),
 ];
 /** The library's planned km. ZLAGODA → BASE exists so Григорій's return has a plan km. */

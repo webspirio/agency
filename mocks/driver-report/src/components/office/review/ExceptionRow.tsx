@@ -15,6 +15,15 @@
  *  §8.3 C-02/C-03 #3 asks that the item be impossible to close silently. Only one of the two is open at a time, so
  *  the chips are never ambiguous about which question they answer.
  *
+ *  A RESOLVE ITEM'S PRIMARY OPENS THAT SAME DISCLOSURE, and `onPrimary` is never called for it. C-02's anatomy gives
+ *  every row the ghost «З'ясовано ▾» and C-03 then makes «З'ясовано» the PRIMARY of four codes (`TTN_NO_MASS`,
+ *  `PAYMENT_METHOD_PENDING`, `PLACE_UNKNOWN`, `PLAN_MISMATCH_*`) — two controls, one verb, one question. §8.3
+ *  C-02/C-03 #3 names «З'ясовано» WITHOUT the arrow and asks that it cannot complete without a reason chip, so the
+ *  primary ASKS rather than answers: a one-tap primary would be the single control on this row that closes an item
+ *  under a reason the operator never chose. The two names still differ, so no query is ambiguous about which one it
+ *  pressed. (The Wave 2 round gate left this reading open deliberately; the integrator took it, and `LaneList` —
+ *  the only page that mounts this kit — no longer has a RESOLVE branch to disagree with.)
+ *
  *  A resolved item renders MUTED and WITHOUT ACTIONS. It is not removed: «З'ясувала Н. Шевчук 10:14» under the same
  *  title is what tells the operator the item they just closed is the one that vanished from the count — and a
  *  correction says more, «~~318 405~~ → 381 405 · одруківка · Н. Шевчук 21.09 16:05», because the ORIGINAL stays
@@ -100,6 +109,8 @@ export function ExceptionRow({ item, onPrimary, onTake, onResolve, onAcceptAsIs,
   const tone: Tone = done === null ? item.tone : 'muted';
   const Icon = ICON[item.code];
   const acceptable = onAcceptAsIs !== undefined && item.primary_action === 'FIX';
+  const asks = item.primary_action === 'RESOLVE';
+  const toggleResolve = (): void => setAsking(asking === 'resolve' ? null : 'resolve');
 
   return (
     <article
@@ -133,7 +144,13 @@ export function ExceptionRow({ item, onPrimary, onTake, onResolve, onAcceptAsIs,
         ) : (
           <>
             <div className="mt-[2px] flex flex-wrap items-center gap-[8px]">
-              <Button type="button" variant="outline" onClick={onPrimary} className="h-[36px] text-[14px]">
+              <Button
+                type="button"
+                variant="outline"
+                aria-expanded={asks ? asking === 'resolve' : undefined}
+                onClick={asks ? toggleResolve : onPrimary}
+                className="h-[36px] text-[14px]"
+              >
                 {VERB[item.primary_action]}
               </Button>
               {item.taken_by === null
@@ -147,7 +164,7 @@ export function ExceptionRow({ item, onPrimary, onTake, onResolve, onAcceptAsIs,
                 type="button"
                 variant="ghost"
                 aria-expanded={asking === 'resolve'}
-                onClick={() => setAsking(asking === 'resolve' ? null : 'resolve')}
+                onClick={toggleResolve}
                 className="h-[36px] text-[14px]"
               >
                 {"З'ясовано ▾"}

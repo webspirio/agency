@@ -6,7 +6,13 @@
  *  a `SimChip` inside its own sentence without the copy being assembled by string concatenation.
  *
  *  `back` is the deep-link return path («← Перевірка», §2.4): a `Link`, so it keeps the hash router's history
- *  instead of reloading the app, and the office can walk back out of a row it opened from a lane. */
+ *  instead of reloading the app, and the office can walk back out of a row it opened from a lane.
+ *
+ *  `title` is a `ReactNode` and the `<h1>` stays HERE, because §4.2 C-13 makes the PLATE the heading — «← Машини»,
+ *  then `Plate` lg, then the truck line. As a `string` the only way to draw that page was to mirror this header's
+ *  markup inside it, and a second copy of the console's page header living in a page is exactly the drift this
+ *  component exists to prevent. `Plate` carries `role="img"` with «Номер АР 8150 КС», so a heading made of one still
+ *  reads out as words (§8.5). */
 import type { JSX, ReactNode } from 'react';
 import { Link } from 'react-router';
 
@@ -16,7 +22,7 @@ export function PageHead({
   actions,
   back,
 }: {
-  title: string;
+  title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   back?: { label: string; to: string };

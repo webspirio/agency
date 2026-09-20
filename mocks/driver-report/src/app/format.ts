@@ -51,6 +51,15 @@ export const fmtDec = (v: string | null): string => (v === null ? '—' : decima
 export const fmtRate = fmtDec;
 /** «12,000» · «24,4» | «—». */
 export const fmtMass = fmtDec;
+/** A stored tonnage as a WAYBILL prints it: «24.400» → «24,4», «12.000» → «12» | «—» (§4.2 C-08).
+ *
+ *  The scale belongs to the store and the tonnage to the document, so the trailing zeros come off HERE and not in a
+ *  page: `LegRow.mass` is a Dec3, and every other number a screen shows arrives finished. String operations only —
+ *  no coercion, no arithmetic — which is what keeps this legal in the layer that renders it. */
+export function fmtTonnes(v: string | null): string {
+  if (v === null) return '—';
+  return fmtDec(v.includes('.') ? v.replace(/0+$/, '').replace(/\.$/, '') : v);
+}
 /** «−0,6 %» · «+5,9 %» · «0,0 %» | «—». */
 export function fmtPct(v: string | null): string {
   if (v === null) return '—';

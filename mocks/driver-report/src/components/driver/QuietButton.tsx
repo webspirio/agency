@@ -3,7 +3,14 @@
  *  accent stays unique. `tone: 'hold'` is for a secondary that carries an ochre consequence; there is no reject tone
  *  on the driver route (§8.6 #4).
  *
- *  `half` puts two of them side by side in one ActionBar row («Мій день» / «Ще»). */
+ *  `half` puts two of them side by side in one ActionBar row («Мій день» / «Ще»).
+ *
+ *  A `half` BUTTON CARRIES `min-w-0`, and a full-width one does not, because only the first is a flex item. Measured
+ *  in a browser at the Wave 2 exit gate, at the stage's 360 px phone width (§5.2): `CameraScreen`'s row 2 put «Зніму
+ *  на стоянці» at 430 px against a clientWidth of 360 on both the loading and the unloading capture screens. A flex
+ *  item's `min-width` defaults to `auto`, which floors it at its min-content width, and the `truncate` on the label
+ *  below sets `white-space: nowrap` — so that floor is the whole untruncated label and the ellipsis never fires.
+ *  Same defect, same fix, as `Tile`; `chrome.test.tsx` holds both. */
 import type { JSX } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -21,7 +28,7 @@ export function QuietButton({ icon: Icon, label, onPress, tone = 'plain', dark =
       type="button"
       onClick={onPress}
       className={`flex min-h-tap items-center justify-center gap-2 rounded-[12px] px-3 ${
-        half ? 'w-full flex-1' : 'w-full'
+        half ? 'w-full min-w-0 flex-1' : 'w-full'
       } ${dark ? '' : 'tap-ring'}`}
       style={{
         color: ink,

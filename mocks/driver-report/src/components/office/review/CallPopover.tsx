@@ -7,21 +7,39 @@
  *  confused), and one button that puts it on the clipboard for a softphone.
  *
  *  «Скопійовано» stays until the popover closes rather than fading on a timer: a timer that outlives the popover is
- *  a state update into an unmounted tree, and the operator has already looked away by then anyway. */
+ *  a state update into an unmounted tree, and the operator has already looked away by then anyway.
+ *
+ *  TWO WAYS IN, because two callers need two different things. A card that owns its own «Подзвонити» passes it as
+ *  `children` and the popover belongs to that button (`BoardColumns`). A LANE ROW owns no button: `ExceptionRow`
+ *  renders the primary itself and calls `onPrimary()`, so the eleven CALL codes had nothing to hang a card on. With
+ *  `open` the popover is CONTROLLED and `children` becomes the ANCHOR it sits under — an element that positions it
+ *  and nothing else. That replaces the 1 px `aria-hidden` button `LaneList` rendered per row and clicked from
+ *  `onPrimary`: it worked and no query could reach it, but a state flag is the honest spelling. */
 import { useState, type JSX, type ReactNode } from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { Button } from '@agency/kit/button';
 import { copyToClipboard } from '@agency/kit/lib/clipboard';
 
-export function CallPopover({ phone, children }: { phone: string; children: ReactNode }): JSX.Element {
+export function CallPopover({ phone, children, open, onOpenChange }: {
+  phone: string;
+  /** The control that opens it — or, with `open`, the element it is anchored to. */
+  children: ReactNode;
+  open?: boolean;
+  onOpenChange?(open: boolean): void;
+}): JSX.Element {
   const [copied, setCopied] = useState(false);
+  const controlled = open !== undefined;
   return (
     <PopoverPrimitive.Root
+      open={open}
       onOpenChange={(o) => {
         if (!o) setCopied(false);
+        onOpenChange?.(o);
       }}
     >
-      <PopoverPrimitive.Trigger asChild>{children}</PopoverPrimitive.Trigger>
+      {controlled
+        ? <PopoverPrimitive.Anchor asChild>{children}</PopoverPrimitive.Anchor>
+        : <PopoverPrimitive.Trigger asChild>{children}</PopoverPrimitive.Trigger>}
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
           data-slot="popover-content"

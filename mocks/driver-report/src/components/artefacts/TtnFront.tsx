@@ -12,7 +12,7 @@
  */
 import type { JSX, ReactNode } from 'react';
 import type { TtnPaper, TtnPrint } from './catalogue';
-import { SIGNATURE } from './catalogue';
+import { FIT_SCALE, SIGNATURE } from './catalogue';
 
 export const A4_W = 210;
 export const A4_H = 297;
@@ -44,10 +44,12 @@ export function Sheet({ w, h, label, thermal = false, children }: {
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
+      width={w * FIT_SCALE}
+      height={h * FIT_SCALE}
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={label}
-      className="block h-full max-h-full w-auto max-w-full select-none"
+      className="block h-auto w-auto max-h-full max-w-full select-none"
     >
       <rect width={w} height={h} style={{ fill: thermal ? 'var(--doc-thermal)' : 'var(--doc-paper)' }} />
       {children}

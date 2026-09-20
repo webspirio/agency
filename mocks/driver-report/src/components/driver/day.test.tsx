@@ -38,8 +38,8 @@ describe('the day as a road (§3.3 D-02, §6.1, §8.2 D-02 #5)', () => {
   it('times the stop from the server clock and opens «Що зараз?» from the status line', async () => {
     server.clock.set(demo('07:48'));
     const onStatus = vi.fn();
-    render(<StopCard open={{ stop: { stop_id: 's1', plan_key: '3312-1', seq: 1, kind: 'LOADING', place_id: 'p', label: 'Дніпро-Корм', short: 'Дніпро-Корм, Вільнянськ',
-      town: 'Вільнянськ', ttn_expected: 2, ttn_nos: [], drop_index: null, drop_count: null, compartments: null, mass_t: null, planned_km: null, no_photos: false,
+    render(<StopCard open={{ stop: { stop_id: 's1', plan_key: '3312-1', seq: 1, kind: 'LOADING', place_id: 'p', label: 'Дніпро-Корм', label_gen: 'Дніпро-Корму',
+      short: 'Дніпро-Корм, Вільнянськ', town: 'Вільнянськ', town_loc: 'Вільнянську', ttn_expected: 2, ttn_nos: [], drop_index: null, drop_count: null, compartments: null, mass_t: null, planned_km: null, no_photos: false,
       weigh_ticket: false, accepted_at: null }, arrived_at: demo('06:10'), auto: false, segment: { chip: 'QUEUE', since: demo('06:10') }, alert: null }}
       now={demo('07:48')} rc={false} onStatus={onStatus} />);
     expect(screen.getByText('Завантаження — «Дніпро-Корм»')).toBeInTheDocument();
@@ -49,8 +49,8 @@ describe('the day as a road (§3.3 D-02, §6.1, §8.2 D-02 #5)', () => {
     expect(onStatus).toHaveBeenCalledOnce();
   });
   it('waits for instructions with the call button after «Не приймають» (D-11)', () => {
-    render(<StopCard open={{ stop: { stop_id: 's2', plan_key: '3312-2', seq: 2, kind: 'DROP', place_id: 'p', label: 'Злагода', short: 'Злагода, Синельникове',
-      town: 'Синельникове', ttn_expected: 0, ttn_nos: [], drop_index: 1, drop_count: 2, compartments: null, mass_t: null, planned_km: null, no_photos: false,
+    render(<StopCard open={{ stop: { stop_id: 's2', plan_key: '3312-2', seq: 2, kind: 'DROP', place_id: 'p', label: 'Злагода', label_gen: 'Злагоди',
+      short: 'Злагода, Синельникове', town: 'Синельникове', town_loc: 'Синельниковому', ttn_expected: 0, ttn_nos: [], drop_index: 1, drop_count: 2, compartments: null, mass_t: null, planned_km: null, no_photos: false,
       weigh_ticket: false, accepted_at: null }, arrived_at: demo('10:05'), auto: false, segment: { chip: 'WAIT_ORDERS', since: demo('10:40') }, alert: null }}
       now={demo('10:50')} rc={false} onStatus={() => {}} onCall={{ name: 'Ірина Коваленко', role_label: 'диспетчер', until: '20:00', phone: '+380 67 214 55 08' }} />);
     expect(screen.getByRole('button', { name: /Чекаю вказівки · з 10:40/ })).toBeInTheDocument();

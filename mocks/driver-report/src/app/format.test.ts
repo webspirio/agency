@@ -1,6 +1,6 @@
 // mocks/driver-report/src/app/format.test.ts
 import { describe, expect, it } from 'vitest';
-import { fmtAgo, fmtBytes, fmtCode, fmtDate, fmtDateTime, fmtDay, fmtDec, fmtDur, fmtKm, fmtMass, fmtPct, fmtRate,
+import { fmtAgo, fmtBytes, fmtCode, fmtDate, fmtDateTime, fmtDay, fmtDec, fmtDur, fmtKm, fmtMass, fmtPct, fmtRate, fmtTonnes,
   fmtTime, fmtTimer, fmtWhen, plural, pluralN } from './format';
 
 const NB = ' ';
@@ -40,6 +40,12 @@ describe('format (§6.12, §8.6 #3)', () => {
     expect([fmtRate('31.8'), fmtPct('-0.6'), fmtPct('5.9'), fmtPct('0.0')])
       .toEqual(['31,8', `−0,6${NB}%`, `+5,9${NB}%`, `0,0${NB}%`]);
     expect([fmtMass('12.000'), fmtMass('1439.6'), fmtMass(null)]).toEqual(['12,000', `1${NB}439,6`, '—']);
+  });
+  // A waybill's legs table reads «24,4», never «24,400»: the scale belongs to the store, the tonnage to the
+  // document (§4.2 C-08). Trailing zeros only — «12,000» is «12», and a whole number keeps no comma.
+  it('trims a stored tonnage to what a waybill prints', () => {
+    expect([fmtTonnes('24.400'), fmtTonnes('12.000'), fmtTonnes('12'), fmtTonnes('1439.60'), fmtTonnes(null)])
+      .toEqual(['24,4', '12', '12', `1${NB}439,6`, '—']);
   });
   it('writes durations, timers and ages', () => {
     expect([fmtDur(642), fmtDur(18), fmtDur(120), fmtDur(0)]).toEqual(['10 год 42 хв', '18 хв', '2 год', '0 хв']);

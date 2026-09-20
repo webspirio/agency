@@ -12,6 +12,7 @@
  * with `Math.round`, never coerced: no `Number()`, no `+x`, no `.toFixed` anywhere in this kit.
  */
 import { useId, type JSX } from 'react';
+import { FIT_SCALE } from './catalogue';
 
 const W = 220;
 const H = 100;
@@ -105,10 +106,12 @@ export function ClusterArt({ digits, glare = false, dark = false, time = CLOCK }
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
+      width={W * FIT_SCALE}
+      height={H * FIT_SCALE}
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={`Панель приладів, одометр ${digits}`}
-      className="block h-full max-h-full w-auto max-w-full select-none"
+      className="block h-auto w-auto max-h-full max-w-full select-none"
     >
       <rect width={W} height={H} rx={9} style={{ fill: 'var(--cluster-bg)' }} />
       <rect x={2.5} y={2.5} width={W - 5} height={H - 5} rx={7} fill="none" stroke="rgb(255 255 255 / 0.07)"

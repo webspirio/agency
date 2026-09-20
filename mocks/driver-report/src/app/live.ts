@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { server, type ChangedEvent, type Server, type ServerEvent } from '../api/server';
-import type { Instant } from '../domain/types';
+import type { Instant, Scope } from '../domain/types';
 import { lt } from '../domain/num';
 
 /** How long a changed truck-day stays highlighted on the console, in wall-clock milliseconds (§5.9). */
@@ -80,6 +80,16 @@ export function useServerValue<T>(read: (s: Server) => T): T {
   useEffect(() => untilPagehide(server.subscribe(() => bump())), []);
   return read(server);
 }
+
+/** WHICH PARC IS ON SCREEN — read by every console page, written by two of them.
+ *
+ *  It lives on the server (`ui.scope`, D13) rather than in a page: the stage's «Такт» sets it (§5.6) and the console
+ *  header's switch writes it back, so the phone pane, the console pane and the presenter bar can never disagree
+ *  about which parc they are showing. It is a hook here rather than the same `useServerValue` line copied into ten
+ *  pages, and the write sits beside the read it answers (W2-07's integrator note, applied at the round gate). */
+export const useScope = (): Scope => useServerValue((s) => s.ui.scope);
+/** Not a hook: one call, and it belongs next to the read. */
+export const setScope = (next: Scope): void => server.setUi({ scope: next });
 
 type Highlight = { at: Instant; wall: number };
 

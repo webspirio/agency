@@ -121,7 +121,8 @@ export function currentTrip(w: World, trips: readonly Trip[], recs: readonly Dri
 function stopView(w: World, s: PlannedStop, seq: number, plannedKmTo: Km | null, now: Instant): PlannedStopView {
   const p = placeOf(w, s.place_id);
   return { stop_id: s.id, plan_key: s.plan_key, seq, kind: s.kind, place_id: s.place_id, label: p?.label ?? NEW_PLACE,
-    short: p?.short ?? NEW_PLACE, town: p?.town ?? '', ttn_expected: s.ttn_expected, ttn_nos: [...s.ttn_nos],
+    label_gen: p?.label_gen ?? NEW_PLACE, short: p?.short ?? NEW_PLACE, town: p?.town ?? '', town_loc: p?.town_loc ?? '',
+    ttn_expected: s.ttn_expected, ttn_nos: [...s.ttn_nos],
     drop_index: s.drop_index, drop_count: s.drop_count, compartments: s.compartments, mass_t: s.mass_t,
     planned_km: plannedKmTo, no_photos: p?.no_photos ?? false, weigh_ticket: p?.weigh_ticket ?? false,
     accepted_at: s.accepted_at !== null && atOrBefore(s.accepted_at, now) ? s.accepted_at : null };
@@ -248,9 +249,11 @@ function autoEvents(w: World, truckId: string, date: BusinessDate, stops: readon
   });
 }
 
-const NO_REFERENCE: OdometerRefView = { value: null, at: null, source: null, basis: 'NONE', place_short: null, kind: 'NONE' };
+const NO_REFERENCE: OdometerRefView = { value: null, at: null, source: null, basis: 'NONE', place_short: null,
+  place_gen: null, kind: 'NONE' };
 const BASIS: Record<Exclude<OdometerRefView['kind'], 'NONE'>, OdometerRefView['basis']> = {
-  SHIFT_END_AT_BASE: 'LAST_AT_BASE', MECHANIC: 'MECHANIC', CAN: 'CAN_DELTA', POINT: 'PLANNED_KM' };
+  SHIFT_END_AT_BASE: 'LAST_AT_BASE', MECHANIC: 'MECHANIC', CAN: 'CAN_DELTA', SHIFT_START: 'PLANNED_KM',
+  POINT: 'PLANNED_KM' };
 /** The last trusted reading of the truck at `now` (a flagged, unresolved one is skipped, §7.3) and what it is: a shift
  *  end at the base, the mechanic's reading, a CAN reading, or any other point. */
 function odometerRef(w: World, truckId: string, now: Instant): OdometerRefView {
@@ -258,10 +261,14 @@ function odometerRef(w: World, truckId: string, now: Instant): OdometerRefView {
   const last = lastTrustedOf(points, addSeconds(now, 1));
   if (last === null) return NO_REFERENCE;
   const point = points.filter((p) => !p.flagged && p.value === last.value && p.at === last.at).at(-1) ?? null;
-  const kind: Exclude<OdometerRefView['kind'], 'NONE'> = last.kind === 'MECHANIC' || last.kind === 'SHIFT_END_AT_BASE'
+  // SHIFT_START is carried through rather than folded into POINT: it is the one kind `expectedOdometer` words
+  // differently («+36 км від виїзду»), and two pages were rebuilding it from `shift.started_at` to get it back.
+  const kind: Exclude<OdometerRefView['kind'], 'NONE'> = last.kind === 'MECHANIC'
+    || last.kind === 'SHIFT_END_AT_BASE' || last.kind === 'SHIFT_START'
     ? last.kind : point?.source === 'CAN' ? 'CAN' : 'POINT';
+  const place = placeOf(w, point?.place_id ?? null);
   return { value: last.value, at: last.at, source: point?.source ?? null, basis: BASIS[kind],
-    place_short: placeOf(w, point?.place_id ?? null)?.short ?? null, kind };
+    place_short: place?.short ?? null, place_gen: place?.label_gen ?? null, kind };
 }
 /** The newest CAN kilometre count the truck reported by `now` (R+C only). */
 function canKm(w: World, truck: Truck, now: Instant): Km | null {
@@ -323,7 +330,8 @@ export function todayView(w: World, deviceId: string, now: Instant, sensors: { s
   const revoked = device?.revoked_at != null && atOrBefore(device.revoked_at, now);
   const on_call = onCallAt(w, now);
   if (device === null || driver === null) {
-    return { server_time: now, device: { id: deviceId, bound: false, revoked }, driver: null, truck: null, trailer: null,
+    return { server_time: now, device: { id: deviceId, bound: false, revoked, os_label: device?.os_label ?? null },
+      driver: null, truck: null, trailer: null,
       plan: null, shift: null, records: [], auto_events: [], odometer_ref: NO_REFERENCE, requests: [], requests_done_today: [],
       corrections_to_ack: [], paper: { owed: [], receipts: [] }, on_call, last_contact_at: device?.last_contact_at ?? null,
       first_time: { examples_seen: [...(device?.seen_examples ?? [])], office_sees_read: device?.office_sees_read ?? false,
@@ -365,7 +373,7 @@ export function todayView(w: World, deviceId: string, now: Instant, sensors: { s
 
   return {
     server_time: now,
-    device: { id: deviceId, bound: device.bound_at !== null, revoked },
+    device: { id: deviceId, bound: device.bound_at !== null, revoked, os_label: device.os_label },
     driver: { id: driver.id, name: displayName(driver), short_name: driver.short_name },
     truck: truck === null ? null : { id: truck.id, plate: truck.plate, model: truck.model, telematics: truck.telematics,
       has_can: truck.has_can, speed_kmh: sensors.speed_kmh, gnss: sensors.gps_lost ? 'SUSPECT' : 'OK', can_km: canKm(w, truck, now) },

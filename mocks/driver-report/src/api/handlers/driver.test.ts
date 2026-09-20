@@ -60,6 +60,26 @@ describe('today (§7.4 DriverToday, §3.2 inputs)', () => {
     expect(driverHandlers(night).getToday(ctxFor(night, PAVLO_ACTOR)).on_call)
       .toMatchObject({ name: 'Дмитро Савчук', role_label: 'черговий до 06:00', until: '06:00' });
   });
+  it('names every place in the case the sentence needs it, and keeps a shift start a shift start', () => {
+    // Three facts the phone cannot recover once they are dropped, each of which a page was inventing instead: the
+    // genitive of the place the reference reading was taken at («+23 км від «Лану»», §3.3 D-09), the locative of a
+    // stop's town («Завантаження у Вільнянську не записано», §3.3 D-04) and the genitive of the stop itself.
+    const s = testServer('05:14');
+    const before = driverHandlers(s).getToday(ctxFor(s, PAVLO_ACTOR));
+    expect(before.odometer_ref).toMatchObject({ place_short: 'База', place_gen: 'Бази', kind: 'SHIFT_END_AT_BASE' });
+    expect(before.plan?.stops.map((x) => [x.short, x.label_gen, x.town_loc])).toEqual([
+      ['Дніпро-Корм, Вільнянськ', 'Дніпро-Корму', 'Вільнянську'],
+      ['Злагода, Синельникове', 'Злагоди', 'Синельниковому'],
+      ['Лан, Балабине', 'Лану', 'Балабиному'],
+      ['База', 'Бази', 'Запоріжжі'],
+    ]);
+    // `lastTrustedOf` tells a SHIFT_START from any other point — that is what words «+36 км від виїзду» — and the
+    // view flattened it to POINT, so two pages rebuilt the distinction from `shift.started_at` themselves.
+    replayDriver(s, PAVLO_ACTOR.id, '05:25');
+    s.clock.set(demo('05:30'));
+    expect(driverHandlers(s).getToday(ctxFor(s, PAVLO_ACTOR)).odometer_ref)
+      .toMatchObject({ value: 412355, kind: 'SHIFT_START', basis: 'PLANNED_KM' });
+  });
   it('gives Григорій the mechanic’s reading', () => {
     const s = testServer('05:14');
     const d = s.stores.devices.get('device-000003')!;

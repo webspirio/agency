@@ -77,6 +77,22 @@ export type TicketPaper = { label: string; title: string; owner: string; at: str
 export type ActPaper = { label: string; title: string; at: string; place: string;
   rows: readonly (readonly [string, string])[]; note: string; hand: string };
 
+/**
+ * How much bigger than its `viewBox` a drawing declares itself, so that CSS always has to SHRINK it to fit.
+ *
+ * Every drawing sizes itself by the contain rule — `w-auto h-auto max-w-full max-h-full` — which works because an
+ * `<svg>` with a `viewBox` is a replaced element, and CSS's min/max constraint table shrinks a replaced element to
+ * fit while preserving its intrinsic ratio. That is what makes the box HUG the paper in a wide box and a tall one
+ * alike, rather than letterboxing it.
+ *
+ * But the rule needs an intrinsic SIZE to shrink from, and a `viewBox` supplies only a ratio. With `width`/`height`
+ * absent, `w-auto h-auto` falls back to CSS's 300×150 default object size and every drawing renders postage-stamp
+ * sized in a viewfinder. So each declares `viewBox × FIT_SCALE`. The number has one job: be larger than any box this
+ * app can hand a drawing, because the constraint only ever scales DOWN. The widest is the office lightbox; 40× puts
+ * the smallest drawing (the 80-unit receipt) at 3 200 px, measured to still scale correctly in a 2 400 px box.
+ */
+export const FIT_SCALE = 40;
+
 /** Ballpoint paths, drawn once and reused: a signature is a shape, not a character. */
 export const SIGNATURE = {
   driver: 'M0 0c2.4-4.4 4.1-1.3 5.6 1 1.1 1.7 2.2 1.5 3.2-1.2 1.2-3.3 2.6-3.1 3.9.4 1 2 2.1 2 3.6-.3 1.3-2.2 2.8-2 4.5.8',

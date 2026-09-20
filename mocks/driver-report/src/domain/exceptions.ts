@@ -117,7 +117,8 @@ function context(w: World, scope: Scope, now: Instant): Ctx {
 /** One derived item: lane, group, tone and primary from the code; meta, age, phone and the retake line from the rows. */
 function mk(c: Ctx, p: { code: ExceptionCode; ref: string; title: string; opened_at: Instant; truck_id: string;
   driver_id: string | null; place_id: string | null; truck_day_id: string | null; stop_id?: string | null;
-  record_key?: string | null; page_key?: string | null; evidence?: ExceptionEvidence | null }): Raw {
+  record_key?: string | null; page_key?: string | null; evidence?: ExceptionEvidence | null;
+  values?: ExceptionItem['values'] }): Raw {
   const shape = SHAPE[p.code];
   const truck = c.w.trucks.find((t) => t.id === p.truck_id) ?? null;
   const driver = c.w.drivers.find((d) => d.id === p.driver_id) ?? null;
@@ -127,8 +128,8 @@ function mk(c: Ctx, p: { code: ExceptionCode; ref: string; title: string; opened
     tone: shape.tone, title: p.title, meta: [truck?.plate ?? null, driver?.short_name ?? null, town].filter((x) => x !== null).join(' · '),
     opened_at: p.opened_at, age_min: Math.max(0, minutesBetween(p.opened_at, c.now)), evidence: p.evidence ?? null,
     primary_action: shape.primary, taken_by: null, resolved: null,
-    truck_day_id: p.truck_day_id, truck_plate: truck?.plate ?? '', target, request_line: requestLine(c, target),
-    phone: driver?.phone ?? null, example: false } };
+    truck_day_id: p.truck_day_id, truck_plate: truck?.plate ?? '', target, values: p.values ?? null,
+    request_line: requestLine(c, target), phone: driver?.phone ?? null, example: false } };
 }
 /** «запит надіслано 08:43» while the item's stop (or record) has an open retake request. */
 function requestLine(c: Ctx, target: ExceptionItem['target']): string | null {
@@ -143,12 +144,12 @@ const dayOf = (c: Ctx, r: DriverRecord): string | null =>
   r.truck_day_id ?? truckDayIdFor(c.w, r.truck_id, businessDate(r.occurred_at));
 /** A record's item, placed at its stop when it has one. */
 function fromRecord(c: Ctx, r: DriverRecord, code: ExceptionCode, title: string, extra: { ref?: string; opened_at?: Instant;
-  page_key?: string | null; evidence?: ExceptionEvidence | null } = {}): Raw {
+  page_key?: string | null; evidence?: ExceptionEvidence | null; values?: ExceptionItem['values'] } = {}): Raw {
   const f = c.facts(r.stop_id);
   return mk(c, { code, ref: extra.ref ?? r.key, title, opened_at: extra.opened_at ?? r.occurred_at, truck_id: r.truck_id,
     driver_id: r.driver_id, place_id: f?.place.id ?? r.place_id ?? (r.type === 'SHIFT_END' ? r.payload.place_id : null),
     truck_day_id: f?.truck_day_id ?? dayOf(c, r), stop_id: r.stop_id, record_key: r.key, page_key: extra.page_key ?? null,
-    evidence: extra.evidence ?? null });
+    evidence: extra.evidence ?? null, values: extra.values ?? null });
 }
 
 /* ── the predicates (§7.3 exceptions table) ─────────────────────────────── */
@@ -280,7 +281,11 @@ function odometerItem(c: Ctx, r: DriverRecord): Raw | null {
     odo.expected === null ? null : `очікували ~${fmtKm(odo.expected)}`,
     odo.choice === 'KEPT_AS_IS' ? 'водій залишив як є' : null].filter((x) => x !== null).join(' · ');
   return fromRecord(c, r, flag as ExceptionCode, `Одометр: ${MOMENT[r.type] ?? 'запис'} ${fmtTime(r.occurred_at)}`,
-    { page_key: odo?.page_key ?? null, evidence: { kind: 'line', text } });
+    // The SAME two numbers as the line above, as data: C-05 prefills from these, so editing the sentence cannot
+    // change what the correction dialog opens with (the round's integrator note).
+    { page_key: odo?.page_key ?? null, evidence: { kind: 'line', text },
+      values: odo === null ? null
+        : { current: odo.value === null ? '' : String(odo.value), expected: odo.expected === null ? null : String(odo.expected) } });
 }
 
 /** «ТТН 2 з 2, зворотний — відблиск · водій залишив так»: a low page nobody replaced and nobody accepted. */
@@ -406,7 +411,8 @@ function sampleItem(c: Ctx): Raw | null {
     group: 'ODOMETER', tone: 'hold', title: `Звірте з фото: ${k} з ${n} сьогодні`,
     meta: 'Пілот · показання одометра з фото за сьогодні', opened_at: from, age_min: Math.max(0, minutesBetween(from, c.now)),
     evidence: null, primary_action: 'SAMPLE', taken_by: null, resolved: null, truck_day_id: null, truck_plate: '',
-    target: { stop_id: null, record_key: null, page_key: null }, request_line: null, phone: null, example: false } };
+    target: { stop_id: null, record_key: null, page_key: null }, values: null, request_line: null, phone: null,
+    example: false } };
 }
 
 /** The fleet example's items (§7.6), as they stand once they happened. The fleet's sample names no truck's fault: the
@@ -420,8 +426,8 @@ function exampleItems(c: Ctx): Raw[] {
       evidence: x.evidence === null ? null : { kind: 'line', text: x.evidence }, primary_action: SHAPE[x.code].primary,
       taken_by: null, resolved: null, truck_day_id: sample ? null : truckDayIdFor(c.w, x.truck_id, c.today),
       truck_plate: sample ? '' : c.w.trucks.find((t) => t.id === x.truck_id)?.plate ?? '',
-      target: { stop_id: null, record_key: x.target_record_key, page_key: null }, request_line: null, phone: x.phone,
-      example: true } };
+      target: { stop_id: null, record_key: x.target_record_key, page_key: null }, values: null, request_line: null,
+      phone: x.phone, example: true } };
   });
 }
 

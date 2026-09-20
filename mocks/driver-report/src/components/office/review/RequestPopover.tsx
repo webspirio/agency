@@ -10,6 +10,11 @@
  *  дорозі» — and it is here rather than in the driver app because the person who needs convincing that the phone
  *  will not buzz at 90 km/h is the dispatcher about to press the button.
  *
+ *  THE TARGET IS `target_label`, NOT `caption`. §4.2 C-06 pins the line «ТТН 2 з 2, зворотний бік · Вільнянськ ·
+ *  знято 08:39» with a COMMA, and the same comma form is what the driver's own card reads («Диспетчер просить
+ *  перезняти: ТТН 2 з 2, зворотний бік — розмито»). `caption` is the photo panel's heading and carries a middot, so
+ *  composing the Reading from it showed the dispatcher a preview of a sentence the driver never sees.
+ *
  *  A SECOND request on the same record is refused, not queued: `REQUEST_ALREADY_OPEN` carries who asked, when, and
  *  where it got to, and `fillSays` renders those from the envelope's ctx — «Уже запитано: Н. Шевчук 08:43 · побачив
  *  08:43». Reading a ctx is not branching (HARD RULE 5); the branch is on `code` alone. */
@@ -78,10 +83,10 @@ export function RequestPopover({ page, context, children, onSent }: {
           className="card-ring z-50 flex w-[420px] max-w-[calc(100vw-32px)] flex-col gap-[12px] p-[16px]"
         >
           <p className="text-[15px] leading-[1.35] font-semibold text-ink">Попросити перезняти</p>
-          <p className="text-[13px] leading-[1.4] text-text-2">{`${page.caption} · ${context}`}</p>
+          <p className="text-[13px] leading-[1.4] text-text-2">{`${page.target_label} · ${context}`}</p>
           <ReasonChips options={REASONS} value={reasons} multi onChange={setReasons} />
           <p className="text-[13px] leading-[1.45] text-text-2">
-            {`Водій побачить на найближчій зупинці, не в дорозі: «Диспетчер просить перезняти: ${page.caption} — ${words === '' ? '…' : words}»`}
+            {`Водій побачить на найближчій зупинці, не в дорозі: «Диспетчер просить перезняти: ${page.target_label} — ${words === '' ? '…' : words}»`}
           </p>
           {refused === null ? null : <p className="text-[13px] leading-[1.45] text-reject">{refused}</p>}
           <div className="flex items-center justify-end gap-[8px]">

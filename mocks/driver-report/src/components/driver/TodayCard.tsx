@@ -47,6 +47,7 @@ function referenceLine(ref: OdometerRefView, plate: string | null, now: Instant)
       return { text: `Одометр ${km} · ${whenLine(at, now)} · база`, simulated: false };
     case 'CAN':
       return { text: `Одометр ${km} · CAN`, simulated: true };
+    case 'SHIFT_START':
     case 'POINT':
       return { text: ref.place_short === null ? `Одометр ${km} · ${whenLine(at, now)}`
         : `Одометр ${km} · ${whenLine(at, now)} · ${ref.place_short}`, simulated: false };

@@ -68,12 +68,16 @@ const DOUBLE_MS = 50;
 
 type Phase = 'PROMPT' | 'LIVE' | 'DENIED';
 
-export function CameraScreen({ title, hint, artefact, counter, row2, engine, drawn, lastThumb = null, onBack, onShot,
-  onRow2, banner }: {
+export function CameraScreen({ title, hint, artefact, counter, taken, row2, engine, drawn, lastThumb = null,
+  onBack, onShot, onRow2, banner }: {
   title: string;
   hint: string;
   artefact: ArtefactKind;
+  /** The FlowHeader count: the flow's own STEPS, the grid among them — «2 з 5» at a two-ТТН loading (§3.3 D-07). */
   counter?: { index: number; total: number };
+  /** The count beside the shutter: the PAGES of the set, «1 з 4» (§3.3 D-06's diagram). It is a different number
+   *  from `counter` and needs its own prop; without one it follows `counter` and reads «2 з 5 ✓» after one shot. */
+  taken?: { index: number; total: number };
   row2: Row2Kind[];
   engine: 'DRAWN' | 'INPAGE';
   drawn: DrawnSpec | null;
@@ -238,7 +242,7 @@ export function CameraScreen({ title, hint, artefact, counter, row2, engine, dra
             className="size-shutter rounded-full"
             style={{ background: '#ffffff', boxShadow: '0 0 0 3px var(--cam-bg), 0 0 0 6px #ffffff' }}
           />
-          {lastThumb === null || counter === undefined ? null : (
+          {lastThumb === null || (taken ?? counter) === undefined ? null : (
             <span className="absolute right-0 flex items-center gap-2">
               {/* «flies its thumbnail to the counter 220 ms ease-out» (§6.8): the kit's own enter keyframe at the
                   duration and curve the spec names, rather than a second keyframe in the frozen stylesheet. */}
@@ -249,7 +253,7 @@ export function CameraScreen({ title, hint, artefact, counter, row2, engine, dra
                   : <Artefact variant={lastThumb} size="thumb" />}
               </span>
               <span className="font-mono text-[0.875rem] font-medium" style={{ color: 'var(--cam-text-2)' }}>
-                {counter.index + 1} з {counter.total} ✓
+                {(taken ?? counter)!.index + 1} з {(taken ?? counter)!.total} ✓
               </span>
             </span>
           )}

@@ -4,8 +4,10 @@ vi.hoisted(() => { vi.stubEnv('VITE_MOCK', '1'); window.history.replaceState(nul
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
+import type { JSX } from 'react';
 import { demo } from '../../domain/clock';
-import { ConsoleHeader, ContactCell, DocDots, LiveLine, ResponsiveTable, saveFile, Sidebar, StatusPill, useConsoleMode } from './index';
+import { ConsoleHeader, ContactCell, DocDots, LiveLine, ResponsiveTable, saveFile, Sidebar, StatusPill, useConsoleMode,
+  type RTColumn } from './index';
 import { CheckCheck } from 'lucide-react';
 
 afterEach(cleanup);   // no globals here: Testing Library would not unmount by itself (src/app/speed.test.ts)
@@ -65,6 +67,25 @@ describe('the console shell (§4.1, §8.3 shell)', () => {
     expect(onOpen).toHaveBeenCalledWith(rows[0]);
     rerender(<ResponsiveTable columns={cols} rows={rows} rowKey={(r) => r.id} onOpen={onOpen} card={(r) => <p>card {r.plate}</p>} mode="mobile" />);
     expect(screen.getByText('card АР 1234 ВС')).toBeInTheDocument();
+  });
+  // A merged column loses its header, so the second line has to label itself — and WHICH of the two spellings is
+  // used is the table's decision. A page deciding it would be `hideAt` re-derived outside the table (W2-08's note).
+  it('labels a merged second line from the column, not from the page', () => {
+    type Row = { id: string; plate: string; norm: string };
+    const rows: Row[] = [{ id: 'a', plate: 'АР 8150 КС', norm: '32,0' }];
+    const cols: RTColumn<Row>[] = [
+      { id: 'fuel', header: 'Пальне', cell: (r) => r.plate },
+      { id: 'norm', header: 'Норма', hideAt: ['compact'], mergeInto: 'fuel',
+        cell: (r) => r.norm, mergedCell: (r) => `норма ${r.norm}` },
+    ];
+    const table = (mode: 'wide' | 'compact'): JSX.Element =>
+      <ResponsiveTable columns={cols} rows={rows} rowKey={(r) => r.id} card={(r) => <p>{r.plate}</p>} mode={mode} />;
+    const { rerender } = render(table('wide'));
+    expect(screen.getByRole('columnheader', { name: 'Норма' })).toBeInTheDocument();
+    expect(screen.getByText('32,0')).toBeInTheDocument();
+    rerender(table('compact'));
+    expect(screen.queryByRole('columnheader', { name: 'Норма' })).toBeNull();
+    expect(screen.getByText('норма 32,0')).toBeInTheDocument();
   });
   it('saves a file through a blob link, never a dialog', () => {
     URL.createObjectURL = vi.fn(() => 'blob:mock');

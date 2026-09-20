@@ -110,6 +110,28 @@ describe('Back inside a flow (§2.2, EC-159)', () => {
   });
 });
 
+/* The entry that opens a flow is remembered by its `location.key`, so a render React repeats finds its draft again
+ * instead of minting a second one. A memory router with ONE initial entry always keys that entry with the literal
+ * string 'default' — which is exactly what the page harness's `renderAt` builds — so every flow opened by a second
+ * `renderAt` in the same test FILE asks about the SAME key. When the phone was rebuilt in between, the draft that key
+ * names is gone, and a flow that resumes it reads «gone» and redirects home one frame after it paints. */
+const mountFirstEntry = () => render(<RouterProvider router={createMemoryRouter(
+  [{ path: '/', element: <p>home</p> }, { path: '/stop/:stopId/loaded', element: <Stepper /> }],
+  { initialEntries: ['/stop/stop-000001/loaded'] })} />);
+
+describe('a flow opened on the first history entry (§2.2, D11)', () => {
+  it('mints its own draft when the one that entry opened before is gone', async () => {
+    server.reset();
+    mountFirstEntry();
+    await screen.findByText(/at:shoot key:device-000001:417/);   // leaves the draft behind, uncommitted
+    cleanup();
+    server.reset();                                              // the rebuild `atBeat` performs: that draft is gone
+    mountFirstEntry();
+    expect(await screen.findByText(/at:shoot key:device-000001:417/)).toBeInTheDocument();
+    expect(openDrafts('device-000001').map((d) => [d.flow, d.step])).toEqual([['loaded', 'shoot']]);
+  });
+});
+
 /* «Продовжимо» resumes a draft from home. `stop_id` alone cannot rebuild every flow's route: a retake lives at
  * /request/:requestId and a put-off receipt at /refuel/:recordKey/later, and neither parameter is a stop. So the draft
  * keeps the pathname it was opened on, and home navigates back to it with the step and the draft id. */

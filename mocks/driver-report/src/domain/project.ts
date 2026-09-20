@@ -98,7 +98,7 @@ const atStop = (e: AutoEventView, s: PlannedStopView): boolean =>
 function unplannedStop(a: LiveOf<'ARRIVED'>): PlannedStopView {
   const name = a.payload.new_place ? 'Нове місце' : '—';
   return { stop_id: a.stop_id ?? a.key, plan_key: `u-${a.key}`, seq: 0, kind: 'UNPLANNED', place_id: '', label: name,
-    short: name, town: '', ttn_expected: 0, ttn_nos: [], drop_index: null, drop_count: null, compartments: null,
+    label_gen: name, short: name, town: '', town_loc: '', ttn_expected: 0, ttn_nos: [], drop_index: null, drop_count: null, compartments: null,
     mass_t: null, planned_km: null, no_photos: false, weigh_ticket: false, accepted_at: null };
 }
 

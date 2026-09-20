@@ -44,9 +44,12 @@ const holdChip = (text: string): JSX.Element => (
   </span>
 );
 
-export function ReviewGrid({ pages, add, onOk, onRetake, onAdd }: {
+export function ReviewGrid({ pages, add, busy = false, onOk, onRetake, onAdd }: {
   pages: CapturedPage[];
   add: AddKind[];
+  /** The commit guard made visible (EC-137): «Добре, все видно» becomes «Записую…» and takes no second tap. This is
+   *  the slowest commit of the route — four photographs — so it is the one that most needs to say so. */
+  busy?: boolean;
   onOk(): void;
   onRetake(i: number): void;
   onAdd(k: AddKind): void;
@@ -85,7 +88,7 @@ export function ReviewGrid({ pages, add, onOk, onRetake, onAdd }: {
         )}
       </div>
       <ActionBar dark>
-        <PrimaryAction icon={Check} verb="Добре, все видно" dark onPress={onOk} />
+        <PrimaryAction icon={Check} verb="Добре, все видно" dark busy={busy} onPress={onOk} />
       </ActionBar>
     </div>
   );

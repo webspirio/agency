@@ -13,8 +13,11 @@ export type DocDot = 'none' | 'part' | 'full';
 export type BindPreview = { status: 'VALID' | 'EXPIRED' | 'USED' | 'UNKNOWN'; driver_name: string | null;
   initials: string | null; truck_plate: string | null; truck_model: string | null };
 export type Binding = { device_id: string; driver_id: string; driver_name: string; bound_at: Instant };
+/** `label_gen` and `town_loc` are the two cases the phone's own sentences need and cannot derive: «+23 км від
+ *  «Лану»» (§3.3 D-09) and «Завантаження у Вільнянську не записано» (§3.3 D-04). Both are authored on the place. */
 export type PlannedStopView = { stop_id: string; plan_key: string; seq: number;
-  kind: 'LOADING' | 'DROP' | 'BASE' | 'UNPLANNED'; place_id: string; label: string; short: string; town: string;
+  kind: 'LOADING' | 'DROP' | 'BASE' | 'UNPLANNED'; place_id: string; label: string; label_gen: string; short: string;
+  town: string; town_loc: string;
   ttn_expected: number; ttn_nos: string[]; drop_index: number | null; drop_count: number | null;
   compartments: string | null; mass_t: Dec3 | null; planned_km: Km | null; no_photos: boolean;
   weigh_ticket: boolean; accepted_at: Instant | null };
@@ -26,8 +29,11 @@ export type RecordView = { key: string; seq: number; type: RecordType; occurred_
 export type AutoEventView = { id: string; kind: TelemetryKind; at: Instant; place_id: string | null;
   place_short: string | null; stop_id: string | null; can_km: Km | null; litres: Decimal2 | null;
   minutes: number | null; simulated: true };
+/** `kind` keeps SHIFT_START apart from every other point because the basis line is worded from it — «+36 км від
+ *  виїзду» rather than «+36 км від «…»» — and `place_gen` is the genitive that other wording needs. */
 export type OdometerRefView = { value: Km | null; at: Instant | null; source: OdometerSource | null;
-  basis: OdometerBasis; place_short: string | null; kind: 'SHIFT_END_AT_BASE' | 'MECHANIC' | 'POINT' | 'CAN' | 'NONE' };
+  basis: OdometerBasis; place_short: string | null; place_gen: string | null;
+  kind: 'SHIFT_END_AT_BASE' | 'MECHANIC' | 'SHIFT_START' | 'POINT' | 'CAN' | 'NONE' };
 export type RequestCardView = { id: string; type: RequestType; record_key: string; page_key: string | null;
   stop_id: string | null; artefact: ArtefactKind | null; doc_index: number | null; page_no: number | null;
   target_label: string; reasons: RetakeReason[]; reason_line: string; by_short: string; created_at: Instant;
@@ -41,7 +47,10 @@ export type DaySummaryView = { started_at: Instant; ended_at: Instant | null; on
   on_site_min: number; alert_min: number; km: Km | null; docs_in_office: number; docs_total: number; owed: string[] };
 export type DriverToday = {
   server_time: Instant;
-  device: { id: string; bound: boolean; revoked: boolean };
+  /** `os_label` is «Android 10 · Chrome» — §3.3 D-18's «Про телефон» line, derived from the device row rather than
+   *  written anywhere: the spec's own example is Григорій's Redmi 8 while «Ще» is reached on Павло's phone. It is
+   *  `null` only for a phone this world has no row for, which is the same case `bound: false` describes. */
+  device: { id: string; bound: boolean; revoked: boolean; os_label: string | null };
   driver: { id: string; name: string; short_name: string } | null;
   truck: { id: string; plate: string; model: string; telematics: Telematics; has_can: boolean;
     speed_kmh: number | null; gnss: 'OK' | 'SUSPECT'; can_km: Km | null } | null;
@@ -111,6 +120,12 @@ export type ExceptionItem = { id: string; code: ExceptionCode; lane: 'NOW' | 'RE
     correction: { old: string; new: string } | null } | null;
   truck_day_id: string | null; truck_plate: string;
   target: { stop_id: string | null; record_key: string | null; page_key: string | null };
+  /** An ODOMETER_* item's two numbers AS DATA — the reading the record carries and, where there is one, what the
+   *  derivation expected — as digit strings, «» for a reading nobody could take (`ODOMETER_UNREAD`). The same two
+   *  numbers are in `evidence.text` as prose («318 405 · введено вручну · очікували ~381 402 · …»), and a page that
+   *  read them back out of that sentence would change what C-05 prefills the day somebody edits the copy. `null` on
+   *  every other code. */
+  values: { current: string; expected: string | null } | null;
   request_line: string | null; phone: string | null; example: boolean };
 export type UpdateExceptionIn = { action: 'TAKE' | 'RESOLVE' | 'ACCEPT_AS_IS'; reason?: string };
 export type TtnFieldView = { field: TtnField; label: string; value: string | null;
@@ -123,7 +138,13 @@ export type RequestView = { id: string; type: RequestType; target_label: string;
   states: { sent: Instant; delivered: Instant | null; seen: Instant | null; done: Instant | null;
     cancelled: Instant | null } };
 export type PageView = { key: string; record_key: string; artefact: ArtefactKind; doc_index: number; page_no: number;
-  caption: string; provenance: string; received: boolean; drawn_variant: string | null; image: string | null;
+  /** The photo panel's heading, with a middot: «ТТН 2 з 2 · зворотний бік» (§4.2 C-04). */
+  caption: string;
+  /** The same page as a REQUEST names it, with a comma: «ТТН 2 з 2, зворотний бік» — C-06's target line and the
+   *  words the DRIVER is shown («Диспетчер просить перезняти: …»), so the dispatcher's preview and the driver's
+   *  card cannot drift apart. Both spellings are the spec's; neither is derivable from the other by a page. */
+  target_label: string;
+  provenance: string; received: boolean; drawn_variant: string | null; image: string | null;
   superseded_by: string | null; supersedes: string | null; request: RequestView | null };
 export type StopReview = { stop: { id: string; kind: 'LOADING' | 'DROP'; title: string; line: string };
   truck: { plate: string }; driver: { short: string; phone: string | null }; docs: TtnDocView[];
@@ -140,6 +161,11 @@ export type TruckDayRow = { id: string; plate: string; badge: Badge; driver: str
   exported_at: Instant | null; example: boolean };
 export type SummaryCellView = { label: string; value: string; lines: string[]; hold_lines: string[]; simulated: boolean };
 export type TimelineRow = { at: Instant; to: Instant | null; source: SourceKey; event: string;
+  /** WHERE the row happened, for the printed sheet's «Місце» column (§4.2 C-09): «Дніпро-Корм, Вільнянськ», «База
+   *  КТЛ», or `null` where a row has no place at all (a road stop on the way, a tachograph break). The place is
+   *  also inside `event` as prose — «На місці: Дніпро-Корм, Вільнянськ · Черга» — and the sheet must not parse it
+   *  back out of that sentence, which is why it is data here. */
+  place_short: string | null;
   odometer: { value: Km; source: SourceKey } | null; thumbs: string[]; simulated: boolean; example: boolean };
 export type LegRow = { n: number; from: string; to: string; loaded: boolean; km: Km | null; mass: Dec3 | null;
   tkm: Dec1 | null; ttn: string[]; arrival_driver: Instant | null; arrival_ttn: string | null; original: 'NONE' | 'RECEIVED' };
@@ -161,7 +187,11 @@ export type ConfirmTruckDayIn = { version: number; reason?: string };
 /* ── reports ──────────────────────────────────────────────────────── */
 export type KeyPointRow = { plate: string; place: string; arrived_at: Instant; departed_at: Instant | null;
   departed_label: string; odometer: Km | null; source: SourceKey; simulated: boolean };
-export type SheetRow = { cells: string[]; confirmed: boolean; example: boolean; ettn: boolean;
+export type SheetRow = { cells: string[]; confirmed: boolean; example: boolean;
+  /** True for the one fleet leg carrying an е-ТТН (§4.2 C-11). C-11 surfaces that row's е-ТТН text under the row
+   *  when the «е-ТТН» column is one of the ones the fold narrowed away — it is how a page finds that row without
+   *  knowing anything about ТТН platforms. */
+  ettn: boolean;
   /** «У BAS 21.09 16:07 · версія 1» once the day was imported (C-11); never written into a file. */
   exported_line: string | null };
 export type SheetView = { title: string; columns: string[]; rows: SheetRow[]; total: number };

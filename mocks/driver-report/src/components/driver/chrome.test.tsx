@@ -90,4 +90,44 @@ describe('driver chrome (§3.1, §6.5)', () => {
     await userEvent.click(screen.getByRole('button', { name: '−30 хв' }));
     expect(onPick).toHaveBeenCalledWith('M30');
   });
+
+  /* MEASURED IN CHROME AT THE WAVE 2 EXIT GATE, inside the stage's own phone frame — which is 360 px wide (§5.2),
+   * not the 390 px every driver test here assumes. The action bar's two tiles laid out 139 px + 257 px inside a
+   * 328 px row: «Стою» overflowed its row by 76 px and the phone document's scrollWidth was 420 against a
+   * clientWidth of 360. That is §8.2 D-02 #2 («360 px, no horizontal scroll») red, on the first screen of the demo.
+   *
+   * The cause is one missing token. A flex item's `min-width` defaults to `auto`, which floors it at its own
+   * min-content width — and because `truncate` sets `white-space: nowrap`, that min-content width is the WHOLE
+   * untruncated sub-line. So the tile refused to shrink and the `truncate` inside it never got to do the one thing
+   * this component's docblock promises. `min-w-0` removes the floor; measured again with it, the two tiles come out
+   * 160 px + 160 px and scrollWidth returns to 360.
+   *
+   * jsdom has no layout, so this asserts the token rather than the pixels: the browser was the instrument and this
+   * is the record. It goes red if anybody takes `min-w-0` off again, which is the failure that actually happened. */
+  it('lets a tile shrink below its own text, so two fit a 360 px phone', () => {
+    const { container } = render(<ActionBar><Tile icon={Fuel} word="Заправка" sub="чек і щиток" onPress={() => {}} />
+      <Tile icon={MapPin} word="Стою" sub="тривога · поломка · проблема" onPress={() => {}} /></ActionBar>);
+    const tiles = [...container.querySelectorAll('button')];
+    expect(tiles).toHaveLength(2);
+    for (const tile of tiles) {
+      const tokens = new Set((tile.getAttribute('class') ?? '').split(/\s+/).filter((t) => t !== ''));
+      expect(tokens).toContain('min-w-0');
+      expect(tokens).toContain('flex-1');
+    }
+  });
+
+  /* The same defect, the same measurement, one component along. `QuietButton half` is what `CameraScreen` puts in
+   * its row 2, and at 360 px the loading and unloading capture screens ran to a scrollWidth of 430: «Зніму на
+   * стоянці» reached 430 px against a clientWidth of 360. A `half` button is a flex ITEM, so it needs the floor
+   * removed for the `truncate` on its label to ever fire; a full-width one is not, and does not. */
+  it('lets a half-width quiet button shrink below its own label', () => {
+    const { container } = render(<ActionBar>
+      <QuietButton half dark icon={MapPin} label="Зніму на стоянці" onPress={() => {}} />
+      <QuietButton half dark icon={Fuel} label="Немає документа" onPress={() => {}} /></ActionBar>);
+    for (const btn of container.querySelectorAll('button')) {
+      const tokens = new Set((btn.getAttribute('class') ?? '').split(/\s+/).filter((t) => t !== ''));
+      expect(tokens).toContain('min-w-0');
+      expect(tokens).toContain('flex-1');
+    }
+  });
 });

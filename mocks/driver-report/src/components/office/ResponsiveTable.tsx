@@ -32,6 +32,12 @@ export type RTColumn<R> = {
   id: string;
   header: string;
   cell(r: R): ReactNode;
+  /** What this column reads as a SECOND LINE under `mergeInto`, where its own header is not on screen to label it.
+   *  Merging drops the header — that is what merging IS — so a bare «32,0» under «33,9 CAN» says nothing until the
+   *  line reads «норма 32,0». Absent, the merged line is `cell`, which is right for a column whose value speaks for
+   *  itself. A page that composed this itself had to re-derive `hideAt` in a ternary per column — the table's own
+   *  answer, read back out of it (W2-08's integrator note, applied at the round gate). */
+  mergedCell?(r: R): ReactNode;
   width?: number;
   hideAt?: ('compact' | 'rail')[];
   mergeInto?: string;
@@ -188,7 +194,7 @@ export function ResponsiveTable<R>({
                     <div>{c.cell(r)}</div>
                     {(merged.get(c.id) ?? []).map((m) => (
                       <div key={m.id} className="text-[13px] leading-[1.4] text-text-2">
-                        {m.cell(r)}
+                        {m.mergedCell === undefined ? m.cell(r) : m.mergedCell(r)}
                       </div>
                     ))}
                   </div>

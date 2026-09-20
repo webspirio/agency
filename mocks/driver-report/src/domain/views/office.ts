@@ -363,6 +363,12 @@ const caption = (artefact: ArtefactKind, docIndex: number, n: number): string =>
   const side = SIDE[artefact];
   return side === undefined ? OTHER[artefact] ?? 'Фото' : `ТТН ${docIndex} з ${Math.max(n, docIndex)} · ${side}`;
 };
+/** The same page as a request names it — a COMMA, «ТТН 2 з 2, зворотний бік» (§4.2 C-06, and `pageTarget` for the
+ *  driver's own card). The heading above uses a middot; a page cannot turn one into the other, so both are data. */
+const targetLabel = (artefact: ArtefactKind, docIndex: number, n: number): string => {
+  const side = SIDE[artefact];
+  return side === undefined ? OTHER[artefact] ?? 'Фото' : `ТТН ${docIndex} з ${Math.max(n, docIndex)}, ${side}`;
+};
 /** «знято в застосунку 08:39 · 0,7 МБ» · «на стоянці 09:02» · «після виїзду 15:16» · «з галереї, файл від 12.09». */
 function provenance(p: Page, day: BusinessDate): string {
   const at = fmtTime(p.captured_at);
@@ -382,7 +388,8 @@ function missingPages(f: StopFacts, w: World, n: number, now: Instant): PageView
     const artefact: ArtefactKind = loading ? (i % 2 === 0 ? 'TTN_FRONT' : 'TTN_BACK') : 'TTN_SIGNED';
     const docIndex = loading ? intDiv(i, 2) + 1 : i + 1;
     return [{ key, record_key: done.key, artefact, doc_index: docIndex, page_no: loading ? (i % 2) + 1 : 1,
-      caption: caption(artefact, docIndex, n), provenance: 'ще в телефоні', received: false, drawn_variant: null, image: null,
+      caption: caption(artefact, docIndex, n), target_label: targetLabel(artefact, docIndex, n),
+      provenance: 'ще в телефоні', received: false, drawn_variant: null, image: null,
       superseded_by: null, supersedes: null, request: null }];
   });
 }
@@ -397,7 +404,8 @@ function pageViews(w: World, f: StopFacts, n: number, day: BusinessDate, now: In
     const q = newest(p.key);
     const next = p.superseded_by === null ? null : pages.find((x) => x.key === p.superseded_by) ?? null;
     return { key: p.key, record_key: p.record_key, artefact: p.artefact, doc_index: p.doc_index, page_no: p.page_no,
-      caption: caption(p.artefact, p.doc_index, n), provenance: provenance(p, day), received: true,
+      caption: caption(p.artefact, p.doc_index, n), target_label: targetLabel(p.artefact, p.doc_index, n),
+      provenance: provenance(p, day), received: true,
       drawn_variant: p.drawn?.variant ?? null, image: p.image, superseded_by: next?.key ?? null,
       supersedes: pages.find((x) => x.superseded_by === p.key)?.key ?? null, request: q === null ? null : requestOf(w, q, now) };
   });

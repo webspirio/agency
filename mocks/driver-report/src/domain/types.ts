@@ -79,7 +79,7 @@ export type Device = { id: string; driver_id: string | null; label: string; os_l
 export type BindCode = { id: string; code: string; driver_id: string; created_by: string; created_at: Instant;
   expires_at: Instant; opened_at: Instant | null; used_at: Instant | null; device_id: string | null };
 export type Place = { id: string; code: string; name: string; short: string; label: string; label_gen: string;
-  town: string; town_gen: string;
+  town: string; town_gen: string; town_loc: string;
   kind: PlaceKind; edrpou: string | null; no_photos: boolean; weigh_ticket: boolean;
   curfew: { from: string; to: string } | null; radius_m: number; near_code: string | null; near_km: Km | null };
 export type Distance = { id: string; from_code: string; to_code: string; km: Km };
