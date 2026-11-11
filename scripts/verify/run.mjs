@@ -306,7 +306,21 @@ async function main() {
   const failureDetail = [];
   const warnings = [];
 
-  for (const check of selected) {
+  // Rows run CONCURRENTLY: each one starts as soon as every `after` dependency
+  // it names has settled, not when the row above it in the table has. Run one
+  // after another the fast tier cost the sum of its rows (~58s, of which the
+  // vitest row alone is ~35s); scheduled by dependency it costs roughly the
+  // longest chain. Rows are reported in registry order regardless of finish order.
+  const settled = new Map();
+  const runOne = async (check) => {
+    await null; // let every row be registered before any looks up a dependency
+    for (const dep of check.after ?? []) if (settled.has(dep)) await settled.get(dep);
+    // `build` and `wire:frozen` run `pnpm install`, which rewrites node_modules
+    // under any tsc or vitest still running — so the full-tier rows wait for
+    // every fast-tier row to finish and only then run, among themselves, by `after`.
+    if (check.tier !== 'fast') {
+      await Promise.all(selected.filter((c) => c.tier === 'fast').map((c) => settled.get(c.id)));
+    }
     let status;
     let reason = null;
     let ms = 0;
@@ -357,7 +371,12 @@ async function main() {
       proves: check.proves,
       blindSpot: check.blindSpot,
     });
-  }
+  };
+  for (const check of selected) settled.set(check.id, runOne(check));
+  await Promise.all(settled.values());
+  const order = new Map(selected.map((c, i) => [c.id, i]));
+  rows.sort((a, b) => order.get(a.id) - order.get(b.id));
+  failureDetail.sort((a, b) => order.get(a.id) - order.get(b.id));
 
   const blocking = rows.filter((r) => r.blocking);
   const report = {

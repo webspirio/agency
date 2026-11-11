@@ -79,6 +79,9 @@ describe('the hooks CLAUDE.md promises are wired and runnable', () => {
     const stop = settings.hooks.Stop?.flatMap((m) => m.hooks).map((h) => h.command) ?? [];
     expect(stop.some((c) => c.includes('stop-gate.mjs'))).toBe(true);
     expect(read('.claude/hooks/stop-gate.mjs')).toMatch(/--tier',\s*'fast'/);
+    // A turn that changed nothing a check reads is served the last green for that exact content
+    // hash instead of re-running ~35s of checks over the same bytes.
+    expect(read('.claude/hooks/stop-gate.mjs')).toMatch(/'--reuse-if-fresh'/);
     expect(CLAUDE_MD).toMatch(/Stop hook/);
   });
 });

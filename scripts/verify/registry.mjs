@@ -96,7 +96,7 @@ const REAL = [
   {
     id: 'lint',
     tier: 'fast',
-    cmd: 'pnpm lint',
+    cmd: 'pnpm --config.verify-deps-before-run=false lint',
     proves:
       'oxlint exits 0 over packages/, templates/ and mocks/ with --max-warnings=0, so no file in ' +
       'the workspace performs money arithmetic, relational comparison, numeric coercion, an ' +
@@ -129,7 +129,7 @@ const REAL = [
   {
     id: 'test',
     tier: 'fast',
-    cmd: 'pnpm test',
+    cmd: 'pnpm --config.verify-deps-before-run=false test',
     proves:
       'Every *.test.ts and *.test.tsx under packages/ and mocks/ that vitest collects runs to ' +
       'completion and passes, in the environment its package needs.',
@@ -540,6 +540,23 @@ const SELFTEST = [
       'FAILED, not UNRUNNABLE. A test suite whose test fails on a bad import prints exactly that ' +
       'text, and relabelling it as "could not start" hides a genuine red behind a status that ' +
       'claims nothing was tested.',
+    blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
+  },
+  ...['selftest:sleepA', 'selftest:sleepB'].map((id) => ({
+    id,
+    tier: /** @type {Tier} */ ('fast'),
+    cmd: 'sleep 2',
+    proves:
+      'Two rows with no dependency between them run CONCURRENTLY, so the fast tier costs its ' +
+      'longest chain rather than the sum of its rows.',
+    blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
+  })),
+  {
+    id: 'selftest:sleepC',
+    tier: 'fast',
+    after: ['selftest:sleepA'],
+    cmd: 'sleep 2',
+    proves: 'A row still waits for every row it names in `after` before it starts.',
     blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
   },
 ];

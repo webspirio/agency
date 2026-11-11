@@ -18,7 +18,7 @@ fails on it, or it does not exist.
 this paragraph is where that instruction lives.
 
 ```bash
-pnpm verify        # fast tier — what the Stop hook runs, ~19s
+pnpm verify        # fast tier — what the Stop hook runs, ~35s (rows run concurrently; vitest is the floor)
 pnpm verify:full   # fast + full: renders the template, then installs, builds and tests a real mock
 pnpm verify:ci     # the CI form: a SKIPPED check counts as a failure
 ```
@@ -109,7 +109,8 @@ pnpm lint:exempt  # the exemption ratchet
 pnpm verify:write # regenerate the table above after editing the registry
 ```
 
-`.claude/hooks/stop-gate.mjs` runs the fast tier at the end of every turn and **blocks** on red —
+`.claude/hooks/stop-gate.mjs` runs the fast tier at the end of every turn — with `--reuse-if-fresh`, so a turn
+that changed no hashed byte costs nothing — and **blocks** on red —
 exit 2 plus a top-level `{"decision":"block","reason":…}`, which is the shape the Stop contract
 reads. At most twice per prompt; after that it lets the turn end and tells you to state the red
 result out loud. It fails closed on check failures and open-but-loud on its own errors: a message
