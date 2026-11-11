@@ -43,6 +43,7 @@ const ROOT = path.resolve(import.meta.dirname, '..', '..');
  * @property {PreconditionId} [needs]  absent precondition means SKIPPED, not FAILED
  * @property {string[]} [after]        ids that must have PASSED, else NOT_RUN
  * @property {number} [skipExit]       this exit code means SKIPPED, not FAILED
+ * @property {boolean} [exclusive]    runs alone, after every other row of its tier
  * @property {string} proves
  * @property {string} blindSpot
  */
@@ -129,6 +130,7 @@ const REAL = [
   {
     id: 'test',
     tier: 'fast',
+    exclusive: true,
     cmd: 'pnpm --config.verify-deps-before-run=false test',
     proves:
       'Every *.test.ts and *.test.tsx under packages/ and mocks/ that vitest collects runs to ' +
@@ -551,6 +553,14 @@ const SELFTEST = [
       'longest chain rather than the sum of its rows.',
     blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
   })),
+  {
+    id: 'selftest:alone',
+    tier: 'fast',
+    exclusive: true,
+    cmd: 'sleep 2',
+    proves: 'An `exclusive` row shares the machine with no other row, before or during its run.',
+    blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
+  },
   {
     id: 'selftest:sleepC',
     tier: 'fast',
