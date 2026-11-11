@@ -150,6 +150,14 @@ describe('rows are scheduled by dependency, not by table order', () => {
     }
   });
 
+  it('runs an `exclusive` row alone, after every concurrent row has finished', () => {
+    // The vitest row's UI tests wait 1s for a re-render; sharing the CPU with checks:bite and
+    // template:check (each running tsc and vitest) made one miss it — a flaky red. Measured.
+    const { ms } = wall('selftest:sleepA,selftest:sleepB,selftest:alone');
+    expect(ms).toBeGreaterThanOrEqual(4000);
+    expect(ms).toBeLessThan(5500);
+  });
+
   it('still starts a row only after the rows it names in `after`', () => {
     const { ms, ids } = wall('selftest:sleepC,selftest:sleepA');
     expect(ms).toBeGreaterThanOrEqual(4000);

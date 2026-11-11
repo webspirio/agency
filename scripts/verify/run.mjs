@@ -325,6 +325,31 @@ async function main() {
     if (check.tier !== 'fast') {
       await Promise.all(selected.filter((c) => c.tier === 'fast').map((c) => settled.get(c.id)));
     }
+    // An `exclusive` row (the vitest suite) runs ALONE: its UI tests wait ~1s for a re-render,
+    // and sharing the CPU with rows that run tsc and vitest themselves made one miss — a flaky
+    // red. It waits for every non-exclusive row of its tier, and exclusive rows run one at a time.
+    if (check.exclusive) {
+      const isExclusive = (id) => selected.some((c) => c.id === id && c.exclusive);
+      // A row that waits on an exclusive row cannot also be waited on by it.
+      const before = selected.filter(
+        (c) => c.tier === check.tier && !c.exclusive && !(c.after ?? []).some(isExclusive),
+      );
+      await Promise.all(before.map((c) => settled.get(c.id)));
+      // Take a place in the queue synchronously, so two exclusive rows can never both start.
+      const prev = exclusiveChain;
+      let release;
+      exclusiveChain = new Promise((r) => (release = r));
+      await prev;
+      try {
+        return await runRow(check);
+      } finally {
+        release();
+      }
+    }
+    return runRow(check);
+  };
+  let exclusiveChain = Promise.resolve();
+  const runRow = async (check) => {
     let status;
     let reason = null;
     let ms = 0;

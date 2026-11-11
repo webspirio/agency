@@ -15,7 +15,7 @@ This file is prose, so it documents the checks; it does not replace them.
 ## Verification — run it before a turn ends
 
 ```bash
-pnpm verify        # fast tier, ~35s: rows run concurrently, vitest is the floor
+pnpm verify        # fast tier, ~45s: other rows run concurrently, then vitest runs alone
 pnpm verify:full   # + renders the template, installs, builds and tests a real mock
 pnpm verify:ci     # the CI form: a SKIPPED check counts as a failure
 ```
@@ -56,7 +56,7 @@ from `.nvmrc` via `.claude/hooks/node.sh` (this repo pins 24; the shell default 
 ### Keeping the loop fast
 
 - **While iterating, run only the tests you touched**: `npx vitest run <file>` (~1–3s per file).
-  The whole suite is ~33s and the Stop gate runs it anyway.
+  The whole suite is ~35s and the Stop gate runs it anyway.
 - **Subagents do not run `pnpm verify` or the whole suite.** Parallel agents each doing so share the
   CPU: measured, a 3s test file averaged 9s and verify reached 5 min. The orchestrator verifies once.
 - **Never poll** (`sleep` loops waiting for another agent's file). Wait for the agent's completion.
