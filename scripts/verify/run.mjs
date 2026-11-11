@@ -114,6 +114,10 @@ function parseArgs(argv) {
         rejectValue();
         o.json = true;
         break;
+      case '--explain':
+        rejectValue();
+        o.explain = true;
+        break;
       case '--reuse-if-fresh':
         rejectValue();
         o.reuseIfFresh = true;
@@ -288,7 +292,7 @@ async function main() {
       // cover. In the harness this was ported from, the blind-spot footer was
       // skipped on exactly the two paths production took, so the property held
       // of the code and not of the layer.
-      if (!opts.json) printBlindSpots(stored, `reused the green report for ${hash.slice(0, 12)}`);
+      if (!opts.json) printBlindSpots(stored, opts.explain, `reused the green report for ${hash.slice(0, 12)}`);
       else process.stdout.write(`${JSON.stringify({ ...stored, reused: true }, null, 2)}\n`);
       process.exitCode = 0;
       return;
@@ -420,7 +424,7 @@ async function main() {
   if (opts.json) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
-    printTable(report, failureDetail);
+    printTable(report, failureDetail, opts.explain);
   }
   // exitCode rather than exit(): process.exit can truncate a large async pipe write.
   process.exitCode = report.ok ? 0 : 1;
@@ -450,7 +454,7 @@ function warningLines(id, res) {
     .slice(0, 20);
 }
 
-function printTable(report, failureDetail) {
+function printTable(report, failureDetail, explain = false) {
   const w = globalThis.Math.max(...report.checks.map((c) => c.id.length));
   const scopeNote = report.scope.only ? `--only ${report.scope.only.join(',')}` : `tier ${report.tier}`;
   process.stdout.write(
@@ -524,21 +528,28 @@ function printTable(report, failureDetail) {
     process.stdout.write(`${f.text.split('\n').map((l) => `  ${l}`).join('\n')}\n`);
   }
 
-  printBlindSpots(report);
+  printBlindSpots(report, explain);
 }
 
 /**
  * The footer prints on green as well as red. A table of passes without its blind
- * spots is precisely the false-confidence artifact this layer exists to remove —
- * and in the harness this was ported from, the two paths production actually
- * used both returned before reaching it, so the property held of the code and
- * not of the layer.
+ * spots is precisely the false-confidence artifact this layer exists to remove.
+ * On green it is SHORT — the tier's gaps plus where the per-row text lives —
+ * because the full text is ~10KB and every agent run of `pnpm verify` put it in
+ * context. A row that did not pass always gets its blind spot; `--explain` prints all.
  */
-function printBlindSpots(report, note = null) {
+function printBlindSpots(report, explain = false, note = null) {
   if (note) process.stdout.write(paint('90', `\n  ${note}\n`));
   process.stdout.write(paint('1', '\n  What this does NOT prove\n'));
-  for (const c of report.checks) {
+  const shown = explain ? report.checks : report.checks.filter((c) => c.status !== PASSED);
+  for (const c of shown) {
     process.stdout.write(`\n  ${c.id}\n${wrap(c.blindSpot, 4, 92)}\n`);
+  }
+  if (!explain) {
+    process.stdout.write(
+      `${report.tier === 'fast' ? '\n  The fast tier does not build, bundle or open a browser (that is `pnpm verify:full`),\n  and measures no coverage: a test that cannot fail counts the same as one that can.\n' : ''}` +
+        '\n  Per-row blind spots: docs/CHECKS.md, or re-run with --explain.\n',
+    );
   }
   if (note && Array.isArray(report.warnings) && report.warnings.length) {
     process.stdout.write(paint('33', `\n  Warnings from that run\n`));

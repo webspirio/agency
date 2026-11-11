@@ -37,7 +37,7 @@ const END = '<!-- END:verify-table -->';
  */
 function cell(s) {
   if (s.includes('BEGIN:verify-table') || s.includes('END:verify-table')) {
-    throw new Error(`a registry string contains the table marker — that would break CLAUDE.md: ${s.slice(0, 60)}`);
+    throw new Error(`a registry string contains the table marker — that would break docs/CHECKS.md: ${s.slice(0, 60)}`);
   }
   return s.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
 }
@@ -75,7 +75,7 @@ export function renderTable() {
 function main() {
   const write = process.argv.includes('--write');
   const at = process.argv.indexOf('--memo');
-  const memoPath = at === -1 ? path.join(ROOT, 'CLAUDE.md') : path.resolve(process.argv[at + 1] ?? '');
+  const memoPath = at === -1 ? path.join(ROOT, 'docs', 'CHECKS.md') : path.resolve(process.argv[at + 1] ?? '');
 
   if (process.argv.includes('--print')) {
     process.stdout.write(`${renderTable()}\n`);
@@ -123,7 +123,7 @@ function main() {
     process.stderr.write(
       `memo:drift: FAILED\n` +
         `  The table in ${path.relative(ROOT, memoPath)} has drifted from scripts/verify/registry.mjs (line ${i + 1}).\n` +
-        `  in CLAUDE.md: ${a[i] ?? '(no such line)'}\n` +
+        `  in the memo: ${a[i] ?? '(no such line)'}\n` +
         `  in registry:  ${b[i] ?? '(no such line)'}\n` +
         `  Fix: node scripts/verify/checks/memo-drift.mjs --write\n`,
     );

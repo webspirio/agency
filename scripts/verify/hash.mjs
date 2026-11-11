@@ -50,6 +50,7 @@ const HASHED_EXACT = new Set([
   '.nvmrc',
   '.gitignore',
   'CLAUDE.md',
+  'docs/CHECKS.md',
 ]);
 
 /**

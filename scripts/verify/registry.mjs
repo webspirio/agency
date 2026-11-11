@@ -209,7 +209,7 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/memo-drift.mjs',
     proves:
-      'The proves / does-not-prove table inside the generated-region markers in CLAUDE.md is ' +
+      'The proves / does-not-prove table inside the generated-region markers in docs/CHECKS.md is ' +
       'byte-identical to the table rendered from this registry, and the SHA-256 printed beneath it ' +
       'matches a digest taken over the RAW proves and blindSpot strings — which the rendered cells ' +
       'cannot stand in for, because rendering collapses whitespace and two different registry ' +
@@ -217,7 +217,7 @@ const REAL = [
     blindSpot:
       'It compares two artifacts to each other, never either against reality. A `proves` sentence ' +
       'that is a lie is copied into the memo faithfully and both go green. It also says nothing ' +
-      'about the rest of CLAUDE.md — every line outside the markers is unchecked prose.',
+      'about the rest of docs/CHECKS.md or CLAUDE.md — every line outside the markers is unchecked prose.',
   },
   {
     id: 'api:bound',

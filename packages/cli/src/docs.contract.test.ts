@@ -86,6 +86,15 @@ describe('the hooks CLAUDE.md promises are wired and runnable', () => {
   });
 });
 
+describe('CLAUDE.md stays small, because every agent and subagent loads all of it', () => {
+  it('is under 16KB and carries no generated table', () => {
+    // Measured 2026-11-11: 48KB (~12k tokens) in each of 17k subagent calls, half of it the
+    // generated check table. The table lives in docs/CHECKS.md; rationale in docs/CONTRACT.md.
+    expect(CLAUDE_MD.length).toBeLessThan(16_000);
+    expect(CLAUDE_MD).not.toContain('BEGIN:verify-table');
+  });
+});
+
 describe('CLAUDE.md states the blind spots rather than only the passes', () => {
   it('says out loud that the fast tier does not build', () => {
     // The whole point of the layer. A document that lists the green commands and

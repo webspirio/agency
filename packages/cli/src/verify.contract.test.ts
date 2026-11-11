@@ -197,6 +197,21 @@ describe('the blind-spot footer prints on GREEN as well as red', () => {
     expect(r.out).toMatch(/does NOT prove/i);
     expect(r.out).toMatch(/selftest:pass/);
   });
+
+  it('is SHORT on green: a pointer to the per-row blind spots, not ~10KB of them', () => {
+    // Every agent run of `pnpm verify` landed ~3k tokens of footer in context. Measured.
+    const r = verify(['--only', 'selftest:pass'], { AGENCY_VERIFY_SELFTEST: '1', NO_COLOR: '1' });
+    expect(r.out).not.toMatch(/Exercises the harness only/);
+    expect(r.out).toMatch(/--explain/);
+    expect(r.out).toMatch(/docs\/CHECKS\.md/);
+  });
+
+  it('prints every row\'s blind spot under --explain, and a failing row\'s always', () => {
+    const all = verify(['--explain', '--only', 'selftest:pass'], { AGENCY_VERIFY_SELFTEST: '1', NO_COLOR: '1' });
+    expect(all.out).toMatch(/Exercises the harness only/);
+    const red = verify(['--only', 'selftest:fail'], { AGENCY_VERIFY_SELFTEST: '1', NO_COLOR: '1' });
+    expect(red.out).toMatch(/Exercises the harness only/);
+  });
 });
 
 describe('the registry rows describe checks that exist', () => {
@@ -428,7 +443,7 @@ describe('the report is content-addressed, so a green can be reused honestly', (
     expect(report.hashedFileCount).toBeGreaterThan(50);
   });
 
-  it('hashes CLAUDE.md, which is the entire input to memo:drift', async () => {
+  it('hashes docs/CHECKS.md and CLAUDE.md, the inputs to memo:drift and docs:truth', async () => {
     // Leaving it out meant a hand-edited memo did not change the hash, so
     // --reuse-if-fresh served a cached green and the one check whose whole job
     // is catching that drift could never run.
@@ -436,6 +451,7 @@ describe('the report is content-addressed, so a green can be reused honestly', (
       hashedFiles: (root: string) => string[];
     };
     expect(hashedFiles(ROOT)).toContain('CLAUDE.md');
+    expect(hashedFiles(ROOT)).toContain('docs/CHECKS.md');
   });
 
   it('does not reuse a narrow green as a wide verdict', async () => {
