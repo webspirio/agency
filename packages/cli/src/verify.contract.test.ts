@@ -124,6 +124,40 @@ describe('the five statuses never collapse', () => {
   });
 });
 
+describe('rows are scheduled by dependency, not by table order', () => {
+  const wall = (ids: string): { ms: number; ids: string[] } => {
+    const t0 = performance.now();
+    const r = verify(['--json', '--only', ids], { AGENCY_VERIFY_SELFTEST: '1' });
+    return { ms: performance.now() - t0, ids: asReport(r.out).checks.map((c) => c.id) };
+  };
+
+  it('runs two independent rows concurrently', () => {
+    // Two `sleep 2` rows. One after the other they cost >= 4s; together ~2s.
+    const { ms } = wall('selftest:sleepA,selftest:sleepB');
+    expect(ms).toBeLessThan(3500);
+  });
+
+  it('never lets a concurrent row trigger pnpm\'s implicit install', async () => {
+    // pnpm 11 installs before `pnpm <script>` when the workspace looks out of date. Rows now
+    // overlap, and template:check renders a transient mocks/verify-tmpl-* — a NEW workspace
+    // project — so a `pnpm test` running beside it installed that project, rewrote
+    // pnpm-lock.yaml, and made template:check's own rmSync fail with ENOTEMPTY. Measured.
+    const { CHECKS } = (await import(join(ROOT, 'scripts', 'verify', 'registry.mjs'))) as {
+      CHECKS: { id: string; tier: string; cmd: string }[];
+    };
+    for (const c of CHECKS.filter((x) => x.tier === 'fast' && /^pnpm\b/.test(x.cmd))) {
+      expect(c.cmd, c.id).toMatch(/--config\.verify-deps-before-run=false/);
+    }
+  });
+
+  it('still starts a row only after the rows it names in `after`', () => {
+    const { ms, ids } = wall('selftest:sleepC,selftest:sleepA');
+    expect(ms).toBeGreaterThanOrEqual(4000);
+    // Reported in registry order, whatever order they finished in.
+    expect(ids).toEqual(['selftest:sleepA', 'selftest:sleepC']);
+  });
+});
+
 describe('a narrow green cannot be quoted as a wide one', () => {
   it('records the scope alongside the verdict', () => {
     const r = verify(['--json', '--only', 'selftest:pass'], { AGENCY_VERIFY_SELFTEST: '1' });
@@ -163,6 +197,21 @@ describe('the blind-spot footer prints on GREEN as well as red', () => {
     expect(r.out).toMatch(/does NOT prove/i);
     expect(r.out).toMatch(/selftest:pass/);
   });
+
+  it('is SHORT on green: a pointer to the per-row blind spots, not ~10KB of them', () => {
+    // Every agent run of `pnpm verify` landed ~3k tokens of footer in context. Measured.
+    const r = verify(['--only', 'selftest:pass'], { AGENCY_VERIFY_SELFTEST: '1', NO_COLOR: '1' });
+    expect(r.out).not.toMatch(/Exercises the harness only/);
+    expect(r.out).toMatch(/--explain/);
+    expect(r.out).toMatch(/docs\/CHECKS\.md/);
+  });
+
+  it('prints every row\'s blind spot under --explain, and a failing row\'s always', () => {
+    const all = verify(['--explain', '--only', 'selftest:pass'], { AGENCY_VERIFY_SELFTEST: '1', NO_COLOR: '1' });
+    expect(all.out).toMatch(/Exercises the harness only/);
+    const red = verify(['--only', 'selftest:fail'], { AGENCY_VERIFY_SELFTEST: '1', NO_COLOR: '1' });
+    expect(red.out).toMatch(/Exercises the harness only/);
+  });
 });
 
 describe('the registry rows describe checks that exist', () => {
@@ -176,7 +225,8 @@ describe('the registry rows describe checks that exist', () => {
     );
     for (const c of CHECKS) {
       if (c.id.startsWith('selftest:')) continue;
-      const m = /^pnpm (?:run )?([a-z:._-]+)/.exec(c.cmd);
+      // Flags before the script name (`pnpm --config.x=y test`) are pnpm's, not a script.
+      const m = /^pnpm (?:--\S+ )*(?:run )?([a-z:._-]+)/.exec(c.cmd);
       if (m?.[1]) expect(scripts).toContain(m[1]);
     }
   });
@@ -393,7 +443,7 @@ describe('the report is content-addressed, so a green can be reused honestly', (
     expect(report.hashedFileCount).toBeGreaterThan(50);
   });
 
-  it('hashes CLAUDE.md, which is the entire input to memo:drift', async () => {
+  it('hashes docs/CHECKS.md and CLAUDE.md, the inputs to memo:drift and docs:truth', async () => {
     // Leaving it out meant a hand-edited memo did not change the hash, so
     // --reuse-if-fresh served a cached green and the one check whose whole job
     // is catching that drift could never run.
@@ -401,6 +451,7 @@ describe('the report is content-addressed, so a green can be reused honestly', (
       hashedFiles: (root: string) => string[];
     };
     expect(hashedFiles(ROOT)).toContain('CLAUDE.md');
+    expect(hashedFiles(ROOT)).toContain('docs/CHECKS.md');
   });
 
   it('does not reuse a narrow green as a wide verdict', async () => {

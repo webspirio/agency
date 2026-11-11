@@ -138,7 +138,10 @@ function main() {
   // does not depend on pnpm being on a hook's PATH; it is the same fast tier.
   const res = spawnSync(
     process.execPath,
-    [path.join(ROOT, 'scripts', 'verify', 'run.mjs'), '--tier', 'fast', '--json'],
+    // --reuse-if-fresh: a turn that changed none of the bytes a check reads
+    // (scripts/verify/hash.mjs) is served the last green for that exact hash,
+    // instead of re-running the whole tier over identical content.
+    [path.join(ROOT, 'scripts', 'verify', 'run.mjs'), '--tier', 'fast', '--json', '--reuse-if-fresh'],
     { cwd: ROOT, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' }, timeout: 240_000 },
   );
 

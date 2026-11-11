@@ -96,7 +96,7 @@ const REAL = [
   {
     id: 'lint',
     tier: 'fast',
-    cmd: 'pnpm lint',
+    cmd: 'pnpm --config.verify-deps-before-run=false lint',
     proves:
       'oxlint exits 0 over packages/, templates/ and mocks/ with --max-warnings=0, so no file in ' +
       'the workspace performs money arithmetic, relational comparison, numeric coercion, an ' +
@@ -129,7 +129,7 @@ const REAL = [
   {
     id: 'test',
     tier: 'fast',
-    cmd: 'pnpm test',
+    cmd: 'pnpm --config.verify-deps-before-run=false test',
     proves:
       'Every *.test.ts and *.test.tsx under packages/ and mocks/ that vitest collects runs to ' +
       'completion and passes, in the environment its package needs.',
@@ -209,7 +209,7 @@ const REAL = [
     tier: 'fast',
     cmd: 'node scripts/verify/checks/memo-drift.mjs',
     proves:
-      'The proves / does-not-prove table inside the generated-region markers in CLAUDE.md is ' +
+      'The proves / does-not-prove table inside the generated-region markers in docs/CHECKS.md is ' +
       'byte-identical to the table rendered from this registry, and the SHA-256 printed beneath it ' +
       'matches a digest taken over the RAW proves and blindSpot strings — which the rendered cells ' +
       'cannot stand in for, because rendering collapses whitespace and two different registry ' +
@@ -217,7 +217,7 @@ const REAL = [
     blindSpot:
       'It compares two artifacts to each other, never either against reality. A `proves` sentence ' +
       'that is a lie is copied into the memo faithfully and both go green. It also says nothing ' +
-      'about the rest of CLAUDE.md — every line outside the markers is unchecked prose.',
+      'about the rest of docs/CHECKS.md or CLAUDE.md — every line outside the markers is unchecked prose.',
   },
   {
     id: 'api:bound',
@@ -540,6 +540,23 @@ const SELFTEST = [
       'FAILED, not UNRUNNABLE. A test suite whose test fails on a bad import prints exactly that ' +
       'text, and relabelling it as "could not start" hides a genuine red behind a status that ' +
       'claims nothing was tested.',
+    blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
+  },
+  ...['selftest:sleepA', 'selftest:sleepB'].map((id) => ({
+    id,
+    tier: /** @type {Tier} */ ('fast'),
+    cmd: 'sleep 2',
+    proves:
+      'Two rows with no dependency between them run CONCURRENTLY, so the fast tier costs its ' +
+      'longest chain rather than the sum of its rows.',
+    blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
+  })),
+  {
+    id: 'selftest:sleepC',
+    tier: 'fast',
+    after: ['selftest:sleepA'],
+    cmd: 'sleep 2',
+    proves: 'A row still waits for every row it names in `after` before it starts.',
     blindSpot: 'Exercises the harness only. It says nothing whatsoever about this repository.',
   },
 ];
