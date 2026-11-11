@@ -27,9 +27,9 @@ import { defineConfig } from 'vitest/config';
  */
 const TRANSIENT = '!mocks/verify-*/**';
 const DOM = ['packages/kit/src/**/*.test.{ts,tsx}', 'mocks/*/src/**/*.test.{ts,tsx}', TRANSIENT];
-/* A mock's domain/ tests are pure functions over rows: no DOM, and jsdom cost ~0.6s of startup per
- * file. Measured: moving app/, stage/ or api/server.test.ts as well turns them red — they use window. */
-const MOCK_NODE = 'mocks/*/src/domain/**/*.test.ts';
+/* Every mock test runs under jsdom, domain/ included. Splitting by directory was tried on 2026-11-11
+ * (~4s saved) and reverted the same day: mocks/driver-report/src/domain/policyA.test.ts drives the
+ * server through `window`, so the directory says nothing about whether a test needs the DOM. */
 
 export default defineConfig({
   test: {
@@ -37,8 +37,8 @@ export default defineConfig({
       {
         test: {
           name: 'node',
-          include: ['packages/*/src/**/*.test.ts', MOCK_NODE, TRANSIENT],
-          exclude: ['**/node_modules/**', 'packages/kit/src/**/*.test.{ts,tsx}'],
+          include: ['packages/*/src/**/*.test.ts', TRANSIENT],
+          exclude: ['**/node_modules/**', ...DOM],
           environment: 'node',
         },
       },
@@ -46,7 +46,6 @@ export default defineConfig({
         test: {
           name: 'dom',
           include: DOM,
-          exclude: ['**/node_modules/**', MOCK_NODE],
           environment: 'jsdom',
           setupFiles: ['./vitest.setup.ts'],
           testTimeout: 15000,
